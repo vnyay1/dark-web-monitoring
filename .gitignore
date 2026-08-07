@@ -1,0 +1,33 @@
+# Secrets et configuration sensible
+.env
+.env.*
+!.env.example
+
+# Base de données locale (jamais versionner des donnees, meme de test)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environnement virtuel Python
+venv/
+.venv/
+env/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs (peuvent contenir des infos sensibles selon config)
+*.log
+logs/
+
+# Fichiers OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Snapshots ou exports de contenu collecté (jamais committer)
+dumps/
+exports/
+raw_content/
