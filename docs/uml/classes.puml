@@ -1,0 +1,66 @@
+@startuml ClassDiagram_DarkWebMonitoring
+
+class Exposition {
+  +id : UUID
+  +nom_entite : str
+  +secteur_activite : str
+  +type_entite : enum {publique, privee}
+  +categorie_fuite : enum
+  +date_premiere_detection : datetime
+  +date_derniere_detection : datetime
+  +nombre_enregistrements_revendique : int
+  +score_confiance : float
+  +statut : enum
+  --
+  +changer_statut(nouveau_statut)
+}
+
+class SourceReference {
+  +id : UUID
+  +exposition_id : UUID
+  +type_source : enum {ransomware_site, paste, forum, telegram}
+  +reference_source : str
+  --
+}
+
+class Source {
+  +id : UUID
+  +nom : str
+  +type_source : enum
+  +url_ou_identifiant : str
+  +derniere_collecte_reussie : datetime
+  +nombre_erreurs : int
+  +temps_reponse_moyen : float
+  --
+  +est_indisponible() : bool
+}
+
+class Selecteur {
+  +id : UUID
+  +valeur : str
+  +categorie : enum {domaine, telephone, ministere, banque, ...}
+  +actif : bool
+  --
+}
+
+class ExclusionFauxPositif {
+  +id : UUID
+  +motif : str
+  +ajoute_par : str
+  --
+}
+
+class JournalAudit {
+  +id : UUID
+  +horodatage : datetime
+  +source_id : UUID
+  +resultat : enum {succes, echec}
+  --
+}
+
+Exposition "1" -- "0..*" SourceReference : possède >
+SourceReference "0..*" -- "1" Source : provient de >
+Selecteur "0..*" --> "0..*" Exposition : génère >
+Source "1" -- "0..*" JournalAudit : historique >
+
+@enduml

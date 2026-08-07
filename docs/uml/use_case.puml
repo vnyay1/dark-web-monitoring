@@ -1,0 +1,62 @@
+@startuml UseCase_DarkWebMonitoring
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Analyste CIRT" as Analyste
+actor "Planificateur\nautomatique" as Planificateur
+actor "Système de\ncollecte" as Systeme
+
+rectangle "Système de surveillance Dark Web - ANTIC" {
+
+  ' Cas d'utilisation - Analyste
+  usecase "S'authentifier" as UC_Auth
+  usecase "Consulter le tableau\nde bord" as UC_Dashboard
+  usecase "Rechercher / filtrer\nles expositions" as UC_Search
+  usecase "Modifier le statut\nd'une exposition" as UC_Status
+  usecase "Consulter la frise\nchronologique" as UC_Timeline
+  usecase "Générer / consulter\nun rapport" as UC_Report
+  usecase "Exporter les données\n(JSON/CSV)" as UC_Export
+  usecase "Valider un sélecteur\nproposé (NER)" as UC_ValidateNER
+  usecase "Gérer la liste\nd'exclusion" as UC_Exclusion
+
+  ' Cas d'utilisation - Système (déclenchés par le planificateur)
+  usecase "Collecter une source" as UC_Collect
+  usecase "Se connecter via Tor" as UC_TorConnect
+  usecase "Analyser le contenu\n(Matching Engine)" as UC_Match
+  usecase "Générer une alerte" as UC_Alert
+  usecase "Journaliser l'opération\n(audit log)" as UC_Audit
+
+}
+
+' Relations Analyste
+Analyste --> UC_Auth
+Analyste --> UC_Dashboard
+Analyste --> UC_Search
+Analyste --> UC_Status
+Analyste --> UC_Timeline
+Analyste --> UC_Report
+Analyste --> UC_Export
+Analyste --> UC_ValidateNER
+Analyste --> UC_Exclusion
+
+UC_Dashboard ..> UC_Auth : <<include>>
+UC_Search ..> UC_Auth : <<include>>
+UC_Status ..> UC_Auth : <<include>>
+
+' Relations Planificateur
+Planificateur --> UC_Collect
+
+' Relations Système
+UC_Collect --> Systeme
+UC_Collect ..> UC_TorConnect : <<include>>
+UC_Collect ..> UC_Audit : <<include>>
+UC_Collect --> UC_Match
+
+UC_Match ..> UC_Alert : <<extend>>
+Systeme --> UC_Match
+Systeme --> UC_Alert
+Systeme --> UC_Audit
+
+@enduml

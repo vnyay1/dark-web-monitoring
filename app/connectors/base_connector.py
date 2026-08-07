@@ -10,7 +10,6 @@ Convention (pas de contrainte stricte via ABC) :
 - parse()   : extrait le texte pertinent depuis le contenu brut
 - get_metadata() : retourne les informations de la source (nom, type)
 """
-
 import logging
 import time
 

@@ -1,0 +1,60 @@
+@startuml Components_DarkWebMonitoring
+
+package "VM Isolee (Kali)" {
+
+  component "Planificateur\n(APScheduler)" as Scheduler
+
+  package "Couche Collecte" {
+    component "BaseConnector\n(interface FR-02)" as BaseConnector
+    component "RansomwareConnector\n(x5)" as RansomwareConn
+    component "PasteForumConnector\n(x2)" as PasteConn
+    component "TelegramConnector" as TelegramConn
+    component "Module Tor\n(FR-01, stem)" as TorModule
+  }
+
+  package "Couche Analyse" {
+    component "Matching Engine\n(FR-08 a FR-13)" as MatchingEngine
+    component "Catalogue de\nSelecteurs" as Selecteurs
+  }
+
+  package "Couche Persistance" {
+    component "SQLAlchemy Models" as Models
+    database "SQLite" as DB
+    component "Journal d'audit\n(append-only)" as AuditLog
+  }
+
+  package "Couche Presentation" {
+    component "Flask App\n(routes)" as FlaskApp
+    component "Templates Jinja2\n+ Chart.js" as Templates
+    component "Generateur PDF\n(WeasyPrint)" as PDFGen
+  }
+
+  component "Analyste CIRT\n(navigateur)" as Analyste
+
+}
+
+Scheduler --> RansomwareConn
+Scheduler --> PasteConn
+Scheduler --> TelegramConn
+
+RansomwareConn ..|> BaseConnector
+PasteConn ..|> BaseConnector
+TelegramConn ..|> BaseConnector
+
+RansomwareConn --> TorModule
+PasteConn --> TorModule
+
+BaseConnector --> MatchingEngine : texte extrait\n(RAM uniquement, CN-05)
+MatchingEngine --> Selecteurs : consulte
+MatchingEngine --> Models : indicateur detecte
+BaseConnector --> AuditLog : resultat collecte
+
+Models --> DB
+AuditLog --> DB
+
+FlaskApp --> Models : lecture/ecriture
+FlaskApp --> Templates
+FlaskApp --> PDFGen
+Analyste --> FlaskApp : HTTPS (authentifie)
+
+@enduml

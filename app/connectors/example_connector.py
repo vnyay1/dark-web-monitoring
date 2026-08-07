@@ -4,9 +4,13 @@ Exemple minimal montrant comment etendre BaseConnector.
 Ceci n'est PAS un connecteur reel - juste une validation de l'interface,
 en attendant le premier vrai connecteur (prochaine etape).
 """
-
+import logging
 from app.connectors.base_connector import BaseConnector
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 class ExampleConnector(BaseConnector):
     SOURCE_NAME = "example_source"
@@ -23,5 +27,5 @@ class ExampleConnector(BaseConnector):
 
 if __name__ == "__main__":
     connector = ExampleConnector()
-    result = connector.collect()
-    print(result)
+    print(connector.collect())
+    print(connector.collect())
