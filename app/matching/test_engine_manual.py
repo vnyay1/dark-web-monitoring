@@ -1,30 +1,21 @@
 """
-Test manuel du Matching Engine (FR-09), avec des donnees simulees.
-Ne touche a aucune vraie source - sert uniquement a valider la logique.
+Test manuel du Matching Engine (FR-09) + Scoring (FR-10).
 """
 
 import logging
 from app.db import get_session
 from app.models import Selecteur
 from app.matching.engine import match_text_against_catalogue
+from app.matching.scoring import calculer_score_confiance
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
 SAMPLE_TEXTS = [
-    # Cas 1 : correspondance exacte evidente
     "A major bank in Cameroon, Afriland First Bank, has reportedly been breached.",
-
-    # Cas 2 : variante de casse
     "The leak allegedly affects CAMEROON government systems, specifically MINFI.",
-
-    # Cas 3 : faute de frappe / variante orthographique (fuzzy)
     "Sources claim data from Camerooon institutions was exposed, including Afriland Frist Bank.",
-
-    # Cas 4 : faux positif potentiel (a filtrer plus tard par FR-11)
     "Countries affected: USA, France, Cameroon, Germany, Brazil - full list of victims.",
-
-    # Cas 5 : aucune correspondance attendue
     "This leak only concerns companies based in South America and Europe.",
 ]
 
@@ -40,13 +31,20 @@ def run_test():
         results = match_text_against_catalogue(texte, selecteurs)
 
         if not results:
-            print("Aucune correspondance.\n")
+            print("Aucune correspondance. Score : 0.0\n")
             continue
 
         for r in results:
             print(f"  [{r.type_correspondance}] '{r.selecteur_valeur}' "
-                  f"(cat: {r.selecteur_categorie}) -> trouve: '{r.segment_trouve}' "
+                  f"(cat: {r.selecteur_categorie}) -> '{r.segment_trouve}' "
                   f"(similarite: {r.similarite:.1f})")
+
+        score = calculer_score_confiance(results, nombre_erreurs_source=0, nombre_collectes_total_source=None)
+        print(f"  >> SCORE DE CONFIANCE : {score.score_final} "
+              f"(precision={score.facteur_precision}, "
+              f"nb_selecteurs={score.facteur_nb_correspondances}, "
+              f"fiabilite_source={score.facteur_fiabilite_source}, "
+              f"nb_distincts={score.nb_selecteurs_distincts})")
         print()
 
     session.close()
