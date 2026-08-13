@@ -87,12 +87,8 @@ class PayloadConnector(BaseConnector):
             # Le nom de la victime n'est pas confirme dans la structure
             # observee - on tente plusieurs candidats plausibles, a
             # ajuster une fois le vrai HTML inspecte
-            nom_tag = (
-                card.select_one("h1")
-                or card.select_one("h2")
-                or card.select_one(".company-name")
-                or card.select_one(".card-title")
-            )
+            nom_tag = card.select_one(".title")
+            
             nom_entite = nom_tag.get_text(strip=True) if nom_tag else None
 
             # Texte complet de la card, utilise comme filet de securite
