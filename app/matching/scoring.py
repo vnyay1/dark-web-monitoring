@@ -5,6 +5,12 @@ Formule proposee (a valider avec l'encadrant - voir ambiguite 7 du rapport
 de suivi). Transparente et ajustable via les poids ci-dessous.
 
 Le score final est compris entre 0.0 et 1.0.
+
+CORRECTIF : deduplication par chevauchement de position ajoutee. Sans elle,
+deux selecteurs proches dans le catalogue (ex: "Cameroon" et "Cameroun")
+matchant sur le meme mot du texte etaient comptes comme deux correspondances
+distinctes, faussant a la baisse la precision moyenne et pouvant faire passer
+un score fuzzy au-dessus d'un score exact equivalent.
 """
 
 import logging
@@ -63,22 +69,63 @@ class ScoreDetail:
     nb_selecteurs_distincts: int
 
 
-def _precision_selecteur(categorie: CategorieSelecteur, type_correspondance: str, similarite: float) -> float:
-    """
-    Calcule la precision d'une correspondance individuelle en combinant :
-    - le poids de precision de la categorie du selecteur
-    - le poids du type de correspondance (exact/insensible/fuzzy)
-    - pour le fuzzy, la similarite reelle (0-100) vient encore moduler le score
-    """
-    base = PRECISION_PAR_CATEGORIE.get(categorie, DEFAULT_PRECISION)
-    poids_type = POIDS_TYPE_CORRESPONDANCE.get(type_correspondance, 0.7)
+def _precision_match(m) -> float:
+    """Calcule la precision d'une correspondance individuelle (MatchResult)."""
+    categorie = m.selecteur_categorie
+    if isinstance(categorie, str):
+        try:
+            categorie = CategorieSelecteur(categorie)
+        except ValueError:
+            categorie = None
 
-    if type_correspondance == "fuzzy":
-        # Une similarite de 85% (seuil minimum) pese moins qu'une similarite de 99%
-        facteur_similarite = similarite / 100.0
+    base = PRECISION_PAR_CATEGORIE.get(categorie, DEFAULT_PRECISION)
+    poids_type = POIDS_TYPE_CORRESPONDANCE.get(m.type_correspondance, 0.7)
+
+    if m.type_correspondance == "fuzzy":
+        facteur_similarite = m.similarite / 100.0
         return base * poids_type * facteur_similarite
 
     return base * poids_type
+
+
+def _deduplicate_overlapping(matches: list) -> list:
+    """
+    Si plusieurs correspondances se chevauchent sur la meme zone de texte,
+    ne garde que celle avec la meilleure precision.
+
+    Evite qu'un meme mot du texte soit compte comme "plusieurs selecteurs
+    distincts" a cause de doublons/variantes linguistiques presents dans
+    le catalogue (ex: "Cameroon" et "Cameroun" matchant tous deux sur le
+    meme mot du texte source).
+
+    Les correspondances avec position == -1 (non localisables, cas rare
+    du fuzzy sur un segment reconstruit) sont conservees telles quelles,
+    sans logique de chevauchement.
+    """
+    localisables = [m for m in matches if m.position is not None and m.position >= 0]
+    non_localisables = [m for m in matches if m.position is None or m.position < 0]
+
+    scored = [(m, _precision_match(m)) for m in localisables]
+    # Tri par position croissante, puis par precision decroissante
+    # (en cas d'egalite de position, le plus precis est examine en premier)
+    scored.sort(key=lambda x: (x[0].position, -x[1]))
+
+    kept = []
+    last_end = -1
+
+    for m, prec in scored:
+        start = m.position
+        end = start + max(len(m.segment_trouve), 1)
+        if start < last_end:
+            # Chevauche un match deja retenu et plus precis (ou egal) -> ignore
+            continue
+        kept.append((m, prec))
+        last_end = end
+
+    # Les non-localisables sont ajoutes sans deduplication (best effort)
+    kept.extend((m, _precision_match(m)) for m in non_localisables)
+
+    return kept
 
 
 def _facteur_nb_correspondances(nb_selecteurs_distincts: int) -> float:
@@ -113,26 +160,26 @@ def calculer_score_confiance(matches: list, nombre_erreurs_source: int = 0,
     (MatchResult) trouvees sur UN MEME texte/incident.
 
     matches : liste de MatchResult (voir engine.py), doit contenir
-              selecteur_categorie, type_correspondance, similarite
+              selecteur_categorie, type_correspondance, similarite, position
+
+    Applique d'abord une deduplication par chevauchement de position, afin
+    que des selecteurs quasi-identiques du catalogue (ex: variantes
+    orthographiques d'un meme nom) ne soient pas comptes plusieurs fois
+    pour le meme mot du texte source.
     """
     if not matches:
         return ScoreDetail(0.0, 0.0, 0.0, 0.0, 0)
 
-    # Precision moyenne des correspondances trouvees (le meilleur match
-    # par selecteur distinct est retenu pour eviter qu'un meme selecteur
-    # trouve 10 fois ne fausse la moyenne)
-    meilleur_par_selecteur = {}
-    for m in matches:
-        cle = m.selecteur_valeur
-        precision = _precision_selecteur(
-            categorie=m.selecteur_categorie if isinstance(m.selecteur_categorie, CategorieSelecteur)
-            else CategorieSelecteur(m.selecteur_categorie) if m.selecteur_categorie else None,
-            type_correspondance=m.type_correspondance,
-            similarite=m.similarite,
-        ) if m.selecteur_categorie else DEFAULT_PRECISION
+    deduped = _deduplicate_overlapping(matches)
 
-        if cle not in meilleur_par_selecteur or precision > meilleur_par_selecteur[cle]:
-            meilleur_par_selecteur[cle] = precision
+    # En cas de plusieurs matches deduplique portant sur le MEME selecteur
+    # (ex: "MINFI" trouve en exact ET en fuzzy a des positions differentes
+    # non chevauchantes), on garde la meilleure precision par selecteur.
+    meilleur_par_selecteur = {}
+    for m, prec in deduped:
+        cle = m.selecteur_valeur
+        if cle not in meilleur_par_selecteur or prec > meilleur_par_selecteur[cle]:
+            meilleur_par_selecteur[cle] = prec
 
     nb_selecteurs_distincts = len(meilleur_par_selecteur)
     facteur_precision = sum(meilleur_par_selecteur.values()) / nb_selecteurs_distincts
