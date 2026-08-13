@@ -1,11 +1,13 @@
 """
-Test manuel du Matching Engine (FR-09) + Scoring (FR-10).
+Test manuel du Matching Engine (FR-09) + Filtrage faux positifs (FR-11)
++ Scoring (FR-10).
 """
 
 import logging
 from app.db import get_session
 from app.models import Selecteur
 from app.matching.engine import match_text_against_catalogue
+from app.matching.exclusion import filtrer_faux_positifs
 from app.matching.scoring import calculer_score_confiance
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -28,10 +30,13 @@ def run_test():
     for i, texte in enumerate(SAMPLE_TEXTS, start=1):
         print(f"--- Texte {i} ---")
         print(f"Contenu : {texte}")
-        results = match_text_against_catalogue(texte, selecteurs)
+
+        results_bruts = match_text_against_catalogue(texte, selecteurs)
+        results = filtrer_faux_positifs(texte, results_bruts, session=session)
 
         if not results:
-            print("Aucune correspondance. Score : 0.0\n")
+            statut = "filtre (faux positif)" if results_bruts else "aucune correspondance"
+            print(f"Aucune correspondance retenue ({statut}). Score : 0.0\n")
             continue
 
         for r in results:
