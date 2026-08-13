@@ -9,7 +9,12 @@ Convention (pas de contrainte stricte via ABC) :
 - fetch()   : recupere le contenu brut de la source (en memoire uniquement, CN-05)
 - parse()   : extrait le texte pertinent depuis le contenu brut
 - get_metadata() : retourne les informations de la source (nom, type)
+
+FR-17 : chaque appel a collect() journalise son resultat (succes/echec)
+dans la table JournalAudit, de maniere append-only (aucune methode de
+modification/suppression n'est exposee pour cette table).
 """
+
 import logging
 import time
 
@@ -33,12 +38,22 @@ class BaseConnector:
     SOURCE_TYPE = "unknown"  # ex: "ransomware_site", "paste", "forum", "telegram"
     MIN_DELAY_SECONDS = 30   # FR-06 - delai minimum entre deux requetes (jamais < 30s)
 
-    def __init__(self, tor_session=None):
+    def __init__(self, tor_session=None, db_session=None, source_id=None):
         """
         tor_session : session de connexion Tor deja etablie (cf module FR-01),
         injectee ici plutot que recreee dans chaque connecteur.
+
+        db_session : session SQLAlchemy pour ecrire le journal d'audit (FR-17).
+        Optionnelle : si non fournie, la journalisation en base est ignoree
+        (utile pour les tests manuels sans base de donnees, ex: FR-01/FR-02).
+
+        source_id : identifiant de l'enregistrement Source correspondant en
+        base (table sources), utilise pour lier les entrees du journal
+        d'audit a la bonne source. Optionnel pour les memes raisons.
         """
         self.tor_session = tor_session
+        self.db_session = db_session
+        self.source_id = source_id
         self._last_request_time = None
 
     def _respect_rate_limit(self):
@@ -77,10 +92,29 @@ class BaseConnector:
             "source_type": self.SOURCE_TYPE,
         }
 
+    def _journaliser(self, resultat, details=None):
+        """
+        FR-17 - Ecrit une entree dans le journal d'audit (append-only).
+        Ne fait rien si aucune db_session n'a ete fournie (mode test sans base).
+        """
+        if self.db_session is None:
+            return
+
+        from app.models import JournalAudit, ResultatAudit
+
+        entry = JournalAudit(
+            source_id=self.source_id,
+            resultat=ResultatAudit.SUCCES if resultat == "succes" else ResultatAudit.ECHEC,
+            details=details,
+        )
+        self.db_session.add(entry)
+        self.db_session.commit()
+
     def collect(self):
         """
         Point d'entree principal : orchestre fetch() + parse() en respectant
-        le rate limiting (FR-06). Ne devrait pas avoir besoin d'etre redefini.
+        le rate limiting (FR-06), et journalise systematiquement le resultat
+        (FR-17).
 
         Retourne un dict contenant le texte extrait et les metadonnees,
         jamais le contenu brut complet au-dela de cette fonction (CN-05).
@@ -91,16 +125,20 @@ class BaseConnector:
             raw_content = self.fetch()
         except Exception as e:
             logger.error(f"[{self.SOURCE_NAME}] Echec fetch() : {e}")
+            self._journaliser("echec", details=f"fetch() : {str(e)[:500]}")
             return {"success": False, "error": str(e), "metadata": self.get_metadata()}
 
         try:
             extracted_text = self.parse(raw_content)
         except Exception as e:
             logger.error(f"[{self.SOURCE_NAME}] Echec parse() : {e}")
+            self._journaliser("echec", details=f"parse() : {str(e)[:500]}")
             return {"success": False, "error": str(e), "metadata": self.get_metadata()}
         finally:
             # Le contenu brut n'est plus reference apres le parsing (CN-05)
             del raw_content
+
+        self._journaliser("succes", details=None)
 
         return {
             "success": True,
