@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Surveillance Dark Web — ANTIC{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0B1120;
+            --bg-card: #141B2D;
+            --bg-card-hover: #1A2338;
+            --border-subtle: #232D45;
+            --text-primary: #C9D1E0;
+            --text-muted: #6B7891;
+            --accent-safe: #3DDC84;
+            --accent-alert: #E8493A;
+            --accent-warn: #E8A93A;
+            --accent-neutral: #4A7DFF;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background-image:
+                radial-gradient(circle at 20% 0%, rgba(74, 125, 255, 0.06), transparent 40%),
+                radial-gradient(circle at 80% 100%, rgba(61, 220, 132, 0.04), transparent 40%);
+        }
+
+        header.topbar {
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-mark {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent-safe);
+            box-shadow: 0 0 8px var(--accent-safe);
+        }
+
+        .brand-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.02em;
+        }
+
+        .brand-text span {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        nav.topnav {
+            display: flex;
+            gap: 24px;
+            font-size: 14px;
+        }
+
+        nav.topnav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.15s ease;
+        }
+
+        nav.topnav a:hover, nav.topnav a.active {
+            color: var(--text-primary);
+        }
+
+        main {
+            padding: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        ::selection { background: rgba(74, 125, 255, 0.3); }
+
+        a:focus-visible, button:focus-visible {
+            outline: 2px solid var(--accent-neutral);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-mark"></div>
+            <div class="brand-text">SENTINEL <span>/ ANTIC — Dark Web Monitoring</span></div>
+        </div>
+        <nav class="topnav">
+            <a href="/dashboard" class="{% block nav_dashboard %}{% endblock %}">Tableau de bord</a>
+            <a href="#" class="{% block nav_expositions %}{% endblock %}">Expositions</a>
+            <a href="#" class="{% block nav_reports %}{% endblock %}">Rapports</a>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
