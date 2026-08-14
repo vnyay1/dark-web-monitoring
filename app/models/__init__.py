@@ -34,7 +34,16 @@ def generate_uuid():
 
 
 def utc_now():
-    return datetime.now(timezone.utc)
+    """
+    Retourne l'heure UTC actuelle en tant que datetime NAIVE (sans
+    tzinfo). SQLite ne conserve pas l'information de timezone au stockage
+    (contrairement a PostgreSQL) : une date consciente inseree en aware
+    revient naive apres relecture, ce qui casse toute comparaison
+    ulterieure avec une nouvelle date aware (TypeError). Comme le systeme
+    est mono-fuseau (tout en UTC implicite), on reste volontairement en
+    naive partout pour eviter ce probleme a la racine.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------
