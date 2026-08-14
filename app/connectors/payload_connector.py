@@ -1,24 +1,21 @@
 """
 FR-03 - Connecteur reel #1 : Payload (ransomware leak site).
 
-Structure observee (capture d'ecran fournie par l'encadrant, a
-reconfirmer en conditions reelles depuis la VM) :
+Structure REELLE confirmee (VM, 08/2026) :
 
-<article class="card">
-    <a class="card-link" href="/posts/{id}">
-        <div class="company-line">
-            <span class="timer">05d 12h 56m</span>
-            <span class="company-sep">.</span>
-            <span class="company-size">64 GB</span>
-            <span class="company-sep">.</span>
-            <span class="company-linklike">/ site</span>
-        </div>
-    </a>
-</article>
+<a class="card-link" href="/posts/{id}">
+    <article class="card">
+        ...
+        <span class="timer">05d 12h 56m</span>
+        <span class="company-sep">.</span>
+        <span class="company-size">64 GB</span>
+        <span class="company-sep">.</span>
+        <span class="company-linklike">/ site</span>
+        ...
+    </article>
+</a>
 
-Le nom de l'entreprise/victime lui-meme n'apparaissait pas clairement
-dans l'extrait capture (probablement dans un <h1>/<h2> ou <span> juste
-avant "Support in Tox" - a VERIFIER et ajuster une fois teste en reel).
+Le lien est le PARENT de la card, pas l'inverse.
 """
 
 import logging
@@ -63,20 +60,24 @@ class PayloadConnector(BaseConnector):
         """
         Extrait la liste des entrees (victimes annoncees) de la page.
 
-        NOTE IMPORTANTE : les selecteurs CSS ci-dessous sont bases sur une
-        capture d'ecran statique fournie, pas sur une inspection live.
-        A ajuster des le premier test reel si la structure differe
-        (notamment pour recuperer le nom de l'entite, pas visible avec
-        certitude dans l'extrait disponible).
+        Le point d'entree de la boucle est le lien <a class="card-link">
+        (parent), a l'interieur duquel on trouve <article class="card">.
         """
         soup = BeautifulSoup(raw_content, "html.parser")
 
         entries = []
-        cards = soup.select("article.card")
+        # Point d'entree : le LIEN, qui contient l'article, pas l'inverse
+        links = soup.select("a.card-link")
 
-        for card in cards:
-            link_tag = card.select_one("a.card-link")
-            href = link_tag.get("href") if link_tag else None
+        for link_tag in links:
+            href = link_tag.get("href")
+
+            card = link_tag.select_one("article.card")
+            if card is None:
+                # Securite : si jamais un lien card-link n'entoure pas
+                # d'article (page partiellement chargee, variante), on
+                # ignore proprement cette entree plutot que de planter
+                continue
 
             size_tag = card.select_one("span.company-size")
             taille = size_tag.get_text(strip=True) if size_tag else None
@@ -84,16 +85,12 @@ class PayloadConnector(BaseConnector):
             timer_tag = card.select_one("span.timer")
             timer = timer_tag.get_text(strip=True) if timer_tag else None
 
-            # Le nom de la victime n'est pas confirme dans la structure
-            # observee - on tente plusieurs candidats plausibles, a
-            # ajuster une fois le vrai HTML inspecte
+            # Le nom de la victime n'est toujours pas confirme avec
+            # certitude dans la structure observee - a ajuster si besoin
+            # une fois que tu vois le nom affiche reellement sur la page
             nom_tag = card.select_one(".title")
-            
             nom_entite = nom_tag.get_text(strip=True) if nom_tag else None
 
-            # Texte complet de la card, utilise comme filet de securite
-            # pour le Matching Engine meme si les champs structures
-            # ci-dessus ne sont pas tous trouves
             texte_complet = card.get_text(separator=" ", strip=True)
 
             entries.append({
@@ -106,9 +103,6 @@ class PayloadConnector(BaseConnector):
 
         logger.info(f"[payload] {len(entries)} entree(s) trouvee(s) sur la page.")
 
-        # Le texte global (toutes entrees concatenees) est ce qui sera
-        # transmis au Matching Engine - chaque entree individuelle reste
-        # aussi disponible si on veut affiner le traitement par la suite
         texte_global = "\n".join(e["texte_brut"] for e in entries)
 
         return {
