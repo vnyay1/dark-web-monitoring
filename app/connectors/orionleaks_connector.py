@@ -1,13 +1,39 @@
 """
 FR-03 - Connecteur reel #2 : Data Leaks & Exposure / Orion Leaks (ransomware leak site).
-STATUT : premiere version, structure de la ZONE DE LISTE non confirmee
-(la capture disponible ne montrait que le header/hero, pas les entrees
-elles-memes). A ajuster une fois teste en reel, comme pour Payload.
+STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
-Structure partiellement connue :
-- Site Bootstrap (navbar-dark bg-dark, container, etc.)
-- Nom du site : "Data Leaks & Exposure" (visible dans un <h1 class="display-4">)
-- La liste des entrees/victimes n'a pas ete vue dans la capture fournie
+Structure REELLE confirmee :
+
+<div class="card h-100 post-card">
+    <div class="position-relative">
+        <img ... class="card-img-top post-thumbnail" alt="...">
+        <div class="views-count"><i class="bi bi-eye"></i> 21458</div>
+    </div>
+    <div class="card-body">
+        <div class="leak-card-header">
+            <small class="leak-date">Jul 27, 2026</small>
+            <span class="company-name">Nitrex Chemicals India</span>
+        </div>
+        <h5 class="card-title">https://www.nitrex.in</h5>
+        <div class="status-badge status-published">
+            <span class="status-text">PUBLISHED</span>
+        </div>
+        <p class="card-text">We only seek money. ...</p>
+        <div class="hidden-link-revealed">
+            <a href="https://mega.nz/...">Access Hidden Content</a>
+        </div>
+    </div>
+    <div class="card-footer ...">
+        <a href="../news/article?id=37" class="btn ...">View Details</a>
+    </div>
+</div>
+
+IMPORTANT (CN-03/CN-04/CN-05) : le lien "Hidden Link Revealed" pointe
+potentiellement vers les donnees volees elles-memes (ex: lien Mega.nz).
+Ce lien ne doit JAMAIS etre suivi/telecharge par le connecteur - on se
+contente d'enregistrer qu'un tel lien existe (booleen), jamais l'URL
+complete ni le contenu qu'il pointe. Cf. OS-03 (interdiction de
+telecharger/stocker le contenu des donnees divulguees).
 """
 
 import logging
@@ -49,43 +75,44 @@ class OrionLeaksConnector(BaseConnector):
         return response.text
 
     def parse(self, raw_content):
-        """
-        PREMIERE TENTATIVE - structure de liste non confirmee.
-
-        On tente plusieurs selecteurs plausibles pour une structure
-        Bootstrap classique (card, list-group, table...). A remplacer
-        par le vrai selecteur une fois inspecte dans la VM.
-        """
         soup = BeautifulSoup(raw_content, "html.parser")
 
         entries = []
+        cards = soup.select("div.card.post-card")
 
-        # Tentatives de selecteurs plausibles, par ordre de probabilite
-        candidate_selectors = [
-            ".card",
-            ".list-group-item",
-            "article",
-            "tr",
-        ]
+        for card in cards:
+            nom_tag = card.select_one("span.company-name")
+            nom_entite = nom_tag.get_text(strip=True) if nom_tag else None
 
-        items = []
-        selecteur_utilise = None
-        for sel in candidate_selectors:
-            found = soup.select(sel)
-            if found:
-                items = found
-                selecteur_utilise = sel
-                break
+            url_victime_tag = card.select_one("h5.card-title")
+            url_victime = url_victime_tag.get_text(strip=True) if url_victime_tag else None
 
-        logger.info(f"[orion_leaks] Selecteur utilise : '{selecteur_utilise}' -> {len(items)} element(s) brut(s)")
+            date_tag = card.select_one("small.leak-date")
+            date_publication = date_tag.get_text(strip=True) if date_tag else None
 
-        for item in items:
-            texte_complet = item.get_text(separator=" ", strip=True)
-            if not texte_complet:
-                continue
+            message_tag = card.select_one("p.card-text")
+            message = message_tag.get_text(strip=True) if message_tag else None
+
+            statut_tag = card.select_one(".status-text")
+            statut = statut_tag.get_text(strip=True) if statut_tag else None
+
+            # On note seulement l'EXISTENCE d'un lien vers les donnees,
+            # jamais l'URL elle-meme ni son contenu (OS-03, CN-04)
+            lien_cache_present = card.select_one(".hidden-link-revealed a") is not None
+
+            texte_complet = " ".join(filter(None, [nom_entite, url_victime, message]))
+
             entries.append({
+                "nom_entite_detecte": nom_entite,
+                "url_victime": url_victime,
+                "date_publication": date_publication,
+                "message": message,
+                "statut": statut,
+                "lien_donnees_present": lien_cache_present,
                 "texte_brut": texte_complet,
             })
+
+        logger.info(f"[orion_leaks] {len(entries)} entree(s) trouvee(s) sur la page.")
 
         texte_global = "\n".join(e["texte_brut"] for e in entries)
 
@@ -93,7 +120,6 @@ class OrionLeaksConnector(BaseConnector):
             "entries": entries,
             "texte_global": texte_global,
             "nb_entries": len(entries),
-            "selecteur_utilise": selecteur_utilise,
         }
 
 
@@ -105,10 +131,14 @@ if __name__ == "__main__":
 
     if result["success"]:
         data = result["extracted_text"]
-        print(f"[OK] Selecteur utilise : {data['selecteur_utilise']}")
         print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
         for i, entry in enumerate(data["entries"][:5], start=1):
             print(f"\n--- Entree {i} ---")
-            print(f"  Texte brut (300 premiers car.) : {entry['texte_brut'][:300]}")
+            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
+            print(f"  URL victime : {entry['url_victime']}")
+            print(f"  Date : {entry['date_publication']}")
+            print(f"  Statut : {entry['statut']}")
+            print(f"  Lien donnees present : {entry['lien_donnees_present']}")
+            print(f"  Message : {entry['message']}")
     else:
         print(f"[ECHEC] {result['error']}")
