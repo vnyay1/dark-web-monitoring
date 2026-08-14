@@ -54,10 +54,21 @@ def _est_selecteur_court(selecteur_valeur: str) -> bool:
 
 def _construire_pattern_mot_entier(selecteur_valeur: str) -> re.Pattern:
     """
-    Construit une regex avec frontieres de mot (\\b) pour un selecteur court.
-    re.escape() protege les caracteres speciaux (ex: ".cm" contient un point).
+    Construit une regex exigeant une VRAIE frontiere de mot pour un
+    selecteur court : espace, debut/fin de chaine, ou ponctuation de
+    phrase (. , ; : ! ?) - mais PAS un tiret ou une apostrophe, qui
+    laisseraient passer des faux positifs comme "state-of-the-art"
+    matchant le selecteur "ART".
+
+    On utilise des lookaround (?<!...) / (?!...) plutot que \\b, car \\b
+    considere le tiret comme une frontiere valide, ce qui est insuffisant
+    ici.
     """
-    return re.compile(r"\b" + re.escape(selecteur_valeur) + r"\b", re.IGNORECASE)
+    escaped = re.escape(selecteur_valeur)
+    # Le caractere avant ne doit pas etre une lettre, un chiffre, ni un tiret
+    # Le caractere apres ne doit pas etre une lettre, un chiffre, ni un tiret
+    pattern = r"(?<![A-Za-z0-9\-])" + escaped + r"(?![A-Za-z0-9\-])"
+    return re.compile(pattern, re.IGNORECASE)
 
 
 def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
@@ -65,8 +76,8 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
     results = []
 
     if _est_selecteur_court(selecteur_valeur):
-        # Selecteur court : on exige une frontiere de mot, sensible a la casse
-        pattern = re.compile(r"\b" + re.escape(selecteur_valeur) + r"\b")
+        escaped = re.escape(selecteur_valeur)
+        pattern = re.compile(r"(?<![A-Za-z0-9\-])" + escaped + r"(?![A-Za-z0-9\-])")
         for m in pattern.finditer(texte):
             results.append(MatchResult(
                 selecteur_valeur=selecteur_valeur,
