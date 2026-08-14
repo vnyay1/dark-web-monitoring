@@ -14,6 +14,9 @@ def create_app():
     init_db()
 
     from app.web.dashboard import dashboard_bp
+    from app.web.expositions import expositions_bp
+
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(expositions_bp)
 
     return app

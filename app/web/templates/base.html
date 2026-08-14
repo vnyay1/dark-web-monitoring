@@ -110,7 +110,7 @@
         </div>
         <nav class="topnav">
             <a href="/dashboard" class="{% block nav_dashboard %}{% endblock %}">Tableau de bord</a>
-            <a href="#" class="{% block nav_expositions %}{% endblock %}">Expositions</a>
+            <a href="{{ url_for('expositions.liste') }}" class="{% block nav_expositions %}{% endblock %}">Expositions</a>
             <a href="#" class="{% block nav_reports %}{% endblock %}">Rapports</a>
         </nav>
     </header>
