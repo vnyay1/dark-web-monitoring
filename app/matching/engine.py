@@ -8,23 +8,32 @@ Recherche les selecteurs actifs dans un texte donne, en combinant :
 
 Ne fait AUCUNE ecriture sur disque : opere entierement sur le texte
 deja extrait en memoire par les connecteurs (CN-05).
+
+CORRECTIF MAJEUR : les selecteurs courts (acronymes type "ART", "MINAT")
+matchaient comme simples sous-chaines, capturant des mots anglais
+courants ("Artificial", "start-of-the-art", "co-educational, multi-
+denominational"). Une verification de FRONTIERE DE MOT est desormais
+appliquee pour tout selecteur de longueur <= SEUIL_LONGUEUR_MOT_ENTIER,
+afin de n'accepter que des correspondances sur des mots complets/isoles.
 """
 
+import re
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
 
-# Seuil de similarite (0-100) en-dessous duquel une correspondance floue
-# n'est pas retenue. A ajuster empiriquement.
 FUZZY_THRESHOLD = 85
+FUZZY_WINDOW_MARGIN = 3
 
-# Taille de la fenetre de mots glissante utilisee pour le fuzzy matching
-# (evite de comparer le selecteur au texte entier d'un coup, trop couteux
-# et peu pertinent - on compare a des segments de longueur comparable).
-FUZZY_WINDOW_MARGIN = 3  # mots de marge au-dela de la longueur du selecteur
+# En-dessous (ou egal) de cette longueur de caracteres, un selecteur est
+# considere "court" et DOIT correspondre a un mot entier isole (frontiere
+# de mot), jamais a une simple sous-chaine a l'interieur d'un mot plus
+# long. Evite les faux positifs massifs de type "ART" trouve dans
+# "Artificial" ou "start-of-the-art".
+SEUIL_LONGUEUR_MOT_ENTIER = 6
 
 
 @dataclass
@@ -38,9 +47,38 @@ class MatchResult:
     position: int  # position approximative dans le texte
 
 
+def _est_selecteur_court(selecteur_valeur: str) -> bool:
+    """Determine si un selecteur necessite une verification de mot entier."""
+    return len(selecteur_valeur) <= SEUIL_LONGUEUR_MOT_ENTIER
+
+
+def _construire_pattern_mot_entier(selecteur_valeur: str) -> re.Pattern:
+    """
+    Construit une regex avec frontieres de mot (\\b) pour un selecteur court.
+    re.escape() protege les caracteres speciaux (ex: ".cm" contient un point).
+    """
+    return re.compile(r"\b" + re.escape(selecteur_valeur) + r"\b", re.IGNORECASE)
+
+
 def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
     """Recherche des occurrences exactes (sensible a la casse) du selecteur."""
     results = []
+
+    if _est_selecteur_court(selecteur_valeur):
+        # Selecteur court : on exige une frontiere de mot, sensible a la casse
+        pattern = re.compile(r"\b" + re.escape(selecteur_valeur) + r"\b")
+        for m in pattern.finditer(texte):
+            results.append(MatchResult(
+                selecteur_valeur=selecteur_valeur,
+                selecteur_categorie="",
+                type_correspondance="exact",
+                similarite=100.0,
+                segment_trouve=m.group(),
+                position=m.start(),
+            ))
+        return results
+
+    # Selecteur long : comportement precedent (recherche de sous-chaine)
     start = 0
     while True:
         idx = texte.find(selecteur_valeur, start)
@@ -48,7 +86,7 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
             break
         results.append(MatchResult(
             selecteur_valeur=selecteur_valeur,
-            selecteur_categorie="",  # rempli par l'appelant
+            selecteur_categorie="",
             type_correspondance="exact",
             similarite=100.0,
             segment_trouve=selecteur_valeur,
@@ -61,6 +99,24 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
 def _match_case_insensitive(texte: str, selecteur_valeur: str) -> list[MatchResult]:
     """Recherche des occurrences insensibles a la casse (hors matches deja exacts)."""
     results = []
+
+    if _est_selecteur_court(selecteur_valeur):
+        # Selecteur court : frontiere de mot obligatoire, insensible a la casse
+        pattern = _construire_pattern_mot_entier(selecteur_valeur)
+        for m in pattern.finditer(texte):
+            segment_reel = m.group()
+            if segment_reel != selecteur_valeur:  # exclut les vrais matches exacts
+                results.append(MatchResult(
+                    selecteur_valeur=selecteur_valeur,
+                    selecteur_categorie="",
+                    type_correspondance="insensible_casse",
+                    similarite=100.0,
+                    segment_trouve=segment_reel,
+                    position=m.start(),
+                ))
+        return results
+
+    # Selecteur long : comportement precedent (sous-chaine insensible a la casse)
     texte_lower = texte.lower()
     selecteur_lower = selecteur_valeur.lower()
     start = 0
@@ -69,8 +125,6 @@ def _match_case_insensitive(texte: str, selecteur_valeur: str) -> list[MatchResu
         if idx == -1:
             break
         segment_reel = texte[idx: idx + len(selecteur_valeur)]
-        # On ne compte pas comme "insensible_casse" si c'est en fait deja
-        # une correspondance exacte (meme casse)
         if segment_reel != selecteur_valeur:
             results.append(MatchResult(
                 selecteur_valeur=selecteur_valeur,
@@ -89,11 +143,24 @@ def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRES
     Recherche des correspondances approximatives via une fenetre glissante
     de mots, comparee au selecteur avec RapidFuzz (ratio de similarite).
     Capte fautes de frappe, variantes orthographiques, translitterations legeres.
+
+    Le fuzzy matching compare deja des MOTS complets (segments issus de
+    texte.split()), donc il n'est pas sujet au meme probleme de sous-chaine
+    que exact/insensible_casse - un selecteur court y reste cependant
+    naturellement plus sujet a des faux positifs de similarite (ex: "ART"
+    vs un mot de 3 lettres proche), donc on l'exclut du fuzzy si trop court.
     """
+    if _est_selecteur_court(selecteur_valeur):
+        # Le fuzzy matching sur un selecteur de 2-6 caracteres genere trop
+        # de faux positifs (trop de mots courts lui ressemblent a 85%+).
+        # On le desactive pour ces selecteurs - ils restent couverts par
+        # exact/insensible_casse avec frontiere de mot, ce qui est deja
+        # strict et suffisant pour un acronyme.
+        return []
+
     results = []
     mots = texte.split()
     nb_mots_selecteur = max(len(selecteur_valeur.split()), 1)
-    fenetre = nb_mots_selecteur + FUZZY_WINDOW_MARGIN
 
     seen_positions = set()
 
@@ -105,7 +172,6 @@ def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRES
         score = fuzz.ratio(segment.lower(), selecteur_valeur.lower())
 
         if score >= threshold and segment.lower() != selecteur_valeur.lower():
-            # Evite les doublons de position approximative
             position_key = i
             if position_key in seen_positions:
                 continue
@@ -127,8 +193,7 @@ def match_text_against_selecteur(texte: str, selecteur_valeur: str, selecteur_ca
                                    enable_fuzzy: bool = True) -> list[MatchResult]:
     """
     Applique les trois niveaux de correspondance pour UN selecteur donne.
-    Retourne la liste de toutes les correspondances trouvees, dedupliquees
-    par (type_correspondance, position).
+    Retourne la liste de toutes les correspondances trouvees.
     """
     all_matches: list[MatchResult] = []
 
