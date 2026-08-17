@@ -8,7 +8,10 @@ from app.models import CanalAlerte
 
 SEUIL_CRITIQUE = 0.85
 SEUIL_ELEVE = 0.6
-
+# FR-25/FR-26 - Hausse de score consideree comme "significative" pour
+# declencher une alerte de confirmation sur une exposition existante
+# (evite le bruit d'une alerte a chaque micro-variation)
+SEUIL_HAUSSE_SIGNIFICATIVE = 0.15
 # Mots-cles indiquant un secteur prioritaire (FR-26). Bases sur le
 # secteur_activite ou le nom de l'entite (ex: domaine .gov.cm).
 SECTEURS_PRIORITAIRES = [

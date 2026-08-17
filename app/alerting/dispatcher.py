@@ -22,10 +22,19 @@ DESTINATAIRES = {
 }
 
 
-def _construire_message(exposition) -> tuple:
+def _construire_message(exposition, est_confirmation: bool = False) -> tuple:
     """Construit le sujet et le corps du message d'alerte."""
-    sujet = f"[SENTINEL] Nouvelle exposition detectee - score {exposition.score_confiance:.2f}"
+    prefixe = "[CONFIRMATION]" if est_confirmation else "[NOUVELLE ALERTE]"
+    sujet = f"{prefixe} SENTINEL - {exposition.nom_entite} - score {exposition.score_confiance:.2f}"
+
+    intro = (
+        "Le score de confiance de cette exposition deja connue a augmente significativement suite a une nouvelle source."
+        if est_confirmation
+        else "Une nouvelle exposition potentielle a ete detectee."
+    )
+
     message = (
+        f"{intro}\n\n"
         f"Entite : {exposition.nom_entite}\n"
         f"Categorie : {exposition.categorie_fuite.value}\n"
         f"Score de confiance : {exposition.score_confiance:.2f}\n"
@@ -35,18 +44,36 @@ def _construire_message(exposition) -> tuple:
     return sujet, message
 
 
-def declencher_alertes(session, exposition, seuil_minimum: float = 0.6) -> list:
+def declencher_alertes(session, exposition, est_nouvelle: bool = True, ancien_score: float = None,
+                        seuil_minimum: float = 0.6) -> list:
     """
-    FR-25 - Point d'entree : declenche les alertes pour une exposition
-    si son score depasse le seuil minimum configurable.
+    FR-25 - Point d'entree : declenche les alertes pour une exposition.
 
-    Retourne la liste des objets Alerte crees.
+    Deux cas declenchent une alerte :
+    1. Nouvelle exposition (est_nouvelle=True) dont le score depasse le seuil
+    2. Exposition existante dont le score a augmente significativement
+       (hausse >= SEUIL_HAUSSE_SIGNIFICATIVE) - alerte de "confirmation"
+
+    Une mise a jour mineure (nouvelle source sans hausse significative du
+    score) ne redeclenche PAS d'alerte, pour eviter le bruit de doublons.
     """
+    from app.alerting.rules import SEUIL_HAUSSE_SIGNIFICATIVE
+
     if exposition.score_confiance < seuil_minimum:
         return []
 
+    est_confirmation = False
+
+    if not est_nouvelle:
+        if ancien_score is None:
+            return []  # securite : pas d'ancien score, on ne peut pas comparer
+        hausse = exposition.score_confiance - ancien_score
+        if hausse < SEUIL_HAUSSE_SIGNIFICATIVE:
+            return []  # mise a jour mineure, pas d'alerte
+        est_confirmation = True
+
     canaux = determiner_canaux(exposition)
-    sujet, message = _construire_message(exposition)
+    sujet, message = _construire_message(exposition, est_confirmation=est_confirmation)
 
     alertes_creees = []
 
@@ -60,8 +87,6 @@ def declencher_alertes(session, exposition, seuil_minimum: float = 0.6) -> list:
         session.flush()
 
         if canal == CanalAlerte.INTERFACE:
-            # L'alerte "interface" n'a rien a envoyer - elle est juste
-            # affichee dans le tableau de bord/liste d'alertes
             alerte.statut_envoi = StatutEnvoiAlerte.ENVOYEE
             alerte.date_envoi = utc_now()
         else:
@@ -89,8 +114,9 @@ def declencher_alertes(session, exposition, seuil_minimum: float = 0.6) -> list:
         alertes_creees.append(alerte)
 
     session.commit()
+    type_alerte = "CONFIRMATION" if est_confirmation else "NOUVELLE"
     logger.info(
-        f"[alerting] {len(alertes_creees)} alerte(s) creee(s) pour "
+        f"[alerting] [{type_alerte}] {len(alertes_creees)} alerte(s) creee(s) pour "
         f"'{exposition.nom_entite}' (canaux: {[c.canal.value for c in alertes_creees]})"
     )
 

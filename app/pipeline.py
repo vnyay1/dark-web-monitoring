@@ -17,6 +17,7 @@ from app.matching.exclusion import filtrer_faux_positifs
 from app.matching.scoring import calculer_score_confiance
 from app.matching.categorisation import categoriser_texte
 from app.matching.deduplication import enregistrer_exposition
+from app.alerting.dispatcher import declencher_alertes
 
 logger = logging.getLogger(__name__)
 
@@ -155,17 +156,22 @@ def traiter_connecteur(connector_class, db_session=None) -> dict:
         )
 
         # FR-12 : deduplication + persistance
-        exposition = enregistrer_exposition(
+        exposition, est_nouvelle, ancien_score = enregistrer_exposition(
             session=session,
             nom_entite=nom_entite,
             categorie_fuite=categorie_fuite,
             type_source=source.type_source,
             reference_source=reference_source,
             score_confiance=score_detail.score_final,
-            nombre_enregistrements=None,  # non deduit automatiquement du texte pour l'instant
+            nombre_enregistrements=None,
         )
 
+        # FR-25/FR-26 : declenchement des alertes (nouvelle detection ou
+        # confirmation par hausse significative du score)
+        declencher_alertes(session, exposition, est_nouvelle=est_nouvelle, ancien_score=ancien_score)
+
         stats["nb_expositions_creees_ou_maj"] += 1
+        
         logger.info(
             f"[pipeline] Exposition traitee : '{nom_entite}' "
             f"(score={score_detail.score_final}, categorie={categorie_fuite.value})"

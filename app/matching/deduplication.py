@@ -68,22 +68,26 @@ def enregistrer_exposition(
     nombre_enregistrements: int = None,
     secteur_activite: str = None,
     type_entite=None,
-) -> Exposition:
+) -> tuple:
     """
     Point d'entree principal FR-12 : enregistre une detection en
     deduppliquant si un incident correspondant existe deja.
 
-    Retourne l'Exposition (nouvelle ou existante mise a jour).
+    Retourne un tuple (exposition, est_nouvelle, ancien_score) :
+    - exposition : l'Exposition (nouvelle ou existante mise a jour)
+    - est_nouvelle : True si l'exposition vient d'etre creee, False si
+      une exposition existante a ete mise a jour
+    - ancien_score : le score de confiance AVANT mise a jour (None si
+      nouvelle exposition) - utile pour detecter une hausse significative
+      (cf FR-25/FR-26, alerte de confirmation)
     """
     exposition_existante = _trouver_exposition_existante(session, nom_entite, categorie_fuite)
 
     if exposition_existante:
-        # Incident deja connu : on met a jour la date de derniere detection
-        # et on ajoute une nouvelle reference de source, sans dupliquer
+        ancien_score = exposition_existante.score_confiance
+
         exposition_existante.date_derniere_detection = utc_now()
 
-        # On ne rajoute pas deux fois la meme reference exacte pour la
-        # meme exposition (ex: si le meme connecteur repasse sur la meme page)
         reference_deja_presente = any(
             sr.reference_source == reference_source and sr.type_source == type_source
             for sr in exposition_existante.sources
@@ -100,14 +104,11 @@ def enregistrer_exposition(
         else:
             logger.info("[FR-12] Reference de source deja presente, aucun doublon ajoute.")
 
-        # Le score de confiance peut etre reevalue a la hausse si confirme
-        # par plusieurs sources independantes (coherent avec FR-10 - le
-        # nombre de correspondances independantes augmente la confiance)
         if score_confiance > exposition_existante.score_confiance:
             exposition_existante.score_confiance = score_confiance
 
         session.commit()
-        return exposition_existante
+        return exposition_existante, False, ancien_score
 
     # Aucun incident correspondant : creation d'une nouvelle Exposition
     nouvelle_exposition = Exposition(
@@ -119,7 +120,7 @@ def enregistrer_exposition(
         score_confiance=score_confiance,
     )
     session.add(nouvelle_exposition)
-    session.flush()  # pour obtenir l'id avant de creer la SourceReference
+    session.flush()
 
     reference = SourceReference(
         exposition_id=nouvelle_exposition.id,
@@ -130,4 +131,4 @@ def enregistrer_exposition(
     session.commit()
 
     logger.info(f"[FR-12] Nouvelle exposition creee : '{nom_entite}' ({categorie_fuite.value}).")
-    return nouvelle_exposition
+    return nouvelle_exposition, True, None
