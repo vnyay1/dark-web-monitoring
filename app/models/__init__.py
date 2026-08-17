@@ -266,3 +266,37 @@ class User(Base):
 
     def __repr__(self):
         return f"<User {self.nom_utilisateur}>"
+# ---------------------------------------------------------------------
+# Alerte (FR-25/FR-26 - alertes multi-canal)
+# ---------------------------------------------------------------------
+
+class CanalAlerte(enum.Enum):
+    EMAIL = "email"
+    SMS = "sms"
+    WHATSAPP = "whatsapp"
+    INTERFACE = "interface"
+
+
+class StatutEnvoiAlerte(enum.Enum):
+    EN_ATTENTE = "en_attente"
+    ENVOYEE = "envoyee"
+    ECHEC = "echec"
+
+
+class Alerte(Base):
+    __tablename__ = "alertes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    exposition_id = Column(String(36), ForeignKey("expositions.id"), nullable=False)
+
+    canal = Column(SAEnum(CanalAlerte), nullable=False)
+    statut_envoi = Column(SAEnum(StatutEnvoiAlerte), nullable=False, default=StatutEnvoiAlerte.EN_ATTENTE)
+    date_creation = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    date_envoi = Column(DateTime(timezone=True), nullable=True)
+    lue = Column(Boolean, nullable=False, default=False)  # pour affichage interface (FR-25)
+    details_echec = Column(Text, nullable=True)  # message d'erreur si echec d'envoi
+
+    exposition = relationship("Exposition")
+
+    def __repr__(self):
+        return f"<Alerte {self.canal.value} - {self.statut_envoi.value}>"
