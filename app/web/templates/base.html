@@ -111,8 +111,14 @@
         </div>
         
         <nav class="topnav">
-            <a href="/dashboard" class="{% block nav_dashboard %}{% endblock %}">Tableau de bord</a>
+            <a href="{{ url_for('dashboard.index') }}" class="{% block nav_dashboard %}{% endblock %}">Tableau de bord</a>
             <a href="{{ url_for('expositions.liste') }}" class="{% block nav_expositions %}{% endblock %}">Expositions</a>
+            <a href="{{ url_for('alerts.liste') }}" class="{% block nav_alerts %}{% endblock %}">
+                Alertes
+                {% if nb_alertes_non_lues and nb_alertes_non_lues > 0 %}
+                <span style="background: var(--accent-alert); color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px;">{{ nb_alertes_non_lues }}</span>
+                {% endif %}
+            </a>
             <a href="#" class="{% block nav_reports %}{% endblock %}">Rapports</a>
             <a href="{{ url_for('auth.logout') }}">Deconnexion</a>
         </nav>

@@ -16,11 +16,20 @@ def create_app():
     from app.web.auth import auth_bp, login_manager
     from app.web.dashboard import dashboard_bp
     from app.web.expositions import expositions_bp
+    from app.web.alerts import alerts_bp, compter_alertes_non_lues
 
     login_manager.init_app(app)
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(expositions_bp)
+    app.register_blueprint(alerts_bp)
+
+    @app.context_processor
+    def inject_alertes_count():
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return {"nb_alertes_non_lues": compter_alertes_non_lues()}
+        return {"nb_alertes_non_lues": 0}
 
     return app

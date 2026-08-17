@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Alertes — Sentinel{% endblock %}
+{% block nav_alerts %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    .alert-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-left: 3px solid var(--accent-neutral);
+        border-radius: 8px;
+        padding: 18px 20px;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .alert-card.non-lue {
+        border-left-color: var(--accent-alert);
+        background: rgba(232, 73, 58, 0.04);
+    }
+
+    .alert-info { flex: 1; }
+
+    .alert-entite {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 600;
+        font-size: 15px;
+        margin-bottom: 4px;
+    }
+
+    .alert-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .alert-score {
+        font-weight: 600;
+        color: var(--accent-alert);
+    }
+
+    .alert-mark-btn {
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-muted);
+        padding: 7px 14px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .alert-mark-btn:hover {
+        border-color: var(--accent-neutral);
+        color: var(--text-primary);
+    }
+
+    .badge-nouvelle {
+        display: inline-block;
+        background: rgba(232, 73, 58, 0.15);
+        color: var(--accent-alert);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-left: 8px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="results-count">{{ alertes|length }} alerte(s)</div>
+
+{% if alertes %}
+    {% for alerte in alertes %}
+    <div class="alert-card {% if not alerte.lue %}non-lue{% endif %}">
+        <div class="alert-info">
+            <div class="alert-entite">
+                {{ alerte.exposition.nom_entite }}
+                {% if not alerte.lue %}<span class="badge-nouvelle">Non lue</span>{% endif %}
+            </div>
+            <div class="alert-meta">
+                {{ alerte.exposition.categorie_fuite.value }} ·
+                score <span class="alert-score">{{ "%.2f"|format(alerte.exposition.score_confiance) }}</span> ·
+                {{ alerte.date_creation.strftime('%d/%m/%Y %H:%M') }}
+            </div>
+        </div>
+        {% if not alerte.lue %}
+        <form method="post" action="{{ url_for('alerts.marquer_lue', alerte_id=alerte.id) }}">
+            <button type="submit" class="alert-mark-btn">Marquer comme lue</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state">Aucune alerte pour le moment.</div>
+{% endif %}
+
+{% endblock %}
