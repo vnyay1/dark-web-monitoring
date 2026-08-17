@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion — Sentinel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0B1120;
+            --bg-card: #141B2D;
+            --border-subtle: #232D45;
+            --text-primary: #C9D1E0;
+            --text-muted: #6B7891;
+            --accent-safe: #3DDC84;
+            --accent-alert: #E8493A;
+            --accent-neutral: #4A7DFF;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: radial-gradient(circle at 50% 0%, rgba(74, 125, 255, 0.08), transparent 50%);
+        }
+
+        .login-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 380px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .brand-mark {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--accent-safe);
+            box-shadow: 0 0 8px var(--accent-safe);
+        }
+
+        .brand-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 17px;
+            letter-spacing: 0.02em;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 32px;
+        }
+
+        .field { margin-bottom: 16px; }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .field input {
+            width: 100%;
+            background: var(--bg-base);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            padding: 11px 12px;
+            border-radius: 7px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+        }
+
+        .field input:focus {
+            outline: 2px solid var(--accent-neutral);
+            outline-offset: 1px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            background: var(--accent-neutral);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 7px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .flash {
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .flash-error { background: rgba(232, 73, 58, 0.1); color: var(--accent-alert); border: 1px solid rgba(232, 73, 58, 0.3); }
+        .flash-success { background: rgba(61, 220, 132, 0.1); color: var(--accent-safe); border: 1px solid rgba(61, 220, 132, 0.3); }
+
+        .footer-note {
+            margin-top: 24px;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <div class="brand">
+            <div class="brand-mark"></div>
+            <div class="brand-text">SENTINEL</div>
+        </div>
+        <div class="subtitle">ANTIC — Surveillance Dark Web / Acces reserve</div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="post">
+            <div class="field">
+                <label>Nom d'utilisateur</label>
+                <input type="text" name="nom_utilisateur" required autofocus>
+            </div>
+            <div class="field">
+                <label>Mot de passe</label>
+                <input type="password" name="mot_de_passe" required>
+            </div>
+            <button type="submit" class="submit-btn">Se connecter</button>
+        </form>
+
+        <div class="footer-note">ACCES INTERNE — CIRT / ANTIC</div>
+    </div>
+</body>
+</html>

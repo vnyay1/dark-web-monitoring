@@ -15,12 +15,15 @@ from flask import Blueprint, render_template
 
 from app.db import get_session
 from app.models import Exposition, utc_now
+from flask_login import login_required
+
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
 @dashboard_bp.route("/")
 @dashboard_bp.route("/dashboard")
+@login_required
 def index():
     session = get_session()
 

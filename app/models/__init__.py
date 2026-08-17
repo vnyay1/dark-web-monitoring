@@ -249,3 +249,20 @@ class JournalAudit(Base):
 
     def __repr__(self):
         return f"<JournalAudit {self.horodatage} - {self.resultat.value}>"
+
+# ---------------------------------------------------------------------
+# User (FR-24 - authentification des analystes)
+# ---------------------------------------------------------------------
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+
+    nom_utilisateur = Column(String(100), nullable=False, unique=True)
+    mot_de_passe_hash = Column(String(255), nullable=False)
+    actif = Column(Boolean, nullable=False, default=True)
+    date_creation = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    def __repr__(self):
+        return f"<User {self.nom_utilisateur}>"
