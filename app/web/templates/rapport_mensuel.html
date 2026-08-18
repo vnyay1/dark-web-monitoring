@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport mensuel — Sentinel</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-center {
+                content: "ANTIC — Confidentiel — Page " counter(page) " / " counter(pages);
+                font-size: 9px;
+                color: #6B7891;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #1A2338;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .header {
+            border-bottom: 3px solid #0B1120;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        .header-brand {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #0B1120;
+        }
+
+        .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+
+        .header-meta {
+            font-size: 10px;
+            color: #6B7891;
+            margin-top: 4px;
+        }
+
+        .confidential-banner {
+            background: #FDF0EE;
+            border: 1px solid #E8493A;
+            color: #E8493A;
+            padding: 8px 12px;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 4px;
+            margin: 16px 0 24px 0;
+        }
+
+        .stats-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .stat-box {
+            flex: 1;
+            border: 1px solid #DDE3ED;
+            border-radius: 6px;
+            padding: 14px;
+        }
+
+        .stat-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6B7891;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        h2 {
+            font-size: 14px;
+            margin: 24px 0 12px 0;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #DDE3ED;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th {
+            text-align: left;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6B7891;
+            padding: 8px 10px;
+            border-bottom: 2px solid #DDE3ED;
+        }
+
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #EEF1F6;
+            font-size: 10px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .badge-high { background: #FDF0EE; color: #E8493A; }
+        .badge-mid { background: #FEF6E8; color: #B8791F; }
+        .badge-low { background: #EEF1F6; color: #6B7891; }
+
+        .empty-note {
+            color: #6B7891;
+            font-style: italic;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-brand">SENTINEL / ANTIC — SYSTEME DE SURVEILLANCE DARK WEB</div>
+        <div class="header-title">Rapport mensuel d'exposition — {{ mois }}/{{ annee }}</div>
+        <div class="header-meta">Genere le {{ date_generation.strftime('%d/%m/%Y a %H:%M') }} UTC</div>
+    </div>
+
+    <div class="confidential-banner">
+        DOCUMENT CONFIDENTIEL — Diffusion limitee a l'encadrement CIRT (CN-11). Ce rapport ne contient aucune donnee personnelle, conformement a FR-27.
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Expositions detectees</div>
+            <div class="stat-value">{{ total_periode }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Score de confiance moyen</div>
+            <div class="stat-value">{{ score_moyen }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Secteurs touches</div>
+            <div class="stat-value">{{ repartition_secteur|length }}</div>
+        </div>
+    </div>
+
+    <h2>Répartition par secteur d'activité</h2>
+    {% if repartition_secteur %}
+    <table>
+        <thead><tr><th>Secteur</th><th>Nombre d'expositions</th></tr></thead>
+        <tbody>
+            {% for secteur, count in repartition_secteur.items() %}
+            <tr><td>{{ secteur }}</td><td>{{ count }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
+    {% endif %}
+
+    <h2>Répartition par catégorie de fuite</h2>
+    {% if repartition_categorie %}
+    <table>
+        <thead><tr><th>Catégorie</th><th>Nombre d'expositions</th></tr></thead>
+        <tbody>
+            {% for cat, count in repartition_categorie.items() %}
+            <tr><td>{{ cat }}</td><td>{{ count }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
+    {% endif %}
+
+    <h2>Répartition par statut de traitement</h2>
+    {% if repartition_statut %}
+    <table>
+        <thead><tr><th>Statut</th><th>Nombre d'expositions</th></tr></thead>
+        <tbody>
+            {% for statut, count in repartition_statut.items() %}
+            <tr><td>{{ statut }}</td><td>{{ count }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
+    {% endif %}
+
+    <h2>Détail des expositions (triées par score de confiance)</h2>
+    {% if entites %}
+    <table>
+        <thead>
+            <tr><th>Entité</th><th>Secteur</th><th>Catégorie</th><th>Score</th><th>Statut</th></tr>
+        </thead>
+        <tbody>
+            {% for e in entites %}
+            <tr>
+                <td>{{ e.nom }}</td>
+                <td>{{ e.secteur }}</td>
+                <td>{{ e.categorie }}</td>
+                <td>
+                    <span class="badge {% if e.score >= 0.7 %}badge-high{% elif e.score >= 0.4 %}badge-mid{% else %}badge-low{% endif %}">
+                        {{ e.score }}
+                    </span>
+                </td>
+                <td>{{ e.statut }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
+    {% endif %}
+
+</body>
+</html>

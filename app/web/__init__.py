@@ -5,7 +5,7 @@ Factory Flask - initialise l'application et enregistre les blueprints.
 from flask import Flask
 from app.config import Config
 from app.db import init_db
-
+from app.web.reports import reports_bp
 
 def create_app():
     app = Flask(__name__)
@@ -24,6 +24,7 @@ def create_app():
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(expositions_bp)
     app.register_blueprint(alerts_bp)
+    app.register_blueprint(reports_bp)
 
     @app.context_processor
     def inject_alertes_count():

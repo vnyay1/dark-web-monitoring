@@ -119,7 +119,7 @@
                 <span style="background: var(--accent-alert); color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px;">{{ nb_alertes_non_lues }}</span>
                 {% endif %}
             </a>
-            <a href="#" class="{% block nav_reports %}{% endblock %}">Rapports</a>
+            <a href="{{ url_for('reports.index') }}" class="{% block nav_reports %}{% endblock %}">Rapports</a>
             <a href="{{ url_for('auth.logout') }}">Deconnexion</a>
         </nav>
     </header>

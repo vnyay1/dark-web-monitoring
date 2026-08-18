@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Rapports — Sentinel{% endblock %}
+{% block nav_reports %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    .report-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 24px;
+        margin-bottom: 20px;
+    }
+
+    .report-panel h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 15px;
+        margin-bottom: 6px;
+    }
+
+    .report-panel p {
+        color: var(--text-muted);
+        font-size: 13px;
+        margin-bottom: 16px;
+    }
+
+    .report-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .report-btn {
+        background: var(--accent-neutral);
+        color: white;
+        text-decoration: none;
+        padding: 9px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .report-btn.secondary {
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="report-panel">
+    <h3>Rapport mensuel d'exposition (FR-27)</h3>
+    <p>Statistiques agrégées du mois en cours ({{ mois_courant }}/{{ annee_courante }}) — aucune donnée personnelle incluse.</p>
+    <div class="report-actions">
+        <a href="{{ url_for('reports.monthly_pdf', mois=mois_courant, annee=annee_courante) }}" class="report-btn">Télécharger PDF</a>
+        <a href="{{ url_for('reports.monthly_html', mois=mois_courant, annee=annee_courante) }}" class="report-btn secondary" target="_blank">Voir en HTML</a>
+    </div>
+</div>
+
+<div class="report-panel">
+    <h3>Export des données (FR-28)</h3>
+    <p>Exporte l'ensemble des indicateurs d'exposition au format exploitable par d'autres outils du CIRT.</p>
+    <div class="report-actions">
+        <a href="{{ url_for('reports.export_json') }}" class="report-btn secondary">Exporter en JSON</a>
+        <a href="{{ url_for('reports.export_csv') }}" class="report-btn secondary">Exporter en CSV</a>
+    </div>
+</div>
+
+{% endblock %}
