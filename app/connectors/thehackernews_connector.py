@@ -27,7 +27,7 @@ en amont par l'absence de correspondance de selecteurs.
 """
 
 import logging
-import requests
+from app.tor import get_via_tor
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
 
@@ -40,25 +40,8 @@ class TheHackerNewsConnector(BaseConnector):
 
     TARGET_URL = "https://thehackernews.com/search/label/Vulnerability"
 
-    HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    }
-
     def fetch(self):
-        """
-        Site en clairnet - pas de proxy Tor necessaire pour ce connecteur,
-        contrairement aux 5 leak sites .onion precedents.
-        """
-        response = requests.get(
-            self.TARGET_URL,
-            headers=self.HEADERS,
-            timeout=20,
-        )
-        response.raise_for_status()
+        response = get_via_tor(self.TARGET_URL)
         return response.text
 
     def parse(self, raw_content):

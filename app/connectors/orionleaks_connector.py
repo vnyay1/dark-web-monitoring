@@ -2,44 +2,18 @@
 FR-03 - Connecteur reel #2 : Data Leaks & Exposure / Orion Leaks (ransomware leak site).
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
-Structure REELLE confirmee :
+ATTENTION CN-04/OS-03 : le lien "Hidden Link Revealed" pointe
+potentiellement vers les donnees volees elles-memes. Ce lien ne doit
+JAMAIS etre suivi/telecharge - on enregistre uniquement son existence
+(booleen), jamais l'URL ni le contenu qu'il pointe.
 
-<div class="card h-100 post-card">
-    <div class="position-relative">
-        <img ... class="card-img-top post-thumbnail" alt="...">
-        <div class="views-count"><i class="bi bi-eye"></i> 21458</div>
-    </div>
-    <div class="card-body">
-        <div class="leak-card-header">
-            <small class="leak-date">Jul 27, 2026</small>
-            <span class="company-name">Nitrex Chemicals India</span>
-        </div>
-        <h5 class="card-title">https://www.nitrex.in</h5>
-        <div class="status-badge status-published">
-            <span class="status-text">PUBLISHED</span>
-        </div>
-        <p class="card-text">We only seek money. ...</p>
-        <div class="hidden-link-revealed">
-            <a href="https://mega.nz/...">Access Hidden Content</a>
-        </div>
-    </div>
-    <div class="card-footer ...">
-        <a href="../news/article?id=37" class="btn ...">View Details</a>
-    </div>
-</div>
-
-IMPORTANT (CN-03/CN-04/CN-05) : le lien "Hidden Link Revealed" pointe
-potentiellement vers les donnees volees elles-memes (ex: lien Mega.nz).
-Ce lien ne doit JAMAIS etre suivi/telecharge par le connecteur - on se
-contente d'enregistrer qu'un tel lien existe (booleen), jamais l'URL
-complete ni le contenu qu'il pointe. Cf. OS-03 (interdiction de
-telecharger/stocker le contenu des donnees divulguees).
+MISE A JOUR : utilise desormais le module centralise app.tor.
 """
 
 import logging
-import requests
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
+from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -50,28 +24,8 @@ class OrionLeaksConnector(BaseConnector):
 
     TARGET_URL = "http://cjfntkj5qeizxowuy3srceg7zo6namc3kfeor7pfn6bpdkl3w265ooid.onion/news/home"
 
-    TOR_SOCKS_PROXY = "socks5h://127.0.0.1:9050"
-
-    HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    }
-
     def fetch(self):
-        proxies = {
-            "http": self.TOR_SOCKS_PROXY,
-            "https": self.TOR_SOCKS_PROXY,
-        }
-        response = requests.get(
-            self.TARGET_URL,
-            proxies=proxies,
-            headers=self.HEADERS,
-            timeout=30,
-        )
-        response.raise_for_status()
+        response = get_via_tor(self.TARGET_URL)
         return response.text
 
     def parse(self, raw_content):
@@ -96,8 +50,6 @@ class OrionLeaksConnector(BaseConnector):
             statut_tag = card.select_one(".status-text")
             statut = statut_tag.get_text(strip=True) if statut_tag else None
 
-            # On note seulement l'EXISTENCE d'un lien vers les donnees,
-            # jamais l'URL elle-meme ni son contenu (OS-03, CN-04)
             lien_cache_present = card.select_one(".hidden-link-revealed a") is not None
 
             texte_complet = " ".join(filter(None, [nom_entite, url_victime, message]))

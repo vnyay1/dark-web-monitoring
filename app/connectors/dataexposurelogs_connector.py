@@ -2,41 +2,14 @@
 FR-03 - Connecteur reel #3 : Data Exposure logs (ransomware leak site).
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
-Structure REELLE confirmee :
-
-<div class="grid">
-    <div class="card" onclick="window.open('/entity/D1DDFB2A56855328', '_blank')">
-        <div class="title ">I-SYS</div>
-        <div class="meta-row">
-            <div class="meta-texts">
-                <div class="meta-info">AUDIT ID: C66B828414389C27</div>
-                <div class="meta-info">DISCOVERY DATE: 2026-06-15</div>
-            </div>
-            <svg ... id="flag-icons-ru" ...>...</svg>
-        </div>
-        <div class="card-bottom ">
-            <div class="status-PUBLIC_TRANSPARENCY">[ STATUS: PUBLIC TRANSPARENCY ]</div>
-        </div>
-    </div>
-    ...
-</div>
-
-Notes :
-- Pas de <a href>, le lien vers le detail est dans l'attribut onclick
-  (window.open('/entity/{id}', '_blank')) -> extrait par regex simple.
-- Le drapeau SVG porte un id du type "flag-icons-{code_pays}" qui semble
-  indiquer le pays associe a l'entree - a confirmer sur un plus grand
-  echantillon (peut varier selon la librairie d'icones utilisee).
-- Le statut ("PUBLIC TRANSPARENCY" ici) fait partie de la classe CSS
-  elle-meme (status-PUBLIC_TRANSPARENCY), pratique pour categoriser
-  sans dependre du texte affiche.
+MISE A JOUR : utilise desormais le module centralise app.tor.
 """
 
 import logging
 import re
-import requests
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
+from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -47,31 +20,11 @@ class DataExposureLogsConnector(BaseConnector):
 
     TARGET_URL = "http://6tdqqaxftvradka5d2frzgwixis7fmro7rfh4ettzcx7jfapkebe6jad.onion/"
 
-    TOR_SOCKS_PROXY = "socks5h://127.0.0.1:9050"
-
-    HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    }
-
     ONCLICK_URL_PATTERN = re.compile(r"window\.open\('([^']+)'")
     STATUS_CLASS_PATTERN = re.compile(r"status-([A-Za-z_]+)")
 
     def fetch(self):
-        proxies = {
-            "http": self.TOR_SOCKS_PROXY,
-            "https": self.TOR_SOCKS_PROXY,
-        }
-        response = requests.get(
-            self.TARGET_URL,
-            proxies=proxies,
-            headers=self.HEADERS,
-            timeout=30,
-        )
-        response.raise_for_status()
+        response = get_via_tor(self.TARGET_URL)
         return response.text
 
     def parse(self, raw_content):
@@ -94,20 +47,16 @@ class DataExposureLogsConnector(BaseConnector):
                 elif texte.startswith("DISCOVERY DATE:"):
                     discovery_date = texte.replace("DISCOVERY DATE:", "").strip()
 
-            # Lien de detail extrait depuis l'attribut onclick
             onclick_attr = card.get("onclick", "")
             match = self.ONCLICK_URL_PATTERN.search(onclick_attr)
             lien_detail = match.group(1) if match else None
 
-            # Code pays indicatif, depuis l'id du SVG (ex: "flag-icons-ru" -> "ru")
             flag_svg = card.select_one("svg[id^='flag-icons-']")
             code_pays_indicatif = None
             if flag_svg:
                 flag_id = flag_svg.get("id", "")
                 code_pays_indicatif = flag_id.replace("flag-icons-", "") or None
 
-            # Statut extrait depuis le nom de la classe CSS (plus fiable
-            # que le texte affiche, qui peut changer de formulation)
             status_div = card.select_one("[class*='status-']")
             statut = None
             if status_div:

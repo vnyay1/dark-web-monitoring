@@ -2,40 +2,13 @@
 FR-03 - Connecteur reel #5 : SafePay (ransomware leak site).
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
-Structure REELLE confirmee :
-
-<div class="col-md-4 mb-4">
-    <div class="card bg-dark text-light h-100">
-        <div class="card-header ...">
-            <div class="d-flex align-items-center flex-grow-1">
-                <img ... class="favicon-img">
-                <h5 class="card-title text-center mb-0">simonrack.com</h5>
-            </div>
-            <img src="https://flagcdn.com/16x12/es.png" alt="ES" class="country-flag" title="">
-        </div>
-        <div class="card-body">
-            <p class="card-text">Headquartered in Alfamen, Zaragoza, Spain, ...</p>
-        </div>
-        <div class="published-text">
-            <span class="text-success fw-bold">Published</span>
-        </div>
-        <div class="card-footer ...">
-            <span class="badge bg-secondary"><i class="bi bi-eye"></i> 15798</span>
-            <a href="/blog/post/simonrackcom/" class="btn btn-sm btn-primary">Learn More</a>
-        </div>
-    </div>
-</div>
-
-Le code pays est fiable ici : attribut alt="ES"/"IT"/"US" sur l'image
-du drapeau (contrairement a Data Exposure logs ou l'id du SVG etait
-moins certain). Aucun lien vers des donnees divulguees n'est present
-dans cette structure - rien a nettoyer ici (contrairement a BlackWater).
+MISE A JOUR : utilise desormais le module centralise app.tor.
 """
 
 import logging
-import requests
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
+from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -46,28 +19,8 @@ class SafePayConnector(BaseConnector):
 
     TARGET_URL = "http://safepaypfxntwixwjrlcscft433ggemlhgkkdupi2ynhtcmvdgubmoyd.onion/"
 
-    TOR_SOCKS_PROXY = "socks5h://127.0.0.1:9050"
-
-    HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    }
-
     def fetch(self):
-        proxies = {
-            "http": self.TOR_SOCKS_PROXY,
-            "https": self.TOR_SOCKS_PROXY,
-        }
-        response = requests.get(
-            self.TARGET_URL,
-            proxies=proxies,
-            headers=self.HEADERS,
-            timeout=30,
-        )
-        response.raise_for_status()
+        response = get_via_tor(self.TARGET_URL)
         return response.text
 
     def parse(self, raw_content):
@@ -133,6 +86,5 @@ if __name__ == "__main__":
             print(f"  Pays : {entry['code_pays']}")
             print(f"  Statut : {entry['statut']}")
             print(f"  Vues : {entry['vues']}")
-            print(f"  Description : {entry['description'][:100] if entry['description'] else None}")
     else:
         print(f"[ECHEC] {result['error']}")
