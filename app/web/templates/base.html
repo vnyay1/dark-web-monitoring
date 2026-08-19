@@ -120,6 +120,9 @@
                 {% endif %}
             </a>
             <a href="{{ url_for('reports.index') }}" class="{% block nav_reports %}{% endblock %}">Rapports</a>
+            {% if current_user.is_authenticated and current_user.role.value in ['admin', 'super_admin'] %}
+            <a href="{{ url_for('users.liste') }}">Comptes</a>
+            {% endif %}
             <a href="{{ url_for('auth.logout') }}">Deconnexion</a>
         </nav>
     </header>
