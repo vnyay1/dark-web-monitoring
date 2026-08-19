@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Configuration — Sentinel{% endblock %}
+
+{% block extra_head %}
+<style>
+    .settings-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    .settings-panel h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 15px;
+        margin-bottom: 16px;
+    }
+
+    .config-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .config-row:last-child { border-bottom: none; }
+
+    .config-info { flex: 1; }
+
+    .config-cle {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .config-desc {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
+
+    .config-form {
+        display: flex;
+        gap: 8px;
+    }
+
+    .config-form input {
+        width: 90px;
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        padding: 7px 10px;
+        border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+    }
+
+    .selecteur-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 13px;
+    }
+
+    .selecteur-valeur { flex: 1; font-family: 'JetBrains Mono', monospace; }
+    .selecteur-cat { color: var(--text-muted); width: 180px; }
+    .selecteur-inactif { opacity: 0.4; }
+
+    .add-selecteur-form {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-subtle);
+    }
+
+    .add-selecteur-form input, .add-selecteur-form select {
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+{% endwith %}
+
+<div class="settings-panel">
+    <h3>Seuils d'alerte (FR-25/FR-26)</h3>
+    {% for conf in configurations %}
+    <div class="config-row">
+        <div class="config-info">
+            <div class="config-cle">{{ conf.cle }}</div>
+            <div class="config-desc">{{ conf.description or "—" }}</div>
+        </div>
+        <form class="config-form" method="post" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
+            <input type="text" name="valeur" value="{{ conf.valeur }}">
+            <button type="submit" class="filter-submit">Mettre à jour</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="settings-panel">
+    <h3>Catalogue de sélecteurs (FR-08)</h3>
+    {% for sel in selecteurs %}
+    <div class="selecteur-row {% if not sel.actif %}selecteur-inactif{% endif %}">
+        <div class="selecteur-valeur">{{ sel.valeur }}</div>
+        <div class="selecteur-cat">{{ sel.categorie.value }}</div>
+        <form method="post" action="{{ url_for('settings.toggle_selecteur', selecteur_id=sel.id) }}">
+            <button type="submit" class="toggle-btn">{{ "Désactiver" if sel.actif else "Activer" }}</button>
+        </form>
+    </div>
+    {% endfor %}
+
+    <form class="add-selecteur-form" method="post" action="{{ url_for('settings.ajouter_selecteur') }}">
+        <input type="text" name="valeur" placeholder="Nouveau sélecteur..." required>
+        <select name="categorie" required>
+            {% for c in toutes_categories %}
+            <option value="{{ c.value }}">{{ c.value }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="filter-submit">Ajouter</button>
+    </form>
+</div>
+
+{% endblock %}

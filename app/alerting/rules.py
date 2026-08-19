@@ -1,19 +1,14 @@
 """
 FR-25/FR-26 - Determination des canaux d'alerte selon le score de
-confiance et la priorite sectorielle (secteurs .gov.cm, finance,
-telecommunications).
+confiance et la priorite sectorielle.
+
+Les seuils sont desormais lus depuis la configuration systeme (modifiable
+par admin/super_admin), plutot que fixes en dur dans le code.
 """
 
 from app.models import CanalAlerte
+from app.config_system import get_config_float
 
-SEUIL_CRITIQUE = 0.85
-SEUIL_ELEVE = 0.6
-# FR-25/FR-26 - Hausse de score consideree comme "significative" pour
-# declencher une alerte de confirmation sur une exposition existante
-# (evite le bruit d'une alerte a chaque micro-variation)
-SEUIL_HAUSSE_SIGNIFICATIVE = 0.15
-# Mots-cles indiquant un secteur prioritaire (FR-26). Bases sur le
-# secteur_activite ou le nom de l'entite (ex: domaine .gov.cm).
 SECTEURS_PRIORITAIRES = [
     "finance", "banque", "telecommunications", "telecom",
     "administration publique", "gouvernement",
@@ -37,17 +32,20 @@ def determiner_canaux(exposition) -> list:
     exposition donnee, selon son score de confiance et sa priorite
     sectorielle.
     """
+    seuil_critique = get_config_float("seuil_alerte_critique")
+    seuil_eleve = get_config_float("seuil_alerte_eleve")
+
     score = exposition.score_confiance
     prioritaire = est_secteur_prioritaire(exposition)
 
-    canaux = [CanalAlerte.INTERFACE]  # toujours visible dans l'interface
+    canaux = [CanalAlerte.INTERFACE]
 
-    if score >= SEUIL_CRITIQUE:
+    if score >= seuil_critique:
         canaux.append(CanalAlerte.EMAIL)
         canaux.append(CanalAlerte.SMS)
         if prioritaire:
             canaux.append(CanalAlerte.WHATSAPP)
-    elif score >= SEUIL_ELEVE:
+    elif score >= seuil_eleve:
         canaux.append(CanalAlerte.EMAIL)
         if prioritaire:
             canaux.append(CanalAlerte.SMS)

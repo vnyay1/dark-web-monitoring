@@ -48,16 +48,11 @@ def declencher_alertes(session, exposition, est_nouvelle: bool = True, ancien_sc
                         seuil_minimum: float = 0.6) -> list:
     """
     FR-25 - Point d'entree : declenche les alertes pour une exposition.
-
-    Deux cas declenchent une alerte :
-    1. Nouvelle exposition (est_nouvelle=True) dont le score depasse le seuil
-    2. Exposition existante dont le score a augmente significativement
-       (hausse >= SEUIL_HAUSSE_SIGNIFICATIVE) - alerte de "confirmation"
-
-    Une mise a jour mineure (nouvelle source sans hausse significative du
-    score) ne redeclenche PAS d'alerte, pour eviter le bruit de doublons.
     """
-    from app.alerting.rules import SEUIL_HAUSSE_SIGNIFICATIVE
+    from app.config_system import get_config_float
+
+    if seuil_minimum is None:
+        seuil_minimum = get_config_float("seuil_alerte_minimum")
 
     if exposition.score_confiance < seuil_minimum:
         return []
@@ -66,10 +61,11 @@ def declencher_alertes(session, exposition, est_nouvelle: bool = True, ancien_sc
 
     if not est_nouvelle:
         if ancien_score is None:
-            return []  # securite : pas d'ancien score, on ne peut pas comparer
+            return []
+        seuil_hausse = get_config_float("seuil_hausse_confirmation")
         hausse = exposition.score_confiance - ancien_score
-        if hausse < SEUIL_HAUSSE_SIGNIFICATIVE:
-            return []  # mise a jour mineure, pas d'alerte
+        if hausse < seuil_hausse:
+            return []
         est_confirmation = True
 
     canaux = determiner_canaux(exposition)

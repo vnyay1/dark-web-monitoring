@@ -312,3 +312,17 @@ class Alerte(Base):
 
     def __repr__(self):
         return f"<Alerte {self.canal.value} - {self.statut_envoi.value}>"
+
+# ---------------------------------------------------------------------
+# ConfigurationSysteme (parametres modifiables par admin/super_admin)
+# ---------------------------------------------------------------------
+
+class ConfigurationSysteme(Base):
+    __tablename__ = "configuration_systeme"
+
+    cle = Column(String(100), primary_key=True)
+    valeur = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<ConfigurationSysteme {self.cle}={self.valeur}>"
