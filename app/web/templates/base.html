@@ -5,129 +5,231 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Surveillance Dark Web — ANTIC{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-base: #0B1120;
-            --bg-card: #141B2D;
-            --bg-card-hover: #1A2338;
-            --border-subtle: #232D45;
-            --text-primary: #C9D1E0;
-            --text-muted: #6B7891;
-            --accent-safe: #3DDC84;
-            --accent-alert: #E8493A;
-            --accent-warn: #E8A93A;
-            --accent-neutral: #4A7DFF;
-        }
+    /* ===== TOKENS ===== */
+    :root{
+      --bg:#080B12; --bg-2:#0C1119; --surface:#111725; --surface-2:#161E2F;
+      --surface-3:#1C2639; --line:#212B40; --line-strong:#2E3A54;
+      --fg:#DDE4F0; --fg-2:#94A1BA; --fg-3:#63708A;
+      --accent:#33D6C0; --accent-dim:rgba(51,214,192,.12);
+      --crit:#F0503C; --high:#F08A2E; --warn:#E5C13C; --ok:#3DDC84; --info:#4A7DFF;
+      --crit-bg:rgba(240,80,60,.12); --high-bg:rgba(240,138,46,.12);
+      --warn-bg:rgba(229,193,60,.12); --ok-bg:rgba(61,220,132,.12); --info-bg:rgba(74,125,255,.12);
+      --r:8px; --r-sm:5px;
+      --mono:'JetBrains Mono',ui-monospace,monospace;
+      --sans:'Inter',system-ui,sans-serif;
+      --display:'Space Grotesk',var(--sans);
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.7);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{-webkit-text-size-adjust:100%}
+    body{
+      background:var(--bg); color:var(--fg); font-family:var(--sans);
+      font-size:14px; line-height:1.5; min-height:100vh;
+      -webkit-font-smoothing:antialiased;
+      background-image:
+        linear-gradient(to bottom,rgba(51,214,192,.03),transparent 320px),
+        radial-gradient(900px 380px at 85% -5%,rgba(74,125,255,.06),transparent 70%);
+    }
+    ::selection{background:rgba(51,214,192,.25)}
+    a{color:inherit}
+    :is(a,button,input,select,textarea,[tabindex]):focus-visible{
+      outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm);
+    }
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-track{background:var(--bg-2)}
+    ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:6px;border:2px solid var(--bg-2)}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ===== TOPBAR ===== */
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      display:flex; align-items:center; justify-content:space-between; gap:24px;
+      padding:0 24px; height:60px;
+      background:rgba(8,11,18,.85); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--line);
+    }
+    .brand{display:flex;align-items:center;gap:12px;min-width:0}
+    .brand-mark{width:50px;height:50px;object-fit:contain;display:block;flex:none}
+    .brand-text{font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+    .brand-text span{display:block;font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--fg-3)}
+    .live{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--fg-3);text-transform:uppercase}
+    .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg)}
 
-        body {
-            background: var(--bg-base);
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
-            min-height: 100vh;
-            background-image:
-                radial-gradient(circle at 20% 0%, rgba(74, 125, 255, 0.06), transparent 40%),
-                radial-gradient(circle at 80% 100%, rgba(61, 220, 132, 0.04), transparent 40%);
-        }
+    .topnav{display:flex;align-items:center;gap:2px;font-size:13px}
+    .topnav a{
+      position:relative; display:inline-flex; align-items:center; gap:7px;
+      padding:8px 12px; border-radius:var(--r-sm);
+      color:var(--fg-2); text-decoration:none; font-weight:500; white-space:nowrap;
+      transition:color .15s ease,background .15s ease;
+    }
+    .topnav a:hover{color:var(--fg);background:var(--surface-2)}
+    .topnav a.active{color:var(--accent);background:var(--accent-dim)}
+    .topnav a.danger:hover{color:var(--crit);background:var(--crit-bg)}
+    .nav-count{
+      font-family:var(--mono);font-size:10px;font-weight:600;line-height:1;
+      padding:3px 5px;border-radius:99px;background:var(--crit);color:#fff;
+    }
+    .nav-toggle{display:none;background:none;border:1px solid var(--line);color:var(--fg-2);
+      border-radius:var(--r-sm);padding:7px 10px;cursor:pointer;font-size:15px}
 
-        header.topbar {
-            border-bottom: 1px solid var(--border-subtle);
-            padding: 20px 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+    /* ===== LAYOUT ===== */
+    main{padding:28px 24px 64px;max-width:1440px;margin:0 auto}
+    .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
+      padding-bottom:16px;margin-bottom:24px;border-bottom:1px solid var(--line)}
+    .page-title{font-family:var(--display);font-size:21px;font-weight:600;letter-spacing:-.01em}
+    .page-sub{margin-top:4px;font-size:13px;color:var(--fg-3)}
+    .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--fg-3)}
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+    /* ===== SURFACES ===== */
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+    .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:14px 18px;border-bottom:1px solid var(--line)}
+    .card-title{font-family:var(--display);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2)}
+    .card-body{padding:18px}
 
-        .brand-mark {
-            width: 65px;
-            height: 65px;
-            object-fit: contain;
-            display: block;
-        }
+    /* ===== BUTTONS ===== */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:8px 14px;border-radius:var(--r-sm);border:1px solid var(--line-strong);
+      background:var(--surface-2);color:var(--fg);font:inherit;font-size:13px;font-weight:600;
+      text-decoration:none;cursor:pointer;transition:.15s ease}
+    .btn:hover{background:var(--surface-3);border-color:var(--fg-3)}
+    .btn-primary{background:var(--accent);border-color:var(--accent);color:#06231F}
+    .btn-primary:hover{background:#4CE6D1;border-color:#4CE6D1}
+    .btn-danger{background:var(--crit-bg);border-color:rgba(240,80,60,.4);color:var(--crit)}
+    .btn-danger:hover{background:rgba(240,80,60,.2);border-color:var(--crit)}
+    .btn-ghost{background:transparent;border-color:transparent;color:var(--fg-2)}
+    .btn-ghost:hover{background:var(--surface-2);color:var(--fg)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
 
-        .brand-text {
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: 600;
-            font-size: 15px;
-            letter-spacing: 0.02em;
-        }
+    /* ===== FORMS ===== */
+    .field{display:flex;flex-direction:column;gap:6px}
+    .label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3)}
+    .input,.select,textarea{
+      width:100%;padding:9px 11px;border-radius:var(--r-sm);
+      background:var(--bg-2);border:1px solid var(--line-strong);color:var(--fg);
+      font:inherit;font-size:13px;transition:border-color .15s,box-shadow .15s}
+    .input::placeholder{color:var(--fg-3)}
+    .input:hover,.select:hover{border-color:var(--fg-3)}
+    .input:focus,.select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+    .select{appearance:none;cursor:pointer;padding-right:30px;
+      background-image:linear-gradient(45deg,transparent 50%,var(--fg-3) 50%),linear-gradient(135deg,var(--fg-3) 50%,transparent 50%);
+      background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;
+      background-size:5px 5px,5px 5px;background-repeat:no-repeat}
 
-        .brand-text span {
-            color: var(--text-muted);
-            font-weight: 500;
-        }
+    /* ===== BADGES ===== */
+    .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:99px;
+      font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+      border:1px solid transparent;white-space:nowrap}
+    .badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+    .badge-crit{color:var(--crit);background:var(--crit-bg);border-color:rgba(240,80,60,.28)}
+    .badge-high{color:var(--high);background:var(--high-bg);border-color:rgba(240,138,46,.28)}
+    .badge-warn{color:var(--warn);background:var(--warn-bg);border-color:rgba(229,193,60,.28)}
+    .badge-ok{color:var(--ok);background:var(--ok-bg);border-color:rgba(61,220,132,.28)}
+    .badge-info{color:var(--info);background:var(--info-bg);border-color:rgba(74,125,255,.28)}
+    .badge-muted{color:var(--fg-2);background:var(--surface-2);border-color:var(--line-strong)}
 
-        nav.topnav {
-            display: flex;
-            gap: 24px;
-            font-size: 14px;
-        }
+    /* ===== TABLES ===== */
+    .table-wrap{overflow-x:auto;border-radius:var(--r)}
+    table.data{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+    table.data thead th{
+      position:sticky;top:60px;z-index:5;
+      background:var(--surface-2);color:var(--fg-3);
+      font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+      text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+    table.data tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+    table.data tbody tr{transition:background .12s ease}
+    table.data tbody tr:nth-child(even){background:rgba(255,255,255,.014)}
+    table.data tbody tr:hover{background:var(--surface-2)}
+    table.data tbody tr:last-child td{border-bottom:none}
+    .num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+    .t-right{text-align:right}
 
-        nav.topnav a {
-            color: var(--text-muted);
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.15s ease;
-        }
+    /* ===== EMPTY / FLASH ===== */
+    .empty{padding:56px 24px;text-align:center;color:var(--fg-3)}
+    .empty-mark{width:44px;height:44px;margin:0 auto 14px;border-radius:10px;
+      display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line-strong);
+      font-size:19px;color:var(--fg-2)}
+    .empty-title{color:var(--fg);font-weight:600;font-size:14px;margin-bottom:5px}
+    .flashes{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+    .flash{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--r);
+      border:1px solid var(--line-strong);background:var(--surface);font-size:13px;
+      border-left-width:3px;box-shadow:var(--shadow)}
+    .flash-success{border-left-color:var(--ok);color:var(--fg)}
+    .flash-danger,.flash-error{border-left-color:var(--crit)}
+    .flash-warning{border-left-color:var(--warn)}
+    .flash-info{border-left-color:var(--info)}
 
-        nav.topnav a:hover, nav.topnav a.active {
-            color: var(--text-primary);
-        }
-
-        main {
-            padding: 32px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        ::selection { background: rgba(74, 125, 255, 0.3); }
-
-        a:focus-visible, button:focus-visible {
-            outline: 2px solid var(--accent-neutral);
-            outline-offset: 2px;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            * { animation: none !important; transition: none !important; }
-        }
+    @media (max-width:820px){
+      .nav-toggle{display:inline-block}
+      .topnav{position:absolute;top:60px;left:0;right:0;display:none;flex-direction:column;
+        align-items:stretch;gap:2px;padding:10px;background:var(--bg-2);border-bottom:1px solid var(--line)}
+      .topnav.open{display:flex}
+      main{padding:20px 14px 48px}
+      table.data thead th{position:static}
+    }
+    @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <header class="topbar">
         <div class="brand">
-            <img src="{{ url_for('static', filename='images/logo-antic.jpg') }}"
-             alt="Logo ANTIC"
-             class="brand-mark">
-            <div class="brand-text">SENTINEL <span>/ ANTIC — Dark Web Monitoring</span></div>
+            <a href=" {{ url_for('dashboard.index') }}" style="text-decoration: none;"></a>
+                <img src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="Logo ANTIC" class="brand-mark">
+                <div class="brand-text">
+                    Sentinel
+                </div>
+            </a>
+            <span>ANTIC — Dark Web Monitoring</span>
         </div>
-        
-        <nav class="topnav">
-            <a href="{{ url_for('dashboard.index') }}" class="{% block nav_dashboard %}{% endblock %}">Tableau de bord</a>
-            <a href="{{ url_for('expositions.liste') }}" class="{% block nav_expositions %}{% endblock %}">Expositions</a>
-            <a href="{{ url_for('alerts.liste') }}" class="{% block nav_alerts %}{% endblock %}">
+        <span class="live">Live</span>
+        <button class="nav-toggle" type="button" aria-label="Menu" onclick="document.getElementById('topnav').classList.toggle('open')">☰</button>
+
+        <nav class="topnav" id="topnav">
+
+            <a href="{{ url_for('dashboard.index') }}">Tableau de bord</a>
+            <a href="{{ url_for('expositions.liste') }}">Expositions</a>
+            <a href="{{ url_for('alerts.liste') }}">
                 Alertes
                 {% if nb_alertes_non_lues and nb_alertes_non_lues > 0 %}
-                <span style="background: var(--accent-alert); color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px;">{{ nb_alertes_non_lues }}</span>
+                <span class="nav-count">{{ nb_alertes_non_lues }}</span>
                 {% endif %}
             </a>
-            <a href="{{ url_for('reports.index') }}" class="{% block nav_reports %}{% endblock %}">Rapports</a>
+            <a href="{{ url_for('reports.index') }}">Rapports</a>
             {% if current_user.is_authenticated and current_user.role.value in ['admin', 'super_admin'] %}
             <a href="{{ url_for('users.liste') }}">Comptes</a>
             {% endif %}
-            <a href="{{ url_for('auth.logout') }}">Deconnexion</a>
+            <a class="danger" href="{{ url_for('auth.logout') }}">Déconnexion</a>
         </nav>
     </header>
+
     <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+          <div class="flashes">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
     </main>
+
+    <script>
+      // Marque le lien de nav actif selon l'URL courante (aucun impact backend)
+      (function(){
+        var p = window.location.pathname;
+        document.querySelectorAll('#topnav a').forEach(function(a){
+          var h = a.getAttribute('href');
+          if (h && h !== '/' && p.indexOf(h) === 0) a.classList.add('active');
+          else if (h === p) a.classList.add('active');
+        });
+      })();
+    </script>
 </body>
 </html>

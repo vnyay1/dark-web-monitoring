@@ -1,160 +1,107 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion — Sentinel</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-base: #0B1120;
-            --bg-card: #141B2D;
-            --border-subtle: #232D45;
-            --text-primary: #C9D1E0;
-            --text-muted: #6B7891;
-            --accent-safe: #3DDC84;
-            --accent-alert: #E8493A;
-            --accent-neutral: #4A7DFF;
-        }
+{% extends "base.html" %}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+{% block title %}Connexion — Sentinel{% endblock %}
 
-        body {
-            background: var(--bg-base);
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-image: radial-gradient(circle at 50% 0%, rgba(74, 125, 255, 0.08), transparent 50%);
-        }
+{% block extra_head %}
+<style>
+  .login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 60px); /* hauteur sans topbar */
+    padding: 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-card .card-body {
+    padding: 32px;
+  }
+  .login-brand {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .login-brand .logo {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 14px;
+    display: block;
+  }
+  .login-brand h1 {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  .login-brand p {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--fg-2);
+  }
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .login-form .btn-primary {
+    margin-top: 6px;
+    width: 100%;
+    padding: 11px 14px;
+  }
+  .login-footer {
+    margin-top: 24px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .login-footer::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 1px;
+    background: var(--line-strong);
+    margin: 0 auto 14px;
+  }
+</style>
+{% endblock %}
 
-        .login-box {
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 40px;
-            width: 100%;
-            max-width: 380px;
-        }
+{% block content %}
+<div class="login-page">
+  <section class="card login-card" aria-labelledby="login-title">
+    <div class="card-body">
+      <div class="login-brand">
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-
-        .brand-mark {
-            width: 65px;
-            height: 65px;
-            object-fit: contain;
-            display: block;
-        }
-
-        .brand-text {
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: 700;
-            font-size: 17px;
-            letter-spacing: 0.02em;
-        }
-
-        .subtitle {
-            color: var(--text-muted);
-            font-size: 13px;
-            margin-bottom: 32px;
-        }
-
-        .field { margin-bottom: 16px; }
-
-        .field label {
-            display: block;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            font-weight: 600;
-            margin-bottom: 6px;
-        }
-
-        .field input {
-            width: 100%;
-            background: var(--bg-base);
-            border: 1px solid var(--border-subtle);
-            color: var(--text-primary);
-            padding: 11px 12px;
-            border-radius: 7px;
-            font-family: 'Inter', sans-serif;
-            font-size: 14px;
-        }
-
-        .field input:focus {
-            outline: 2px solid var(--accent-neutral);
-            outline-offset: 1px;
-        }
-
-        .submit-btn {
-            width: 100%;
-            background: var(--accent-neutral);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 7px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            margin-top: 8px;
-        }
-
-        .flash {
-            padding: 10px 14px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-size: 13px;
-        }
-        .flash-error { background: rgba(232, 73, 58, 0.1); color: var(--accent-alert); border: 1px solid rgba(232, 73, 58, 0.3); }
-        .flash-success { background: rgba(61, 220, 132, 0.1); color: var(--accent-safe); border: 1px solid rgba(61, 220, 132, 0.3); }
-
-        .footer-note {
-            margin-top: 24px;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-align: center;
-            font-family: 'JetBrains Mono', monospace;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-box">
-        <div class="brand">
-            <img src="{{ url_for('static', filename='images/logo-antic.jpg') }}"
-            alt="Logo ANTIC"
-            class="brand-mark">
-            <div class="brand-text">SENTINEL</div>
-        </div>
-        <div class="subtitle">ANTIC — Surveillance Dark Web / Acces reserve</div>
-
+        <img class="logo" src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="ANTIC" class="brand-mark">
+        <h1 id="login-title">Sentinel</h1>
+        <p>ANTIC — Surveillance Dark Web / Accès réservé</p>
+      </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
                 <div class="flash flash-{{ category }}">{{ message }}</div>
             {% endfor %}
         {% endwith %}
+      <form class="login-form" method="POST">
+        <div class="field">
+          <label class="label" for="username">Nom d'utilisateur</label>
+          <input class="input" type="text" id="username" name="nom_utilisateur" autocomplete="username" required autofocus>
+        </div>
 
-        <form method="post">
-            <div class="field">
-                <label>Nom d'utilisateur</label>
-                <input type="text" name="nom_utilisateur" required autofocus>
-            </div>
-            <div class="field">
-                <label>Mot de passe</label>
-                <input type="password" name="mot_de_passe" required>
-            </div>
-            <button type="submit" class="submit-btn">Se connecter</button>
-        </form>
+        <div class="field">
+          <label class="label" for="password">Mot de passe</label>
+          <input class="input" type="password" id="password" name="mot_de_passe" autocomplete="current-password" required>
+        </div>
 
-        <div class="footer-note">ACCES INTERNE — CIRT / ANTIC</div>
+        <button class="btn btn-primary" type="submit">Se connecter</button>
+      </form>
+
+      <div class="login-footer">Accès interne — CIRT / ANTIC</div>
     </div>
-</body>
-</html>
+  </section>
+</div>
+{% endblock %}
