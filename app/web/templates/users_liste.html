@@ -133,9 +133,15 @@
             <td>{{ "Actif" if u.actif else "Désactivé" }}</td>
             <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
             <td>
+                {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
+                {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
+                {% if peut_agir %}
                 <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
                     <button type="submit" class="toggle-btn">{{ "Désactiver" if u.actif else "Activer" }}</button>
                 </form>
+                {% else %}
+                <span style="color: var(--text-muted); font-size: 12px;">—</span>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

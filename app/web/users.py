@@ -103,13 +103,35 @@ def changer_role(user_id):
 @login_required
 @role_requis(RoleUtilisateur.ADMIN)
 def toggle_actif(user_id):
+    """
+    Active/desactive un compte. Regles de protection :
+    - Un utilisateur ne peut pas se desactiver lui-meme (evite un
+      verrouillage accidentel du systeme).
+    - Seul un super_admin peut desactiver un compte admin ou super_admin
+      (un admin ne peut agir que sur des comptes user/supervisor).
+    """
     session = get_session()
     user = session.query(User).filter_by(id=user_id).first()
 
-    if user:
-        user.actif = not user.actif
-        session.commit()
-        flash(f"Compte '{user.nom_utilisateur}' {'active' if user.actif else 'desactive'}.", "success")
+    if user is None:
+        flash("Utilisateur introuvable.", "error")
+        session.close()
+        return redirect(url_for("users.liste"))
+
+    if user.id == current_user.id:
+        flash("Vous ne pouvez pas desactiver votre propre compte.", "error")
+        session.close()
+        return redirect(url_for("users.liste"))
+
+    cible_est_protegee = user.role in (RoleUtilisateur.ADMIN, RoleUtilisateur.SUPER_ADMIN)
+    if cible_est_protegee and current_user.role != RoleUtilisateur.SUPER_ADMIN:
+        flash("Seul un super-administrateur peut activer/desactiver un compte admin ou super-admin.", "error")
+        session.close()
+        return redirect(url_for("users.liste"))
+
+    user.actif = not user.actif
+    session.commit()
+    flash(f"Compte '{user.nom_utilisateur}' {'active' if user.actif else 'desactive'}.", "success")
 
     session.close()
     return redirect(url_for("users.liste"))
