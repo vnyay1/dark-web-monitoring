@@ -22,6 +22,7 @@ class AuthenticatedUser(UserMixin):
     def __init__(self, user: User):
         self.id = user.id
         self.nom_utilisateur = user.nom_utilisateur
+        self.role = user.role  # necessaire pour le controle de privileges
 
 
 @login_manager.user_loader

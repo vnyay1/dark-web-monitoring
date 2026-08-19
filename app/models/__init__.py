@@ -99,6 +99,12 @@ class ResultatAudit(enum.Enum):
     SUCCES = "succes"
     ECHEC = "echec"
 
+class RoleUtilisateur(enum.Enum):
+    USER = "user"
+    SUPERVISOR = "supervisor"
+    ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
+
 
 # ---------------------------------------------------------------------
 # Exposition (indicateur d'exposition - FR-16)
@@ -254,6 +260,10 @@ class JournalAudit(Base):
 # User (FR-24 - authentification des analystes)
 # ---------------------------------------------------------------------
 
+# ---------------------------------------------------------------------
+# User (FR-24 - authentification + gestion des privileges)
+# ---------------------------------------------------------------------
+
 class User(Base):
     __tablename__ = "users"
 
@@ -261,11 +271,13 @@ class User(Base):
 
     nom_utilisateur = Column(String(100), nullable=False, unique=True)
     mot_de_passe_hash = Column(String(255), nullable=False)
+    role = Column(SAEnum(RoleUtilisateur), nullable=False, default=RoleUtilisateur.USER)
     actif = Column(Boolean, nullable=False, default=True)
     date_creation = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     def __repr__(self):
-        return f"<User {self.nom_utilisateur}>"
+        return f"<User {self.nom_utilisateur} ({self.role.value})>"
+
 # ---------------------------------------------------------------------
 # Alerte (FR-25/FR-26 - alertes multi-canal)
 # ---------------------------------------------------------------------

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Gestion des comptes — Sentinel{% endblock %}
+
+{% block extra_head %}
+<style>
+    .create-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+
+    .create-form {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: end;
+    }
+
+    .create-form .filter-field input,
+    .create-form .filter-field select {
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        min-width: 160px;
+    }
+
+    .create-form label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .role-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+
+    .role-user { background: rgba(107, 120, 145, 0.15); color: var(--text-muted); }
+    .role-supervisor { background: rgba(74, 125, 255, 0.15); color: var(--accent-neutral); }
+    .role-admin { background: rgba(232, 169, 58, 0.15); color: var(--accent-warn); }
+    .role-super_admin { background: rgba(232, 73, 58, 0.15); color: var(--accent-alert); }
+
+    .role-select {
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        padding: 5px 8px;
+        border-radius: 5px;
+        font-size: 12px;
+    }
+
+    .toggle-btn {
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-muted);
+        padding: 5px 12px;
+        border-radius: 5px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+{% endwith %}
+
+<div class="create-panel">
+    <h3 style="font-family:'Space Grotesk',sans-serif; font-size:15px; margin-bottom:16px;">Créer un compte</h3>
+    <form class="create-form" method="post" action="{{ url_for('users.creer') }}">
+        <div class="filter-field">
+            <label>Nom d'utilisateur</label>
+            <input type="text" name="nom_utilisateur" required>
+        </div>
+        <div class="filter-field">
+            <label>Mot de passe</label>
+            <input type="password" name="mot_de_passe" required minlength="8">
+        </div>
+        <div class="filter-field">
+            <label>Rôle</label>
+            <select name="role">
+                {% for r in tous_roles %}
+                <option value="{{ r.value }}">{{ r.value }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="filter-submit">Créer</button>
+    </form>
+</div>
+
+<table class="expositions-table">
+    <thead>
+        <tr>
+            <th>Utilisateur</th>
+            <th>Rôle</th>
+            <th>Statut</th>
+            <th>Créé le</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in utilisateurs %}
+        <tr>
+            <td><strong>{{ u.nom_utilisateur }}</strong></td>
+            <td>
+                {% if peut_modifier_role %}
+                <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
+                    <select name="role" class="role-select" onchange="this.form.submit()">
+                        {% for r in tous_roles %}
+                        <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% else %}
+                <span class="role-badge role-{{ u.role.value }}">{{ u.role.value }}</span>
+                {% endif %}
+            </td>
+            <td>{{ "Actif" if u.actif else "Désactivé" }}</td>
+            <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
+            <td>
+                <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
+                    <button type="submit" class="toggle-btn">{{ "Désactiver" if u.actif else "Activer" }}</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}
