@@ -177,15 +177,15 @@
 <body>
     <header class="topbar">
         <div class="brand">
-            <a href=" {{ url_for('dashboard.index') }}" style="text-decoration: none;"></a>
+            <a href=" {{ url_for('dashboard.index') }}" style="text-decoration: none;">
                 <img src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="Logo ANTIC" class="brand-mark">
+            </a>
                 <div class="brand-text">
                     Sentinel
                 </div>
-            </a>
             <span>ANTIC — Dark Web Monitoring</span>
+            <span class="live">Live</span>
         </div>
-        <span class="live">Live</span>
         <button class="nav-toggle" type="button" aria-label="Menu" onclick="document.getElementById('topnav').classList.toggle('open')">☰</button>
 
         <nav class="topnav" id="topnav">

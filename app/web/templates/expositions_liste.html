@@ -4,242 +4,453 @@
 
 {% block extra_head %}
 <style>
-    .filter-bar {
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 24px;
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        align-items: end;
+  .page-header {
+    margin-bottom: 24px;
+  }
+
+  .page-header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+  }
+
+  .page-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .filter-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 24px;
+  }
+
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    align-items: end;
+  }
+
+  .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .filter-field label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .filter-field input,
+  .filter-field select {
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .filter-field input:focus,
+  .filter-field select:focus {
+    outline: none;
+    border-color: var(--accent-neutral);
+    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+  }
+
+  .filter-actions {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.05s ease, opacity 0.15s ease;
+  }
+
+  .btn:active {
+    transform: translateY(1px);
+  }
+
+  .btn-primary {
+    background: var(--accent-neutral);
+    color: #0b0f17;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.92;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    text-decoration: none;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .btn-ghost:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .results-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    padding: 5px 10px;
+    border-radius: 6px;
+  }
+
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .expositions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .expositions-table thead {
+    background: var(--bg-base);
+  }
+
+  .expositions-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+  }
+
+  .expositions-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+
+  .expositions-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .expositions-table tbody tr:hover {
+    background: var(--bg-card-hover);
+  }
+
+  .expositions-table td strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .cell-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .badge-category {
+    background: rgba(107, 120, 145, 0.14);
+    color: var(--text-secondary);
+  }
+
+  .score-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .score-high {
+    background: rgba(248, 113, 113, 0.12);
+    color: #f87171;
+  }
+
+  .score-mid {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+  }
+
+  .score-low {
+    background: rgba(148, 163, 184, 0.12);
+    color: #94a3b8;
+  }
+
+  .statut-select {
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 5px 22px 5px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7891' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    transition: border-color 0.15s ease;
+  }
+
+  .statut-select:hover {
+    border-color: var(--accent-neutral);
+  }
+
+  .statut-select:focus {
+    outline: none;
+    border-color: var(--accent-neutral);
+    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 64px 24px;
+    color: var(--text-muted);
+  }
+
+  .empty-state-icon {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 16px auto;
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  .empty-state h3 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: 13px;
+  }
+
+  @media (max-width: 768px) {
+    .filter-grid {
+      grid-template-columns: 1fr;
     }
 
-    .filter-field {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+    .filter-actions {
+      width: 100%;
     }
 
-    .filter-field label {
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        font-weight: 600;
+    .filter-actions .btn {
+      flex: 1;
     }
 
-    .filter-field input, .filter-field select {
-        background: var(--bg-base);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        padding: 8px 10px;
-        border-radius: 6px;
-        font-family: 'Inter', sans-serif;
-        font-size: 13px;
-        min-width: 140px;
+    .expositions-table,
+    .expositions-table thead,
+    .expositions-table tbody,
+    .expositions-table th,
+    .expositions-table td,
+    .expositions-table tr {
+      display: block;
     }
 
-    .filter-field input:focus, .filter-field select:focus {
-        outline: 2px solid var(--accent-neutral);
-        outline-offset: 1px;
-    }
-
-    .filter-submit {
-        background: var(--accent-neutral);
-        color: white;
-        border: none;
-        padding: 9px 18px;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 13px;
-        cursor: pointer;
-    }
-
-    .filter-reset {
-        color: var(--text-muted);
-        font-size: 13px;
-        text-decoration: none;
-        padding: 9px 4px;
-    }
-
-    .results-count {
-        color: var(--text-muted);
-        font-size: 13px;
-        margin-bottom: 16px;
-        font-family: 'JetBrains Mono', monospace;
-    }
-
-    table.expositions-table {
-        width: 100%;
-        border-collapse: collapse;
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        overflow: hidden;
-    }
-
-    .expositions-table th {
-        text-align: left;
-        padding: 12px 16px;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        border-bottom: 1px solid var(--border-subtle);
-        font-weight: 600;
+    .expositions-table thead {
+      display: none;
     }
 
     .expositions-table td {
-        padding: 14px 16px;
-        font-size: 13px;
-        border-bottom: 1px solid var(--border-subtle);
+      border-bottom: none;
+      padding: 8px 16px;
+      position: relative;
+      padding-left: 40%;
     }
 
-    .expositions-table tr:last-child td { border-bottom: none; }
-    .expositions-table tr:hover { background: var(--bg-card-hover); }
-
-    .score-badge {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 500;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 12px;
+    .expositions-table td::before {
+      content: attr(data-label);
+      position: absolute;
+      left: 16px;
+      top: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 600;
     }
 
-    .score-high { background: rgba(232, 73, 58, 0.15); color: var(--accent-alert); }
-    .score-mid { background: rgba(232, 169, 58, 0.15); color: var(--accent-warn); }
-    .score-low { background: rgba(107, 120, 145, 0.15); color: var(--text-muted); }
-
-    .statut-select {
-        background: var(--bg-base);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        padding: 5px 8px;
-        border-radius: 5px;
-        font-size: 12px;
-        font-family: 'Inter', sans-serif;
+    .expositions-table tr {
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 10px 0;
     }
 
-    .flash {
-        padding: 10px 16px;
-        border-radius: 6px;
-        margin-bottom: 16px;
-        font-size: 13px;
+    .expositions-table tr:last-child {
+      border-bottom: none;
     }
-    .flash-success { background: rgba(61, 220, 132, 0.1); color: var(--accent-safe); border: 1px solid rgba(61, 220, 132, 0.3); }
-    .flash-error { background: rgba(232, 73, 58, 0.1); color: var(--accent-alert); border: 1px solid rgba(232, 73, 58, 0.3); }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: var(--text-muted);
-    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="page-header">
+  <h1>Expositions</h1>
+  <p>Liste des fuites détectées et suivi de leur traitement</p>
+</div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">{{ message }}</div>
-    {% endfor %}
-{% endwith %}
-
-<form class="filter-bar" method="get">
+<form class="filter-card" method="get">
+  <div class="filter-grid">
     <div class="filter-field">
-        <label>Recherche</label>
-        <input type="text" name="q" placeholder="Nom de l'entite..." value="{{ filtres_actifs.q }}">
+      <label for="f-q">Recherche</label>
+      <input id="f-q" type="text" name="q" placeholder="Nom de l'entité…" value="{{ filtres_actifs.q }}">
     </div>
 
     <div class="filter-field">
-        <label>Secteur</label>
-        <select name="secteur">
-            <option value="">Tous</option>
-            {% for s in tous_secteurs %}
-            <option value="{{ s }}" {% if filtres_actifs.secteur == s %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-        </select>
+      <label for="f-secteur">Secteur</label>
+      <select id="f-secteur" name="secteur">
+        <option value="">Tous</option>
+        {% for s in tous_secteurs %}
+        <option value="{{ s }}" {% if filtres_actifs.secteur == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
     </div>
 
     <div class="filter-field">
-        <label>Categorie</label>
-        <select name="categorie">
-            <option value="">Toutes</option>
-            {% for c in toutes_categories %}
-            <option value="{{ c.value }}" {% if filtres_actifs.categorie == c.value %}selected{% endif %}>{{ c.value }}</option>
-            {% endfor %}
-        </select>
+      <label for="f-categorie">Catégorie</label>
+      <select id="f-categorie" name="categorie">
+        <option value="">Toutes</option>
+        {% for c in toutes_categories %}
+        <option value="{{ c.value }}" {% if filtres_actifs.categorie == c.value %}selected{% endif %}>{{ c.value }}</option>
+        {% endfor %}
+      </select>
     </div>
 
     <div class="filter-field">
-        <label>Statut</label>
-        <select name="statut">
-            <option value="">Tous</option>
-            {% for s in tous_statuts %}
-            <option value="{{ s.value }}" {% if filtres_actifs.statut == s.value %}selected{% endif %}>{{ s.value }}</option>
-            {% endfor %}
-        </select>
+      <label for="f-statut">Statut</label>
+      <select id="f-statut" name="statut">
+        <option value="">Tous</option>
+        {% for s in tous_statuts %}
+        <option value="{{ s.value }}" {% if filtres_actifs.statut == s.value %}selected{% endif %}>{{ s.value }}</option>
+        {% endfor %}
+      </select>
     </div>
 
     <div class="filter-field">
-        <label>Periode (jours)</label>
-        <input type="number" min="1" name="periode" placeholder="ex: 30" value="{{ filtres_actifs.periode }}">
+      <label for="f-periode">Période (jours)</label>
+      <input id="f-periode" type="number" min="1" name="periode" placeholder="ex: 30" value="{{ filtres_actifs.periode }}">
     </div>
 
     <div class="filter-field">
-        <label>Confiance min.</label>
-        <input type="number" name="confiance_min" placeholder="0.0 - 1.0" step="0.05" min="0" max="1" value="{{ filtres_actifs.confiance_min }}">
+      <label for="f-confiance">Confiance min.</label>
+      <input id="f-confiance" type="number" name="confiance_min" placeholder="0.0 – 1.0" step="0.05" min="0" max="1" value="{{ filtres_actifs.confiance_min }}">
     </div>
 
-    <button type="submit" class="filter-submit">Filtrer</button>
-    <a href="{{ url_for('expositions.liste') }}" class="filter-reset">Reinitialiser</a>
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-primary" style="color: aliceblue;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        Filtrer
+      </button>
+      <a href="{{ url_for('expositions.liste') }}" class="btn btn-ghost">Réinitialiser</a>
+    </div>
+  </div>
 </form>
 
-<div class="results-count">{{ expositions|length }} exposition(s) trouvee(s)</div>
+<div class="toolbar">
+  <div class="results-count">{{ expositions|length }} exposition(s) trouvée(s)</div>
+</div>
 
 {% if expositions %}
-<table class="expositions-table">
+<div class="table-card">
+  <table class="expositions-table">
     <thead>
-        <tr>
-            <th>Entite</th>
-            <th>Secteur</th>
-            <th>Categorie</th>
-            <th>Detection</th>
-            <th>Confiance</th>
-            <th>Sources</th>
-            <th>Statut</th>
-        </tr>
+      <tr>
+        <th>Entité</th>
+        <th>Secteur</th>
+        <th>Catégorie</th>
+        <th>Détection</th>
+        <th>Confiance</th>
+        <th>Sources</th>
+        <th>Statut</th>
+      </tr>
     </thead>
     <tbody>
-        {% for exp in expositions %}
-        <tr>
-            <td><strong>{{ exp.nom_entite }}</strong></td>
-            <td>{{ exp.secteur_activite or '—' }}</td>
-            <td>{{ exp.categorie_fuite.value }}</td>
-            <td>{{ exp.date_premiere_detection.strftime('%d/%m/%Y') }}</td>
-            <td>
-                <span class="score-badge {% if exp.score_confiance >= 0.7 %}score-high{% elif exp.score_confiance >= 0.4 %}score-mid{% else %}score-low{% endif %}">
-                    {{ "%.2f"|format(exp.score_confiance) }}
-                </span>
-            </td>
-            <td>{{ exp.sources|length }}</td>
-            <td>
-                <form method="post" action="{{ url_for('expositions.changer_statut', exposition_id=exp.id) }}">
-                    <select name="statut" class="statut-select" onchange="this.form.submit()">
-                        {% for s in tous_statuts %}
-                        <option value="{{ s.value }}" {% if exp.statut == s %}selected{% endif %}>{{ s.value }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
+      {% for exp in expositions %}
+      <tr>
+        <td data-label="Entité"><strong>{{ exp.nom_entite }}</strong></td>
+        <td data-label="Secteur">{{ exp.secteur_activite or '—' }}</td>
+        <td data-label="Catégorie">
+          <span class="badge badge-category">{{ exp.categorie_fuite.value }}</span>
+        </td>
+        <td data-label="Détection" class="cell-mono">{{ exp.date_premiere_detection.strftime('%d/%m/%Y') }}</td>
+        <td data-label="Confiance">
+          <span class="score-badge {% if exp.score_confiance >= 0.7 %}score-high{% elif exp.score_confiance >= 0.4 %}score-mid{% else %}score-low{% endif %}">
+            {{ "%.2f"|format(exp.score_confiance) }}
+          </span>
+        </td>
+        <td data-label="Sources" class="cell-mono">{{ exp.sources|length }}</td>
+        <td data-label="Statut">
+          <form method="post" action="{{ url_for('expositions.changer_statut', exposition_id=exp.id) }}">
+            <select name="statut" class="statut-select" onchange="this.form.submit()" aria-label="Changer le statut de {{ exp.nom_entite }}">
+              {% for s in tous_statuts %}
+              <option value="{{ s.value }}" {% if exp.statut == s %}selected{% endif %}>{{ s.value }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
     </tbody>
-</table>
+  </table>
+</div>
 {% else %}
-<div class="empty-state">Aucune exposition ne correspond a ces criteres.</div>
+<div class="empty-state">
+  <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+  <h3>Aucune exposition trouvée</h3>
+  <p>Essayez d'assouplir les critères de filtre.</p>
+</div>
 {% endif %}
-
 {% endblock %}

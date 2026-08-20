@@ -1,110 +1,305 @@
 {% extends "base.html" %}
+
 {% block title %}Alertes — Sentinel{% endblock %}
 {% block nav_alerts %}active{% endblock %}
 
 {% block extra_head %}
 <style>
+  .page-header {
+    margin-bottom: 24px;
+  }
+
+  .page-header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+  }
+
+  .page-header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .alerts-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .alerts-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+  }
+
+  .alerts-count strong {
+    color: var(--text-primary);
+  }
+
+  .alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .alert-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--accent-neutral);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+  }
+
+  .alert-card:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border-default);
+  }
+
+  .alert-card.non-lue {
+    border-left-color: var(--accent-alert);
+    background: color-mix(in srgb, var(--accent-alert) 5%, var(--bg-card));
+  }
+
+  .alert-card.non-lue:hover {
+    background: color-mix(in srgb, var(--accent-alert) 8%, var(--bg-elevated));
+  }
+
+  .alert-icon {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    font-size: 16px;
+    margin-top: 2px;
+  }
+
+  .alert-card.non-lue .alert-icon {
+    background: color-mix(in srgb, var(--accent-alert) 12%, transparent);
+    color: var(--accent-alert);
+  }
+
+  .alert-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .alert-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+
+  .alert-entite {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+    line-height: 1.3;
+  }
+
+  .badge-nouvelle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: color-mix(in srgb, var(--accent-alert) 14%, transparent);
+    color: var(--accent-alert);
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in srgb, var(--accent-alert) 25%, transparent);
+  }
+
+  .badge-nouvelle::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .alert-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .alert-meta .dot {
+    margin: 0 6px;
+    color: var(--border-default);
+  }
+
+  .alert-score {
+    color: var(--accent-alert);
+    font-weight: 600;
+  }
+
+  .alert-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .alert-mark-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    padding: 7px 12px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+
+  .alert-mark-btn:hover {
+    border-color: var(--accent-neutral);
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+  }
+
+  .alert-mark-btn:active {
+    transform: translateY(1px);
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 72px 24px;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--radius-lg);
+  }
+
+  .empty-state-icon {
+    font-size: 32px;
+    margin-bottom: 14px;
+    opacity: 0.5;
+  }
+
+  .empty-state h3 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  @media (max-width: 640px) {
     .alert-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-left: 3px solid var(--accent-neutral);
-        border-radius: 8px;
-        padding: 18px 20px;
-        margin-bottom: 12px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .alert-card.non-lue {
-        border-left-color: var(--accent-alert);
-        background: rgba(232, 73, 58, 0.04);
+    .alert-icon {
+      margin-top: 0;
     }
 
-    .alert-info { flex: 1; }
-
-    .alert-entite {
-        font-family: 'Space Grotesk', sans-serif;
-        font-weight: 600;
-        font-size: 15px;
-        margin-bottom: 4px;
-    }
-
-    .alert-meta {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        color: var(--text-muted);
-    }
-
-    .alert-score {
-        font-weight: 600;
-        color: var(--accent-alert);
+    .alert-actions {
+      width: 100%;
     }
 
     .alert-mark-btn {
-        background: transparent;
-        border: 1px solid var(--border-subtle);
-        color: var(--text-muted);
-        padding: 7px 14px;
-        border-radius: 6px;
-        font-size: 12px;
-        cursor: pointer;
-        white-space: nowrap;
+      width: 100%;
+      justify-content: center;
     }
-
-    .alert-mark-btn:hover {
-        border-color: var(--accent-neutral);
-        color: var(--text-primary);
-    }
-
-    .badge-nouvelle {
-        display: inline-block;
-        background: rgba(232, 73, 58, 0.15);
-        color: var(--accent-alert);
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        padding: 2px 8px;
-        border-radius: 4px;
-        margin-left: 8px;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: var(--text-muted);
-    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="page-header">
+  <h1>Alertes</h1>
+  <p>Notifications générées à partir des expositions détectées sur le dark web.</p>
+</div>
 
-<div class="results-count">{{ alertes|length }} alerte(s)</div>
+<div class="alerts-toolbar">
+  <div class="alerts-count">
+    <strong>{{ alertes|length }}</strong> alerte{{ 's' if alertes|length > 1 else '' }}
+  </div>
+</div>
 
 {% if alertes %}
+  <div class="alert-list" role="list" aria-label="Liste des alertes">
     {% for alerte in alertes %}
-    <div class="alert-card {% if not alerte.lue %}non-lue{% endif %}">
-        <div class="alert-info">
-            <div class="alert-entite">
-                {{ alerte.exposition.nom_entite }}
-                {% if not alerte.lue %}<span class="badge-nouvelle">Non lue</span>{% endif %}
-            </div>
-            <div class="alert-meta">
-                {{ alerte.exposition.categorie_fuite.value }} ·
-                score <span class="alert-score">{{ "%.2f"|format(alerte.exposition.score_confiance) }}</span> ·
-                {{ alerte.date_creation.strftime('%d/%m/%Y %H:%M') }}
-            </div>
-        </div>
-        {% if not alerte.lue %}
-        <form method="post" action="{{ url_for('alerts.marquer_lue', alerte_id=alerte.id) }}">
-            <button type="submit" class="alert-mark-btn">Marquer comme lue</button>
-        </form>
-        {% endif %}
-    </div>
-    {% endfor %}
-{% else %}
-    <div class="empty-state">Aucune alerte pour le moment.</div>
-{% endif %}
+    <article class="alert-card {% if not alerte.lue %}non-lue{% endif %}" role="listitem">
+      <div class="alert-icon" aria-hidden="true">
+        {% if alerte.lue %}&#x2713;{% else %}&#x26A0;{% endif %}
+      </div>
 
+      <div class="alert-body">
+        <div class="alert-title-row">
+          <div class="alert-entite">{{ alerte.exposition.nom_entite }}</div>
+          {% if not alerte.lue %}
+          <span class="badge-nouvelle">Non lue</span>
+          {% endif %}
+        </div>
+        <div class="alert-meta">
+          {{ alerte.exposition.categorie_fuite.value }}
+          <span class="dot">·</span>
+          score <span class="alert-score">{{ "%.2f"|format(alerte.exposition.score_confiance) }}</span>
+          <span class="dot">·</span>
+          {{ alerte.date_creation.strftime('%d/%m/%Y %H:%M') }}
+        </div>
+      </div>
+
+      {% if not alerte.lue %}
+      <div class="alert-actions">
+        <form method="post" action="{{ url_for('alerts.marquer_lue', alerte_id=alerte.id) }}">
+          <button type="submit" class="alert-mark-btn" aria-label="Marquer l'alerte de {{ alerte.exposition.nom_entite }} comme lue">
+            <span>Marquer comme lue</span>
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon" aria-hidden="true">&#x1F514;</div>
+    <h3>Aucune alerte</h3>
+    <p>Les alertes apparaîtront ici dès qu'une exposition déclenchera un seuil de notification.</p>
+  </div>
+{% endif %}
 {% endblock %}

@@ -51,7 +51,7 @@
 {% block content %}
 
 <div class="report-panel">
-    <h3>Rapport mensuel d'exposition (FR-27)</h3>
+    <h3>Rapport mensuel d'exposition</h3>
     <p>Statistiques agrégées du mois en cours ({{ mois_courant }}/{{ annee_courante }}) — aucune donnée personnelle incluse.</p>
     <div class="report-actions">
         <a href="{{ url_for('reports.monthly_pdf', mois=mois_courant, annee=annee_courante) }}" class="report-btn">Télécharger PDF</a>
@@ -60,7 +60,7 @@
 </div>
 
 <div class="report-panel">
-    <h3>Export des données (FR-28)</h3>
+    <h3>Export des données</h3>
     <p>Exporte l'ensemble des indicateurs d'exposition au format exploitable par d'autres outils du CIRT.</p>
     <div class="report-actions">
         <a href="{{ url_for('reports.export_json') }}" class="report-btn secondary">Exporter en JSON</a>

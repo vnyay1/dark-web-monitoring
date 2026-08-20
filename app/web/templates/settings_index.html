@@ -98,7 +98,7 @@
 {% endwith %}
 
 <div class="settings-panel">
-    <h3>Seuils d'alerte (FR-25/FR-26)</h3>
+    <h3>Seuils d'alerte</h3>
     {% for conf in configurations %}
     <div class="config-row">
         <div class="config-info">
@@ -114,7 +114,7 @@
 </div>
 
 <div class="settings-panel">
-    <h3>Catalogue de sélecteurs (FR-08)</h3>
+    <h3>Catalogue de sélecteurs</h3>
     {% for sel in selecteurs %}
     <div class="selecteur-row {% if not sel.actif %}selecteur-inactif{% endif %}">
         <div class="selecteur-valeur">{{ sel.valeur }}</div>

@@ -1,151 +1,384 @@
 {% extends "base.html" %}
+
 {% block title %}Gestion des comptes — Sentinel{% endblock %}
+{% block nav_comptes %}active{% endblock %}
 
 {% block extra_head %}
 <style>
-    .create-panel {
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 24px;
-    }
+  .page-header {
+    margin-bottom: 24px;
+  }
 
+  .page-header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+  }
+
+  .page-header p {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0;
+  }
+
+  .create-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+
+  .create-card h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 18px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .create-form {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-field label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
+  .form-field input,
+  .form-field select {
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    min-width: 180px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .form-field input:focus,
+  .form-field select:focus {
+    outline: none;
+    border-color: var(--accent-info);
+    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+  }
+
+  .btn-create {
+    background: var(--accent-info);
+    color: var(--bg-base);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.05s ease;
+  }
+
+  .btn-create:hover {
+    opacity: 0.92;
+  }
+
+  .btn-create:active {
+    transform: translateY(1px);
+  }
+
+  .users-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  .users-table thead {
+    background: var(--bg-elevated);
+  }
+
+  .users-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+  }
+
+  .users-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    vertical-align: middle;
+  }
+
+  .users-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .users-table tbody tr:hover {
+    background: rgba(45, 212, 191, 0.04);
+  }
+
+  .user-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .role-select {
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    min-width: 140px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+
+  .role-select:hover {
+    border-color: var(--accent-info);
+  }
+
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+  }
+
+  .role-user {
+    background: rgba(107, 120, 145, 0.12);
+    color: #9aa3b2;
+    border-color: rgba(107, 120, 145, 0.25);
+  }
+
+  .role-supervisor {
+    background: rgba(45, 212, 191, 0.10);
+    color: #2dd4bf;
+    border-color: rgba(45, 212, 191, 0.25);
+  }
+
+  .role-admin {
+    background: rgba(232, 169, 58, 0.12);
+    color: #f0b232;
+    border-color: rgba(232, 169, 58, 0.25);
+  }
+
+  .role-super_admin {
+    background: rgba(232, 73, 58, 0.12);
+    color: #f87171;
+    border-color: rgba(232, 73, 58, 0.25);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  .status-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .status-actif {
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+  }
+
+  .status-actif::before {
+    background: #4ade80;
+  }
+
+  .status-inactif {
+    background: rgba(107, 120, 145, 0.12);
+    color: #9aa3b2;
+  }
+
+  .status-inactif::before {
+    background: #6b7891;
+  }
+
+  .btn-toggle {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-toggle:hover {
+    border-color: var(--accent-info);
+    color: var(--accent-info);
+    background: rgba(45, 212, 191, 0.06);
+  }
+
+  .btn-toggle:disabled,
+  .btn-toggle[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .action-muted {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 768px) {
     .create-form {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        align-items: end;
+      flex-direction: column;
+      align-items: stretch;
     }
 
-    .create-form .filter-field input,
-    .create-form .filter-field select {
-        background: var(--bg-base);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        padding: 8px 10px;
-        border-radius: 6px;
-        font-size: 13px;
-        min-width: 160px;
+    .form-field input,
+    .form-field select {
+      width: 100%;
     }
 
-    .create-form label {
-        font-size: 11px;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        font-weight: 600;
-        display: block;
-        margin-bottom: 4px;
+    .users-table {
+      display: block;
+      overflow-x: auto;
     }
-
-    .role-badge {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-weight: 500;
-    }
-
-    .role-user { background: rgba(107, 120, 145, 0.15); color: var(--text-muted); }
-    .role-supervisor { background: rgba(74, 125, 255, 0.15); color: var(--accent-neutral); }
-    .role-admin { background: rgba(232, 169, 58, 0.15); color: var(--accent-warn); }
-    .role-super_admin { background: rgba(232, 73, 58, 0.15); color: var(--accent-alert); }
-
-    .role-select {
-        background: var(--bg-base);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        padding: 5px 8px;
-        border-radius: 5px;
-        font-size: 12px;
-    }
-
-    .toggle-btn {
-        background: transparent;
-        border: 1px solid var(--border-subtle);
-        color: var(--text-muted);
-        padding: 5px 12px;
-        border-radius: 5px;
-        font-size: 12px;
-        cursor: pointer;
-    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">{{ message }}</div>
-    {% endfor %}
-{% endwith %}
-
-<div class="create-panel">
-    <h3 style="font-family:'Space Grotesk',sans-serif; font-size:15px; margin-bottom:16px;">Créer un compte</h3>
-    <form class="create-form" method="post" action="{{ url_for('users.creer') }}">
-        <div class="filter-field">
-            <label>Nom d'utilisateur</label>
-            <input type="text" name="nom_utilisateur" required>
-        </div>
-        <div class="filter-field">
-            <label>Mot de passe</label>
-            <input type="password" name="mot_de_passe" required minlength="8">
-        </div>
-        <div class="filter-field">
-            <label>Rôle</label>
-            <select name="role">
-                {% for r in tous_roles %}
-                <option value="{{ r.value }}">{{ r.value }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <button type="submit" class="filter-submit">Créer</button>
-    </form>
+<div class="page-header">
+  <h1>Gestion des comptes</h1>
+  <p>Création, rôles et activation des utilisateurs Sentinel.</p>
 </div>
 
-<table class="expositions-table">
-    <thead>
-        <tr>
-            <th>Utilisateur</th>
-            <th>Rôle</th>
-            <th>Statut</th>
-            <th>Créé le</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for u in utilisateurs %}
-        <tr>
-            <td><strong>{{ u.nom_utilisateur }}</strong></td>
-            <td>
-                {% if peut_modifier_role %}
-                <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
-                    <select name="role" class="role-select" onchange="this.form.submit()">
-                        {% for r in tous_roles %}
-                        <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
-                {% else %}
-                <span class="role-badge role-{{ u.role.value }}">{{ u.role.value }}</span>
-                {% endif %}
-            </td>
-            <td>{{ "Actif" if u.actif else "Désactivé" }}</td>
-            <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
-            <td>
-                {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
-                {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
-                {% if peut_agir %}
-                <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
-                    <button type="submit" class="toggle-btn">{{ "Désactiver" if u.actif else "Activer" }}</button>
-                </form>
-                {% else %}
-                <span style="color: var(--text-muted); font-size: 12px;">—</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="create-card">
+  <h2>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+      <circle cx="9" cy="7" r="4"></circle>
+      <line x1="19" y1="8" x2="19" y2="14"></line>
+      <line x1="22" y1="11" x2="16" y2="11"></line>
+    </svg>
+    Créer un compte
+  </h2>
 
+  <form class="create-form" method="post" action="{{ url_for('users.creer') }}">
+    <div class="form-field">
+      <label for="nom_utilisateur">Nom d'utilisateur</label>
+      <input type="text" id="nom_utilisateur" name="nom_utilisateur" required autocomplete="off">
+    </div>
+
+    <div class="form-field">
+      <label for="mot_de_passe">Mot de passe</label>
+      <input type="password" id="mot_de_passe" name="mot_de_passe" required minlength="8">
+    </div>
+
+    <div class="form-field">
+      <label for="role">Rôle</label>
+      <select id="role" name="role">
+        {% for r in tous_roles %}
+        <option value="{{ r.value }}">{{ r.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button type="submit" class="btn-create">Créer</button>
+  </form>
+</div>
+
+<table class="users-table">
+  <thead>
+    <tr>
+      <th>Utilisateur</th>
+      <th>Rôle</th>
+      <th>Statut</th>
+      <th>Créé le</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in utilisateurs %}
+    <tr>
+      <td>
+        <span class="user-name">{{ u.nom_utilisateur }}</span>
+      </td>
+      <td>
+        {% if peut_modifier_role %}
+        <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
+          <select name="role" class="role-select" onchange="this.form.submit()" aria-label="Changer le rôle de {{ u.nom_utilisateur }}">
+            {% for r in tous_roles %}
+            <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% else %}
+        <span class="role-badge role-{{ u.role.value }}">
+          <span aria-hidden="true">●</span>
+          {{ u.role.value }}
+        </span>
+        {% endif %}
+      </td>
+      <td>
+        <span class="status-badge {% if u.actif %}status-actif{% else %}status-inactif{% endif %}">
+          {{ "Actif" if u.actif else "Désactivé" }}
+        </span>
+      </td>
+      <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
+      <td>
+        {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
+        {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
+        {% if peut_agir %}
+        <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
+          <button type="submit" class="btn-toggle">
+            {{ "Désactiver" if u.actif else "Activer" }}
+          </button>
+        </form>
+        {% else %}
+        <span class="action-muted">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endblock %}
