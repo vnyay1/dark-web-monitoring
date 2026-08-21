@@ -9,6 +9,7 @@ naturellement de cette garantie.
 """
 
 import logging
+from pathlib import Path
 from datetime import timedelta
 from collections import Counter
 
@@ -19,6 +20,12 @@ from app.db import get_session
 from app.models import Exposition, utc_now
 
 logger = logging.getLogger(__name__)
+
+# Chemin absolu vers app/web/, calcule relativement a ce fichier
+# (app/reports/monthly_report.py -> ../web/), donc independant du
+# repertoire de travail courant et portable entre le poste Windows
+# et la VM Kali.
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
@@ -97,8 +104,14 @@ def generer_rapport_pdf(mois: int, annee: int, chemin_sortie: str) -> str:
     """
     Genere le rapport au format PDF a partir du meme template HTML,
     via WeasyPrint. Retourne le chemin du fichier genere.
+
+    Le parametre base_url est indispensable : le template utilise
+    url_for('static', ...) qui produit une URL relative (ex.
+    /static/images/logo-antic.png). Sans base_url, WeasyPrint n'a
+    aucun moyen de resoudre ce chemin vers un fichier reel sur le
+    disque et l'image (logo) est silencieusement ignoree.
     """
     html_content = generer_rapport_html(mois, annee)
-    HTML(string=html_content).write_pdf(chemin_sortie)
+    HTML(string=html_content, base_url=str(_WEB_DIR)).write_pdf(chemin_sortie)
     logger.info(f"[reports] Rapport PDF genere : {chemin_sortie}")
     return chemin_sortie
