@@ -6,228 +6,450 @@
     <style>
         @page {
             size: A4;
-            margin: 2cm;
+            margin: 1.8cm 1.8cm 2.2cm 1.8cm;
+            @bottom-left {
+                content: "SENTINEL — ANTIC / CIRT";
+                font-size: 8px;
+                color: #8A93A6;
+                letter-spacing: 0.06em;
+            }
             @bottom-center {
-                content: "ANTIC — Confidentiel — Page " counter(page) " / " counter(pages);
-                font-size: 9px;
-                color: #6B7891;
+                content: "CONFIDENTIEL";
+                font-size: 8px;
+                font-weight: 700;
+                color: #C0392B;
+                letter-spacing: 0.12em;
+            }
+            @bottom-right {
+                content: "Page " counter(page) " / " counter(pages);
+                font-size: 8px;
+                color: #8A93A6;
             }
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Helvetica', 'Arial', sans-serif;
-            color: #1A2338;
-            font-size: 11px;
-            line-height: 1.5;
+            font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+            color: #161F33;
+            font-size: 10.5px;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* ---------- En-tête ---------- */
         .header {
-            border-bottom: 3px solid #0B1120;
-            padding-bottom: 16px;
-            margin-bottom: 24px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            border-bottom: 2.5px solid #0B1120;
+            padding-bottom: 14px;
         }
+
+        .header-mark {
+            width: 34px;
+            height: 34px;
+            border: 2px solid #0B1120;
+            border-radius: 7px;
+            text-align: center;
+            line-height: 30px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: #0B1120;
+            margin-right: 12px;
+        }
+
+        .header-left { display: flex; align-items: flex-start; }
 
         .header-brand {
-            font-size: 12px;
+            font-size: 9px;
             font-weight: 700;
-            letter-spacing: 0.05em;
-            color: #0B1120;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #6B7891;
         }
 
         .header-title {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
-            margin-top: 8px;
+            letter-spacing: -0.02em;
+            margin-top: 5px;
+            color: #0B1120;
+        }
+
+        .header-period {
+            display: inline-block;
+            margin-top: 7px;
+            padding: 2px 9px;
+            border-radius: 20px;
+            background: #EEF1F6;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #3A465F;
         }
 
         .header-meta {
-            font-size: 10px;
-            color: #6B7891;
-            margin-top: 4px;
+            text-align: right;
+            font-size: 8.5px;
+            color: #8A93A6;
+            line-height: 1.7;
+            padding-top: 4px;
         }
 
+        .header-meta strong {
+            display: block;
+            color: #3A465F;
+            font-size: 9px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* ---------- Bandeau confidentiel ---------- */
         .confidential-banner {
-            background: #FDF0EE;
-            border: 1px solid #E8493A;
-            color: #E8493A;
-            padding: 8px 12px;
-            font-size: 10px;
-            font-weight: 600;
-            border-radius: 4px;
-            margin: 16px 0 24px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: #FDF3F1;
+            border-left: 3px solid #E8493A;
+            color: #A3291C;
+            padding: 9px 12px;
+            font-size: 9px;
+            line-height: 1.5;
+            border-radius: 0 4px 4px 0;
+            margin: 16px 0 22px 0;
         }
 
+        .confidential-banner .tag {
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+        }
+
+        /* ---------- Statistiques ---------- */
         .stats-grid {
             display: flex;
-            gap: 12px;
-            margin-bottom: 28px;
+            gap: 10px;
+            margin-bottom: 26px;
         }
 
         .stat-box {
             flex: 1;
             border: 1px solid #DDE3ED;
-            border-radius: 6px;
-            padding: 14px;
+            border-top: 2.5px solid #0B1120;
+            border-radius: 5px;
+            padding: 12px 13px;
+            background: #FBFCFE;
         }
 
+        .stat-box.accent-warn { border-top-color: #E8A22B; }
+        .stat-box.accent-info { border-top-color: #2F6FB5; }
+
         .stat-label {
-            font-size: 9px;
+            font-size: 8px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.09em;
             color: #6B7891;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .stat-value {
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 700;
-            margin-top: 4px;
+            letter-spacing: -0.03em;
+            margin-top: 3px;
+            color: #0B1120;
+            font-variant-numeric: tabular-nums;
         }
 
+        .stat-hint {
+            font-size: 8px;
+            color: #8A93A6;
+            margin-top: 2px;
+        }
+
+        /* ---------- Sections ---------- */
         h2 {
-            font-size: 14px;
-            margin: 24px 0 12px 0;
-            padding-bottom: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #0B1120;
+            margin: 22px 0 10px 0;
+            padding-bottom: 5px;
             border-bottom: 1px solid #DDE3ED;
+            page-break-after: avoid;
         }
 
+        h2 .count {
+            float: right;
+            font-size: 8.5px;
+            font-weight: 600;
+            color: #6B7891;
+            letter-spacing: 0.05em;
+            padding-top: 3px;
+        }
+
+        /* ---------- Tableaux ---------- */
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
+            page-break-inside: auto;
         }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
 
         th {
             text-align: left;
-            font-size: 9px;
+            font-size: 8px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.09em;
             color: #6B7891;
-            padding: 8px 10px;
-            border-bottom: 2px solid #DDE3ED;
+            font-weight: 700;
+            padding: 7px 9px;
+            background: #F5F7FA;
+            border-bottom: 1.5px solid #C8D1E0;
         }
+
+        th:last-child, td:last-child { text-align: right; }
 
         td {
-            padding: 8px 10px;
+            padding: 7px 9px;
             border-bottom: 1px solid #EEF1F6;
-            font-size: 10px;
+            font-size: 9.5px;
+            vertical-align: middle;
         }
 
+        tbody tr:nth-child(even) td { background: #FBFCFE; }
+
+        td.num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        td.entity { font-weight: 600; color: #0B1120; }
+
+        /* ---------- Badges ---------- */
         .badge {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 10px;
-            font-size: 9px;
+            font-size: 8.5px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+        }
+
+        .badge-high { background: #FDF0EE; color: #C0392B; border: 1px solid #F3C9C2; }
+        .badge-mid  { background: #FEF6E8; color: #96631A; border: 1px solid #F0DCB4; }
+        .badge-low  { background: #EEF1F6; color: #5A667E; border: 1px solid #DDE3ED; }
+
+        .status-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #EEF1F6;
+            color: #3A465F;
+            font-size: 8.5px;
             font-weight: 600;
         }
 
-        .badge-high { background: #FDF0EE; color: #E8493A; }
-        .badge-mid { background: #FEF6E8; color: #B8791F; }
-        .badge-low { background: #EEF1F6; color: #6B7891; }
+        /* ---------- Barre de répartition ---------- */
+        .bar-cell { width: 34%; }
 
+        .bar-track {
+            height: 6px;
+            background: #EEF1F6;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 6px;
+            background: #3A465F;
+            border-radius: 3px;
+        }
+
+        /* ---------- Divers ---------- */
         .empty-note {
-            color: #6B7891;
+            color: #8A93A6;
             font-style: italic;
-            font-size: 10px;
+            font-size: 9.5px;
+            padding: 12px;
+            border: 1px dashed #DDE3ED;
+            border-radius: 5px;
+            margin-bottom: 18px;
+        }
+
+        .footnote {
+            margin-top: 26px;
+            padding-top: 10px;
+            border-top: 1px solid #DDE3ED;
+            font-size: 8px;
+            color: #8A93A6;
+            line-height: 1.6;
         }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div class="header-brand">SENTINEL / ANTIC — SYSTEME DE SURVEILLANCE DARK WEB</div>
-        <div class="header-title">Rapport mensuel d'exposition — {{ mois }}/{{ annee }}</div>
-        <div class="header-meta">Genere le {{ date_generation.strftime('%d/%m/%Y a %H:%M') }} UTC</div>
+        <div class="header-left">
+            <div class="header-mark">S</div>
+            <div>
+                <div class="header-brand">Sentinel / ANTIC — Surveillance Dark Web</div>
+                <div class="header-title">Rapport mensuel d'exposition</div>
+                <div class="header-period">PERIODE {{ mois }}/{{ annee }}</div>
+            </div>
+        </div>
+        <div class="header-meta">
+            <strong>Genere le</strong>
+            {{ date_generation.strftime('%d/%m/%Y a %H:%M') }} UTC
+        </div>
     </div>
 
     <div class="confidential-banner">
-        DOCUMENT CONFIDENTIEL — Diffusion limitee a l'encadrement CIRT (CN-11). Ce rapport ne contient aucune donnee personnelle.
+        <span class="tag">DOCUMENT CONFIDENTIEL</span>
+        <span>Diffusion limitee a l'encadrement CIRT (CN-11). Ce rapport ne contient aucune donnee personnelle.</span>
     </div>
 
     <div class="stats-grid">
         <div class="stat-box">
             <div class="stat-label">Expositions detectees</div>
             <div class="stat-value">{{ total_periode }}</div>
+            <div class="stat-hint">sur la periode analysee</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-box accent-warn">
             <div class="stat-label">Score de confiance moyen</div>
             <div class="stat-value">{{ score_moyen }}</div>
+            <div class="stat-hint">moyenne ponderee</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-box accent-info">
             <div class="stat-label">Secteurs touches</div>
             <div class="stat-value">{{ repartition_secteur|length }}</div>
+            <div class="stat-hint">secteurs d'activite distincts</div>
         </div>
     </div>
 
-    <h2>Répartition par secteur d'activité</h2>
+    <h2>Répartition par secteur d'activité <span class="count">{{ repartition_secteur|length }} entrée(s)</span></h2>
     {% if repartition_secteur %}
-    <table>
-        <thead><tr><th>Secteur</th><th>Nombre d'expositions</th></tr></thead>
-        <tbody>
-            {% for secteur, count in repartition_secteur.items() %}
-            <tr><td>{{ secteur }}</td><td>{{ count }}</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
-    {% endif %}
-
-    <h2>Répartition par catégorie de fuite</h2>
-    {% if repartition_categorie %}
-    <table>
-        <thead><tr><th>Catégorie</th><th>Nombre d'expositions</th></tr></thead>
-        <tbody>
-            {% for cat, count in repartition_categorie.items() %}
-            <tr><td>{{ cat }}</td><td>{{ count }}</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
-    {% endif %}
-
-    <h2>Répartition par statut de traitement</h2>
-    {% if repartition_statut %}
-    <table>
-        <thead><tr><th>Statut</th><th>Nombre d'expositions</th></tr></thead>
-        <tbody>
-            {% for statut, count in repartition_statut.items() %}
-            <tr><td>{{ statut }}</td><td>{{ count }}</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
-    {% endif %}
-
-    <h2>Détail des expositions (triées par score de confiance)</h2>
-    {% if entites %}
+    {% set max_secteur = repartition_secteur.values() | max %}
     <table>
         <thead>
-            <tr><th>Entité</th><th>Secteur</th><th>Catégorie</th><th>Score</th><th>Statut</th></tr>
+            <tr>
+                <th>Secteur</th>
+                <th class="bar-cell">Répartition</th>
+                <th>Nombre d'expositions</th>
+            </tr>
         </thead>
         <tbody>
-            {% for e in entites %}
+            {% for secteur, count in repartition_secteur.items() %}
             <tr>
-                <td>{{ e.nom }}</td>
-                <td>{{ e.secteur }}</td>
-                <td>{{ e.categorie }}</td>
-                <td>
-                    <span class="badge {% if e.score >= 0.7 %}badge-high{% elif e.score >= 0.4 %}badge-mid{% else %}badge-low{% endif %}">
-                        {{ e.score }}
-                    </span>
+                <td class="entity">{{ secteur }}</td>
+                <td class="bar-cell">
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (count / max_secteur * 100) | round(0, 'floor') }}%;"></div>
+                    </div>
                 </td>
-                <td>{{ e.statut }}</td>
+                <td class="num">{{ count }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <p class="empty-note">Aucune exposition detectee sur cette periode.</p>
+    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
     {% endif %}
+
+    <h2>Répartition par catégorie de fuite <span class="count">{{ repartition_categorie|length }} entrée(s)</span></h2>
+    {% if repartition_categorie %}
+    {% set max_cat = repartition_categorie.values() | max %}
+    <table>
+        <thead>
+            <tr>
+                <th>Catégorie</th>
+                <th class="bar-cell">Répartition</th>
+                <th>Nombre d'expositions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat, count in repartition_categorie.items() %}
+            <tr>
+                <td class="entity">{{ cat }}</td>
+                <td class="bar-cell">
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (count / max_cat * 100) | round(0, 'floor') }}%;"></div>
+                    </div>
+                </td>
+                <td class="num">{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
+    {% endif %}
+
+    <h2>Répartition par statut de traitement <span class="count">{{ repartition_statut|length }} entrée(s)</span></h2>
+    {% if repartition_statut %}
+    <table>
+        <thead>
+            <tr>
+                <th>Statut</th>
+                <th>Nombre d'expositions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for statut, count in repartition_statut.items() %}
+            <tr>
+                <td><span class="status-pill">{{ statut }}</span></td>
+                <td class="num">{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
+    {% endif %}
+
+    <h2>Détail des expositions <span class="count">triées par score de confiance</span></h2>
+    {% if entites %}
+    <table>
+        <thead>
+            <tr>
+                <th>Entité</th>
+                <th>Secteur</th>
+                <th>Catégorie</th>
+                <th>Statut</th>
+                <th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entites %}
+            <tr>
+                <td class="entity">{{ e.nom }}</td>
+                <td>{{ e.secteur }}</td>
+                <td>{{ e.categorie }}</td>
+                <td><span class="status-pill">{{ e.statut }}</span></td>
+                <td class="num">
+                    <span class="badge {% if e.score >= 70 %}badge-high{% elif e.score >= 40 %}badge-mid{% else %}badge-low{% endif %}">
+                        {{ e.score }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
+    {% endif %}
+
+    <div class="footnote">
+        Rapport genere automatiquement par Sentinel — systeme de surveillance dark web de l'ANTIC.
+        Les scores de confiance sont indicatifs et doivent etre corroborés par une analyse CIRT avant toute action operationnelle.
+    </div>
 
 </body>
 </html>

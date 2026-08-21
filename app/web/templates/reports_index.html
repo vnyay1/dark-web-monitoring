@@ -1,71 +1,243 @@
 {% extends "base.html" %}
+
 {% block title %}Rapports — Sentinel{% endblock %}
 {% block nav_reports %}active{% endblock %}
 
 {% block extra_head %}
 <style>
-    .report-panel {
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        padding: 24px;
-        margin-bottom: 20px;
-    }
+  .page-header { margin-bottom: 24px; }
 
-    .report-panel h3 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 15px;
-        margin-bottom: 6px;
-    }
+  .page-header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+  }
 
-    .report-panel p {
-        color: var(--text-muted);
-        font-size: 13px;
-        margin-bottom: 16px;
-    }
+  .page-header p {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0;
+  }
 
-    .report-actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
+  .report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+  }
 
-    .report-btn {
-        background: var(--accent-neutral);
-        color: white;
-        text-decoration: none;
-        padding: 9px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
-    }
+  .report-panel {
+    position: relative;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .15s ease, transform .15s ease;
+  }
 
-    .report-btn.secondary {
-        background: transparent;
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-    }
+  .report-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    border-radius: 12px 12px 0 0;
+    background: var(--accent-neutral);
+    opacity: .55;
+  }
+
+  .report-panel.is-export::before { background: var(--accent-info, #3B82F6); }
+
+  .report-panel:hover {
+    border-color: var(--border-strong, var(--accent-neutral));
+    transform: translateY(-1px);
+  }
+
+  .report-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--accent-neutral) 14%, transparent);
+    color: var(--accent-neutral);
+    margin-bottom: 14px;
+  }
+
+  .report-panel.is-export .report-icon {
+    background: color-mix(in srgb, var(--accent-info, #3B82F6) 14%, transparent);
+    color: var(--accent-info, #3B82F6);
+  }
+
+  .report-panel h3 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+  }
+
+  .report-panel p {
+    color: var(--text-muted);
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 0 0 18px 0;
+  }
+
+  .report-period {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+    background: var(--bg-subtle, rgba(255,255,255,.04));
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 3px 9px;
+    margin-bottom: 14px;
+  }
+
+  .report-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: auto;
+  }
+
+  .report-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--accent-neutral);
+    color: #fff;
+    text-decoration: none;
+    padding: 9px 15px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1;
+    border: 1px solid transparent;
+    transition: filter .15s ease, background .15s ease, border-color .15s ease;
+  }
+
+  .report-btn:hover { filter: brightness(1.12); }
+  .report-btn:active { transform: translateY(1px); }
+
+  .report-btn.secondary {
+    background: transparent;
+    border-color: var(--border-subtle);
+    color: var(--text-primary);
+  }
+
+  .report-btn.secondary:hover {
+    background: var(--bg-subtle, rgba(255,255,255,.05));
+    border-color: var(--accent-neutral);
+    color: var(--accent-neutral);
+    filter: none;
+  }
+
+  .report-note {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    margin-top: 20px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-subtle);
+    border-left: 2px solid var(--accent-warn, #E8A22B);
+    border-radius: 0 8px 8px 0;
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 640px) {
+    .report-actions { flex-direction: column; align-items: stretch; }
+    .report-btn { justify-content: center; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<div class="report-panel">
-    <h3>Rapport mensuel d'exposition</h3>
-    <p>Statistiques agrégées du mois en cours ({{ mois_courant }}/{{ annee_courante }}) — aucune donnée personnelle incluse.</p>
-    <div class="report-actions">
-        <a href="{{ url_for('reports.monthly_pdf', mois=mois_courant, annee=annee_courante) }}" class="report-btn">Télécharger PDF</a>
-        <a href="{{ url_for('reports.monthly_html', mois=mois_courant, annee=annee_courante) }}" class="report-btn secondary" target="_blank">Voir en HTML</a>
+<header class="page-header">
+  <h1>Rapports &amp; exports</h1>
+  <p>Génération de rapports agrégés et export des indicateurs d'exposition.</p>
+</header>
+
+<div class="report-grid">
+
+  <section class="report-panel">
+    <div class="report-icon" aria-hidden="true">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>
+      </svg>
     </div>
+    <h3>Rapport mensuel d'exposition</h3>
+    <span class="report-period">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      {{ mois_courant }}/{{ annee_courante }}
+    </span>
+    <p>Statistiques agrégées du mois en cours — aucune donnée personnelle incluse. Diffusion limitée à l'encadrement CIRT.</p>
+    <div class="report-actions">
+      <a href="{{ url_for('reports.monthly_pdf', mois=mois_courant, annee=annee_courante) }}" class="report-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+        </svg>
+        Télécharger PDF
+      </a>
+      <a href="{{ url_for('reports.monthly_html', mois=mois_courant, annee=annee_courante) }}" class="report-btn secondary" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>
+        </svg>
+        Voir en HTML
+      </a>
+    </div>
+  </section>
+
+  <section class="report-panel is-export">
+    <div class="report-icon" aria-hidden="true">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+      </svg>
+    </div>
+    <h3>Export des données</h3>
+    <p>Exporte l'ensemble des indicateurs d'exposition au format exploitable par d'autres outils du CIRT (SIEM, tableurs, scripts d'analyse).</p>
+    <div class="report-actions">
+      <a href="{{ url_for('reports.export_json') }}" class="report-btn secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/>
+          <path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/>
+        </svg>
+        Exporter en JSON
+      </a>
+      <a href="{{ url_for('reports.export_csv') }}" class="report-btn secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>
+        </svg>
+        Exporter en CSV
+      </a>
+    </div>
+  </section>
+
 </div>
 
-<div class="report-panel">
-    <h3>Export des données</h3>
-    <p>Exporte l'ensemble des indicateurs d'exposition au format exploitable par d'autres outils du CIRT.</p>
-    <div class="report-actions">
-        <a href="{{ url_for('reports.export_json') }}" class="report-btn secondary">Exporter en JSON</a>
-        <a href="{{ url_for('reports.export_csv') }}" class="report-btn secondary">Exporter en CSV</a>
-    </div>
+<div class="report-note">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:1px;">
+    <path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+  </svg>
+  <span>Les documents générés sont classés <strong>confidentiels</strong> — diffusion limitée à l'encadrement CIRT (CN-11). Aucune donnée personnelle n'est incluse dans les exports.</span>
 </div>
 
 {% endblock %}
