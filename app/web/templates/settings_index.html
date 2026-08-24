@@ -256,7 +256,7 @@
         {% if peut_modifier_seuils %}
         <form class="config-form" method="post" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
             <input type="text" name="valeur" value="{{ conf.valeur }}">
-            <button type="submit" class="filter-submit">Mettre à jour</button>
+            <button type="submit" class="btn btn-primary">Mettre à jour</button>
         </form>
             {% else %}
             <span style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:13px;">{{ conf.valeur }}</span>
