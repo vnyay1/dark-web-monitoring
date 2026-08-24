@@ -343,28 +343,6 @@
         <span class="user-name">{{ u.nom_utilisateur }}</span>
       </td>
       <td>
-        {% if peut_modifier_role %}
-        <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
-          <select name="role" class="role-select" onchange="this.form.submit()" aria-label="Changer le rôle de {{ u.nom_utilisateur }}">
-            {% for r in tous_roles %}
-            <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
-            {% endfor %}
-          </select>
-        </form>
-        {% else %}
-        <span class="role-badge role-{{ u.role.value }}">
-          <span aria-hidden="true">●</span>
-          {{ u.role.value }}
-        </span>
-        {% endif %}
-      </td>
-      <td>
-        <span class="status-badge {% if u.actif %}status-actif{% else %}status-inactif{% endif %}">
-          {{ "Actif" if u.actif else "Désactivé" }}
-        </span>
-      </td>
-      <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
-      <td>
           {% set cible_est_super_admin = u.role.value == 'super_admin' %}
           {% if peut_modifier_role and (est_super_admin or not cible_est_super_admin) %}
           <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
@@ -379,6 +357,25 @@
           {% else %}
           <span class="role-badge role-{{ u.role.value }}">{{ u.role.value }}</span>
           {% endif %}
+      </td>
+      <td>
+        <span class="status-badge {% if u.actif %}status-actif{% else %}status-inactif{% endif %}">
+          {{ "Actif" if u.actif else "Désactivé" }}
+        </span>
+      </td>
+      <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
+      <td>
+        {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
+        {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
+        {% if peut_agir %}
+        <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
+          <button type="submit" class="btn-toggle">
+            {{ "Désactiver" if u.actif else "Activer" }}
+          </button>
+        </form>
+        {% else %}
+        <span class="action-muted">—</span>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

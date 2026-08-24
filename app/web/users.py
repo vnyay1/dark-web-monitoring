@@ -24,7 +24,8 @@ def liste():
         "users_liste.html",
         utilisateurs=utilisateurs,
         tous_roles=list(RoleUtilisateur),
-        peut_modifier_role=(current_user.role == RoleUtilisateur.SUPER_ADMIN),
+        peut_modifier_role=True,  # admin et super_admin arrivent tous deux ici (route protegee ADMIN+)
+        est_super_admin=(current_user.role == RoleUtilisateur.SUPER_ADMIN),
     )
     session.close()
     return resultat
