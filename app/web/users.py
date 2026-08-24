@@ -76,9 +76,14 @@ def creer():
 
 @users_bp.route("/<user_id>/role", methods=["POST"])
 @login_required
-@role_requis(RoleUtilisateur.SUPER_ADMIN)
+@role_requis(RoleUtilisateur.ADMIN)
 def changer_role(user_id):
-    """Modification du role - reserve strictement au super_admin."""
+    """
+    Modification du role :
+    - admin peut modifier le role de tout utilisateur SAUF un super_admin
+      (ni le promouvoir vers super_admin, ni modifier un compte deja super_admin)
+    - super_admin peut modifier n'importe quel role, y compris vers/depuis super_admin
+    """
     session = get_session()
     user = session.query(User).filter_by(id=user_id).first()
 
@@ -87,13 +92,26 @@ def changer_role(user_id):
         session.close()
         return redirect(url_for("users.liste"))
 
-    nouveau_role = request.form.get("role")
+    nouveau_role_str = request.form.get("role")
+
     try:
-        user.role = RoleUtilisateur(nouveau_role)
-        session.commit()
-        flash(f"Role de '{user.nom_utilisateur}' mis a jour : {nouveau_role}.", "success")
+        nouveau_role = RoleUtilisateur(nouveau_role_str)
     except ValueError:
         flash("Role invalide.", "error")
+        session.close()
+        return redirect(url_for("users.liste"))
+
+    if current_user.role != RoleUtilisateur.SUPER_ADMIN:
+        # Un admin ne peut ni toucher a un compte deja super_admin,
+        # ni promouvoir quelqu'un vers super_admin
+        if user.role == RoleUtilisateur.SUPER_ADMIN or nouveau_role == RoleUtilisateur.SUPER_ADMIN:
+            flash("Seul un super-administrateur peut attribuer ou modifier le role super-admin.", "error")
+            session.close()
+            return redirect(url_for("users.liste"))
+
+    user.role = nouveau_role
+    session.commit()
+    flash(f"Role de '{user.nom_utilisateur}' mis a jour : {nouveau_role.value}.", "success")
 
     session.close()
     return redirect(url_for("users.liste"))

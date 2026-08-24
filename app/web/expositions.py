@@ -6,6 +6,8 @@ FR-21 - Modification du statut d'une exposition (inclus ici car couple a la list
 from datetime import timedelta
 from flask_login import login_required
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from app.web.permissions import role_requis
+from app.models import RoleUtilisateur
 
 from app.db import get_session
 from app.models import (
@@ -91,6 +93,7 @@ def liste():
 
 @expositions_bp.route("/<exposition_id>/statut", methods=["POST"])
 @login_required
+@role_requis(RoleUtilisateur.SUPERVISOR)
 def changer_statut(exposition_id):
     """FR-21 - Modification du statut d'une exposition par l'analyste."""
     session = get_session()

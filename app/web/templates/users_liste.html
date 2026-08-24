@@ -365,17 +365,20 @@
       </td>
       <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
       <td>
-        {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
-        {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
-        {% if peut_agir %}
-        <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
-          <button type="submit" class="btn-toggle">
-            {{ "Désactiver" if u.actif else "Activer" }}
-          </button>
-        </form>
-        {% else %}
-        <span class="action-muted">—</span>
-        {% endif %}
+          {% set cible_est_super_admin = u.role.value == 'super_admin' %}
+          {% if peut_modifier_role and (est_super_admin or not cible_est_super_admin) %}
+          <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
+              <select name="role" class="role-select" onchange="this.form.submit()">
+                  {% for r in tous_roles %}
+                      {% if est_super_admin or r.value != 'super_admin' %}
+                      <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
+                      {% endif %}
+                  {% endfor %}
+              </select>
+          </form>
+          {% else %}
+          <span class="role-badge role-{{ u.role.value }}">{{ u.role.value }}</span>
+          {% endif %}
       </td>
     </tr>
     {% endfor %}

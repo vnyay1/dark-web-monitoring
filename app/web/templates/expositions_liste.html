@@ -432,14 +432,18 @@
           </span>
         </td>
         <td data-label="Sources" class="cell-mono">{{ exp.sources|length }}</td>
-        <td data-label="Statut">
-          <form method="post" action="{{ url_for('expositions.changer_statut', exposition_id=exp.id) }}">
-            <select name="statut" class="statut-select" onchange="this.form.submit()" aria-label="Changer le statut de {{ exp.nom_entite }}">
-              {% for s in tous_statuts %}
-              <option value="{{ s.value }}" {% if exp.statut == s %}selected{% endif %}>{{ s.value }}</option>
-              {% endfor %}
-            </select>
-          </form>
+        <td data-label="Status">
+            {% if current_user.role.value in ['supervisor', 'admin', 'super_admin'] %}
+            <form method="post" action="{{ url_for('expositions.changer_statut', exposition_id=exp.id) }}">
+                <select name="statut" class="statut-select" onchange="this.form.submit()">
+                    {% for s in tous_statuts %}
+                    <option value="{{ s.value }}" {% if exp.statut == s %}selected{% endif %}>{{ s.value }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% else %}
+            <span class="score-badge score-low">{{ exp.statut.value }}</span>
+            {% endif %}
         </td>
       </tr>
       {% endfor %}
