@@ -1,7 +1,244 @@
 {% extends "base.html" %}
+
 {% block title %}Journal d'audit — Sentinel{% endblock %}
 
+{% block extra_head %}
+<style>
+    .page-header {
+        margin-bottom: 24px;
+    }
+    .page-header h1 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .page-header h1::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 24px;
+        background: var(--accent);
+        border-radius: 3px;
+    }
+
+    .filter-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        align-items: end;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 18px 20px;
+        margin-bottom: 18px;
+    }
+    .filter-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .filter-field label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+    }
+    .filter-field select,
+    .filter-field input {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 7px;
+        padding: 9px 12px;
+        color: var(--text-primary);
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .filter-field select:focus,
+    .filter-field input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+
+    .filter-submit,
+    .filter-reset {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 9px 16px;
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.05s ease;
+        height: fit-content;
+    }
+    .filter-submit {
+        background: var(--accent);
+        color: var(--bg-deep);
+        border: none;
+    }
+    .filter-submit:hover {
+        background: color-mix(in srgb, var(--accent) 85%, white);
+    }
+    .filter-reset {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border-subtle);
+    }
+    .filter-reset:hover {
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+    }
+
+    .results-count {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .audit-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        overflow: hidden;
+        font-size: 13px;
+    }
+    .audit-table thead {
+        position: sticky;
+        top: 64px;
+        z-index: 10;
+    }
+    .audit-table th {
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: left;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        white-space: nowrap;
+    }
+    .audit-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        vertical-align: top;
+    }
+    .audit-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    .audit-table tbody tr:hover {
+        background: color-mix(in srgb, var(--accent) 4%, transparent);
+    }
+
+    .audit-timestamp {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .audit-source {
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+    .audit-details {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: var(--text-muted);
+        line-height: 1.45;
+        word-break: break-word;
+    }
+
+    .result-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .result-badge::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+    .result-succes {
+        background: color-mix(in srgb, var(--success) 12%, transparent);
+        color: var(--success);
+    }
+    .result-succes::before {
+        background: var(--success);
+    }
+    .result-echec {
+        background: color-mix(in srgb, var(--crit) 12%, transparent);
+        color: var(--crit);
+    }
+    .result-echec::before {
+        background: var(--crit);
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 64px 24px;
+        background: var(--bg-card);
+        border: 1px dashed var(--border-subtle);
+        border-radius: 10px;
+        color: var(--text-muted);
+        text-align: center;
+    }
+    .empty-state svg {
+        width: 40px;
+        height: 40px;
+        opacity: 0.5;
+    }
+    .empty-state p {
+        margin: 0;
+        font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+        .filter-bar {
+            grid-template-columns: 1fr;
+        }
+        .audit-table {
+            display: block;
+            overflow-x: auto;
+        }
+        .audit-table thead {
+            top: 0;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+
+<div class="page-header">
+    <h1>Journal d'audit</h1>
+    <p class="text-muted">Traces d'exécution des collecteurs et opérations système.</p>
+</div>
 
 <form class="filter-bar" method="get">
     <div class="filter-field">
@@ -21,14 +258,17 @@
             <option value="echec" {% if filtres_actifs.resultat == "echec" %}selected{% endif %}>Échec</option>
         </select>
     </div>
-    <button type="submit" class="filter-submit">Filtrer</button>
+    <button type="submit" class="filter-submit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        Filtrer
+    </button>
     <a href="{{ url_for('audit.liste') }}" class="filter-reset">Réinitialiser</a>
 </form>
 
 <div class="results-count">{{ entries|length }} entrée(s) (limité à 500 les plus récentes)</div>
 
 {% if entries %}
-<table class="expositions-table">
+<table class="audit-table">
     <thead>
         <tr>
             <th>Horodatage</th>
@@ -40,22 +280,23 @@
     <tbody>
         {% for e in entries %}
         <tr>
-            <td>{{ e.horodatage.strftime('%d/%m/%Y %H:%M:%S') }}</td>
-            <td>{{ e.source.nom if e.source else "—" }}</td>
+            <td><span class="audit-timestamp">{{ e.horodatage.strftime('%d/%m/%Y %H:%M:%S') }}</span></td>
+            <td><span class="audit-source">{{ e.source.nom if e.source else "—" }}</span></td>
             <td>
-                <span class="score-badge {% if e.resultat.value == 'succes' %}score-high{% else %}score-low{% endif %}">
+                <span class="result-badge result-{{ e.resultat.value }}">
                     {{ e.resultat.value }}
                 </span>
             </td>
-            <td style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">
-                {{ e.details or "—" }}
-            </td>
+            <td class="audit-details">{{ e.details or "—" }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 {% else %}
-<div class="empty-state">Aucune entrée d'audit.</div>
+<div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+    <p>Aucune entrée d'audit ne correspond aux critères.</p>
+</div>
 {% endif %}
 
 {% endblock %}
