@@ -256,7 +256,7 @@
         {% if peut_modifier_seuils %}
         <form class="config-form" method="post" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
             <input type="text" name="valeur" value="{{ conf.valeur }}">
-            <button type="submit" class="btn btn-primary">Mettre à jour</button>
+            <button type="submit" class="filter-submit">Mettre à jour</button>
         </form>
             {% else %}
             <span style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:13px;">{{ conf.valeur }}</span>
@@ -264,9 +264,23 @@
         </div>
         {% endfor %}
     </div>
-    </section>
+</section>
 
-    <section class="settings-panel">
+<section class="settings-panel">
+
+                <h3>
+                    + Ajouter un sélécteur
+                </h3>
+
+        <form class="add-selecteur-form" method="post" action="{{ url_for('settings.ajouter_selecteur') }}">
+            <input type="text" name="valeur" placeholder="Nouveau sélecteur..." required>
+            <select name="categorie" required>
+                {% for c in toutes_categories %}
+                <option value="{{ c.value }}">{{ c.value }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Ajouter</button>
+        </form>
         <div class="settings-panel-header">
             <h3>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
@@ -286,16 +300,7 @@
                 </form>
             </div>
             {% endfor %}
-
-            <form class="add-selecteur-form" method="post" action="{{ url_for('settings.ajouter_selecteur') }}">
-                <input type="text" name="valeur" placeholder="Nouveau sélecteur..." required>
-                <select name="categorie" required>
-                    {% for c in toutes_categories %}
-                    <option value="{{ c.value }}">{{ c.value }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-primary">Ajouter</button>
-            </form>
+            
         </div>
     </section>
 </div>
