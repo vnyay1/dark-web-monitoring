@@ -137,6 +137,7 @@ class Exposition(Base):
         "SourceReference", back_populates="exposition",
         cascade="all, delete-orphan"
     )
+    alertes = relationship("Alerte", cascade="all, delete-orphan")
 
     def changer_statut(self, nouveau_statut: StatutExposition):
         self.statut = nouveau_statut
@@ -326,3 +327,16 @@ class ConfigurationSysteme(Base):
 
     def __repr__(self):
         return f"<ConfigurationSysteme {self.cle}={self.valeur}>"
+
+class HistoriqueRole(Base):
+    __tablename__ = "historique_roles"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_cible_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    modifie_par_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    ancien_role = Column(SAEnum(RoleUtilisateur), nullable=False)
+    nouveau_role = Column(SAEnum(RoleUtilisateur), nullable=False)
+    date_modification = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    user_cible = relationship("User", foreign_keys=[user_cible_id])
+    modifie_par = relationship("User", foreign_keys=[modifie_par_id])

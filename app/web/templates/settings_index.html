@@ -245,27 +245,25 @@
 
 <div class="settings-grid">
     <section class="settings-panel">
-        <div class="settings-panel-header">
-            <h3>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                Seuils d'alerte
-            </h3>
-            <span class="badge badge-info">{{ configurations|length }} paramètres</span>
+       <div class="settings-panel">
+    <h3>Seuils d'alerte (FR-25/FR-26) — réservé super-admin</h3>
+    {% for conf in configurations %}
+    <div class="config-row">
+        <div class="config-info">
+            <div class="config-cle">{{ conf.cle }}</div>
+            <div class="config-desc">{{ conf.description or "—" }}</div>
         </div>
-        <div class="settings-panel-body">
-            {% for conf in configurations %}
-            <div class="config-row">
-                <div class="config-info">
-                    <div class="config-cle">{{ conf.cle }}</div>
-                    <div class="config-desc">{{ conf.description or "—" }}</div>
-                </div>
-                <form class="config-form" method="post" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
-                    <input type="text" name="valeur" value="{{ conf.valeur }}" aria-label="Valeur pour {{ conf.cle }}">
-                    <button type="submit" class="btn btn-primary">Mettre à jour</button>
-                </form>
-            </div>
-            {% endfor %}
+        {% if peut_modifier_seuils %}
+        <form class="config-form" method="post" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
+            <input type="text" name="valeur" value="{{ conf.valeur }}">
+            <button type="submit" class="filter-submit">Mettre à jour</button>
+        </form>
+            {% else %}
+            <span style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:13px;">{{ conf.valeur }}</span>
+            {% endif %}
         </div>
+        {% endfor %}
+    </div>
     </section>
 
     <section class="settings-panel">

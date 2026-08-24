@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Journal d'audit — Sentinel{% endblock %}
+
+{% block content %}
+
+<form class="filter-bar" method="get">
+    <div class="filter-field">
+        <label>Source</label>
+        <select name="source_id">
+            <option value="">Toutes</option>
+            {% for s in toutes_sources %}
+            <option value="{{ s.id }}" {% if filtres_actifs.source_id == s.id %}selected{% endif %}>{{ s.nom }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="filter-field">
+        <label>Résultat</label>
+        <select name="resultat">
+            <option value="">Tous</option>
+            <option value="succes" {% if filtres_actifs.resultat == "succes" %}selected{% endif %}>Succès</option>
+            <option value="echec" {% if filtres_actifs.resultat == "echec" %}selected{% endif %}>Échec</option>
+        </select>
+    </div>
+    <button type="submit" class="filter-submit">Filtrer</button>
+    <a href="{{ url_for('audit.liste') }}" class="filter-reset">Réinitialiser</a>
+</form>
+
+<div class="results-count">{{ entries|length }} entrée(s) (limité à 500 les plus récentes)</div>
+
+{% if entries %}
+<table class="expositions-table">
+    <thead>
+        <tr>
+            <th>Horodatage</th>
+            <th>Source</th>
+            <th>Résultat</th>
+            <th>Détails</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in entries %}
+        <tr>
+            <td>{{ e.horodatage.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+            <td>{{ e.source.nom if e.source else "—" }}</td>
+            <td>
+                <span class="score-badge {% if e.resultat.value == 'succes' %}score-high{% else %}score-low{% endif %}">
+                    {{ e.resultat.value }}
+                </span>
+            </td>
+            <td style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">
+                {{ e.details or "—" }}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">Aucune entrée d'audit.</div>
+{% endif %}
+
+{% endblock %}

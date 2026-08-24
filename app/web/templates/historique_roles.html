@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Historique des rôles — Sentinel{% endblock %}
+
+{% block content %}
+
+<div class="results-count">{{ entries|length }} changement(s) de rôle enregistré(s)</div>
+
+{% if entries %}
+<table class="expositions-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Utilisateur concerné</th>
+            <th>Ancien rôle</th>
+            <th>Nouveau rôle</th>
+            <th>Modifié par</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in entries %}
+        <tr>
+            <td>{{ e.date_modification.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td><strong>{{ e.user_cible.nom_utilisateur }}</strong></td>
+            <td><span class="role-badge role-{{ e.ancien_role.value }}">{{ e.ancien_role.value }}</span></td>
+            <td><span class="role-badge role-{{ e.nouveau_role.value }}">{{ e.nouveau_role.value }}</span></td>
+            <td>{{ e.modifie_par.nom_utilisateur }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">Aucun changement de rôle enregistré.</div>
+{% endif %}
+
+{% endblock %}

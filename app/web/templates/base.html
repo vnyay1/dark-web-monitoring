@@ -201,6 +201,11 @@
             <a href="{{ url_for('users.liste') }}">Comptes</a>
             <a href="{{ url_for('settings.index') }}">Configuration</a>
             {% endif %}
+            {% if current_user.is_authenticated and current_user.role.value == 'super_admin' %}
+            <a href="{{ url_for('audit.liste') }}">Audit</a>
+            <a href="{{ url_for('compliance.index') }}">Conformité</a>
+            <a href="{{ url_for('users.historique_roles') }}">Historique rôles</a>
+            {% endif %}
             <a class="danger" href="{{ url_for('auth.logout') }}">Déconnexion</a>
         </nav>
     </header>

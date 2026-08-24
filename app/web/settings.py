@@ -1,14 +1,15 @@
 """
-Interface de configuration systeme - reservee aux roles admin et super_admin.
-Couvre : seuils d'alerte (FR-25/FR-26) et catalogue de selecteurs (FR-08).
+Interface de configuration systeme.
+- Catalogue de selecteurs (FR-08) : admin et super_admin
+- Seuils d'alerte critiques (FR-25/FR-26) : super_admin uniquement
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.db import get_session
 from app.models import ConfigurationSysteme, Selecteur, CategorieSelecteur, RoleUtilisateur
-from app.config_system import VALEURS_PAR_DEFAUT, init_config_defaults
+from app.config_system import init_config_defaults
 from app.web.permissions import role_requis
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/settings")
@@ -29,6 +30,7 @@ def index():
         configurations=configurations,
         selecteurs=selecteurs,
         toutes_categories=list(CategorieSelecteur),
+        peut_modifier_seuils=(current_user.role == RoleUtilisateur.SUPER_ADMIN),
     )
     session.close()
     return resultat
@@ -36,14 +38,14 @@ def index():
 
 @settings_bp.route("/config/<cle>", methods=["POST"])
 @login_required
-@role_requis(RoleUtilisateur.ADMIN)
+@role_requis(RoleUtilisateur.SUPER_ADMIN)
 def update_config(cle):
     from app.config_system import set_config
 
     valeur = request.form.get("valeur", "").strip()
 
     try:
-        float(valeur)  # tous nos seuils actuels sont numeriques - validation basique
+        float(valeur)
     except ValueError:
         flash(f"Valeur invalide pour {cle} : doit etre un nombre.", "error")
         return redirect(url_for("settings.index"))

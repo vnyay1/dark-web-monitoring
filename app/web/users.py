@@ -52,14 +52,15 @@ def creer():
         session.close()
         return redirect(url_for("users.liste"))
 
-    # Seul un super_admin peut creer un compte super_admin ou admin
     try:
         role_enum = RoleUtilisateur(role_demande)
     except ValueError:
         role_enum = RoleUtilisateur.USER
 
-    if role_enum in (RoleUtilisateur.ADMIN, RoleUtilisateur.SUPER_ADMIN) and current_user.role != RoleUtilisateur.SUPER_ADMIN:
-        flash("Seul un super-administrateur peut attribuer ce role.", "error")
+    # Seul un super_admin peut creer un compte super_admin (protection
+    # backend, independante de ce qui est affiche cote template)
+    if role_enum == RoleUtilisateur.SUPER_ADMIN and current_user.role != RoleUtilisateur.SUPER_ADMIN:
+        flash("Seul un super-administrateur peut creer un compte super-admin.", "error")
         role_enum = RoleUtilisateur.USER
 
     user = User(
@@ -79,12 +80,6 @@ def creer():
 @login_required
 @role_requis(RoleUtilisateur.ADMIN)
 def changer_role(user_id):
-    """
-    Modification du role :
-    - admin peut modifier le role de tout utilisateur SAUF un super_admin
-      (ni le promouvoir vers super_admin, ni modifier un compte deja super_admin)
-    - super_admin peut modifier n'importe quel role, y compris vers/depuis super_admin
-    """
     session = get_session()
     user = session.query(User).filter_by(id=user_id).first()
 
@@ -103,12 +98,20 @@ def changer_role(user_id):
         return redirect(url_for("users.liste"))
 
     if current_user.role != RoleUtilisateur.SUPER_ADMIN:
-        # Un admin ne peut ni toucher a un compte deja super_admin,
-        # ni promouvoir quelqu'un vers super_admin
         if user.role == RoleUtilisateur.SUPER_ADMIN or nouveau_role == RoleUtilisateur.SUPER_ADMIN:
             flash("Seul un super-administrateur peut attribuer ou modifier le role super-admin.", "error")
             session.close()
             return redirect(url_for("users.liste"))
+
+    if user.role != nouveau_role:
+        from app.models import HistoriqueRole
+        historique = HistoriqueRole(
+            user_cible_id=user.id,
+            modifie_par_id=current_user.id,
+            ancien_role=user.role,
+            nouveau_role=nouveau_role,
+        )
+        session.add(historique)
 
     user.role = nouveau_role
     session.commit()
@@ -154,3 +157,16 @@ def toggle_actif(user_id):
 
     session.close()
     return redirect(url_for("users.liste"))
+
+
+@users_bp.route("/historique-roles")
+@login_required
+@role_requis(RoleUtilisateur.SUPER_ADMIN)
+def historique_roles():
+    from app.models import HistoriqueRole
+
+    session = get_session()
+    entries = session.query(HistoriqueRole).order_by(HistoriqueRole.date_modification.desc()).all()
+    resultat = render_template("historique_roles.html", entries=entries)
+    session.close()
+    return resultat

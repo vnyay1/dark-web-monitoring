@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Conformité — Sentinel{% endblock %}
+
+{% block extra_head %}
+<style>
+    .danger-zone {
+        border: 1px solid var(--accent-alert);
+        background: rgba(232, 73, 58, 0.05);
+        border-radius: 10px;
+        padding: 24px;
+        margin-top: 20px;
+    }
+    .danger-zone h3 { color: var(--accent-alert); font-family:'Space Grotesk',sans-serif; margin-bottom: 12px; }
+    .danger-zone input[type="text"], .danger-zone input[type="date"] {
+        background: var(--bg-base); border: 1px solid var(--border-subtle);
+        color: var(--text-primary); padding: 8px 10px; border-radius: 6px; font-size: 13px;
+    }
+    .danger-btn {
+        background: var(--accent-alert); color: white; border: none;
+        padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+{% endwith %}
+
+<div class="report-panel">
+    <h3>Export complet de conformité</h3>
+    <p>{{ total_expositions }} exposition(s) actuellement en base. Export intégral avant toute action de purge.</p>
+    <a href="{{ url_for('compliance.export_complet') }}" class="report-btn">Exporter tout (JSON)</a>
+</div>
+
+<div class="danger-zone">
+    <h3>⚠ Zone de purge — action irréversible</h3>
+    <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">
+        Supprime définitivement toutes les expositions détectées avant la date indiquée, ainsi que leurs sources et alertes associées. Aucune récupération possible après confirmation.
+    </p>
+    <form method="post" action="{{ url_for('compliance.purger') }}" onsubmit="return confirm('Cette action est irréversible. Continuer ?');">
+        <div style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+            <div class="filter-field">
+                <label>Purger avant le</label>
+                <input type="date" name="date_limite" required>
+            </div>
+            <div class="filter-field">
+                <label>Tapez CONFIRMER</label>
+                <input type="text" name="confirmation" placeholder="CONFIRMER" required>
+            </div>
+            <button type="submit" class="danger-btn">Purger définitivement</button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
