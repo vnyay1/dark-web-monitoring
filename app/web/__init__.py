@@ -19,6 +19,7 @@ def create_app():
     from app.web.expositions import expositions_bp
     from app.web.alerts import alerts_bp, compter_alertes_non_lues
     from app.web.audit import audit_bp
+    from app.web.compliance import compliance_bp
     from app.web.settings import settings_bp
 
     login_manager.init_app(app)
@@ -31,6 +32,7 @@ def create_app():
     app.register_blueprint(users_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(audit_bp)
+    app.register_blueprint(compliance_bp)
 
     @app.context_processor
     def inject_alertes_count():
