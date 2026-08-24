@@ -1,28 +1,208 @@
 {% extends "base.html" %}
+
 {% block title %}Conformité — Sentinel{% endblock %}
 
 {% block extra_head %}
 <style>
-    .danger-zone {
-        border: 1px solid var(--accent-alert);
-        background: rgba(232, 73, 58, 0.05);
+    .page-header {
+        margin-bottom: 24px;
+    }
+    .page-header h1 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .page-header h1::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 24px;
+        background: var(--accent);
+        border-radius: 3px;
+    }
+    .page-header p {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin: 6px 0 0 0;
+    }
+
+    .flash {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 18px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .flash-success {
+        background: color-mix(in srgb, var(--success) 10%, transparent);
+        color: var(--success);
+        border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+    }
+    .flash-error, .flash-danger {
+        background: color-mix(in srgb, var(--crit) 10%, transparent);
+        color: var(--crit);
+        border: 1px solid color-mix(in srgb, var(--crit) 25%, transparent);
+    }
+    .flash-warning {
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+        color: var(--warn);
+        border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+    }
+    .flash-info {
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        color: var(--accent);
+        border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+
+    .panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
         border-radius: 10px;
         padding: 24px;
-        margin-top: 20px;
+        margin-bottom: 24px;
     }
-    .danger-zone h3 { color: var(--accent-alert); font-family:'Space Grotesk',sans-serif; margin-bottom: 12px; }
-    .danger-zone input[type="text"], .danger-zone input[type="date"] {
-        background: var(--bg-base); border: 1px solid var(--border-subtle);
-        color: var(--text-primary); padding: 8px 10px; border-radius: 6px; font-size: 13px;
+    .panel h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: var(--text-primary);
     }
+    .panel p {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.55;
+        margin-bottom: 18px;
+    }
+
+    .export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        background: var(--accent);
+        color: var(--bg-deep);
+        transition: background 0.15s ease, transform 0.05s ease;
+    }
+    .export-btn:hover {
+        background: color-mix(in srgb, var(--accent) 85%, white);
+    }
+    .export-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .danger-zone {
+        background: color-mix(in srgb, var(--crit) 6%, transparent);
+        border: 1px solid color-mix(in srgb, var(--crit) 30%, transparent);
+        border-radius: 10px;
+        padding: 24px;
+    }
+    .danger-zone h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--crit);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .danger-zone h3 svg {
+        width: 18px;
+        height: 18px;
+    }
+    .danger-zone p {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.55;
+        margin-bottom: 18px;
+    }
+
+    .purge-form {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .filter-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 200px;
+    }
+    .filter-field label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+    }
+    .filter-field input[type="text"],
+    .filter-field input[type="date"] {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 7px;
+        padding: 9px 12px;
+        color: var(--text-primary);
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .filter-field input[type="text"]:focus,
+    .filter-field input[type="date"]:focus {
+        border-color: var(--crit);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--crit) 15%, transparent);
+    }
+
     .danger-btn {
-        background: var(--accent-alert); color: white; border: none;
-        padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--crit);
+        color: white;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 7px;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.05s ease;
+    }
+    .danger-btn:hover {
+        background: color-mix(in srgb, var(--crit) 85%, black);
+    }
+    .danger-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    @media (max-width: 640px) {
+        .purge-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .filter-field {
+            min-width: auto;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<div class="page-header">
+    <h1>Conformité</h1>
+    <p>Export intégral et opérations de purge des données obsolètes.</p>
+</div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
@@ -30,19 +210,25 @@
     {% endfor %}
 {% endwith %}
 
-<div class="report-panel">
+<div class="panel">
     <h3>Export complet de conformité</h3>
     <p>{{ total_expositions }} exposition(s) actuellement en base. Export intégral avant toute action de purge.</p>
-    <a href="{{ url_for('compliance.export_complet') }}" class="report-btn">Exporter tout (JSON)</a>
+    <a href="{{ url_for('compliance.export_complet') }}" class="export-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exporter tout (JSON)
+    </a>
 </div>
 
 <div class="danger-zone">
-    <h3>⚠ Zone de purge — action irréversible</h3>
-    <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">
+    <h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Zone de purge — action irréversible
+    </h3>
+    <p>
         Supprime définitivement toutes les expositions détectées avant la date indiquée, ainsi que leurs sources et alertes associées. Aucune récupération possible après confirmation.
     </p>
     <form method="post" action="{{ url_for('compliance.purger') }}" onsubmit="return confirm('Cette action est irréversible. Continuer ?');">
-        <div style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+        <div class="purge-form">
             <div class="filter-field">
                 <label>Purger avant le</label>
                 <input type="date" name="date_limite" required>
@@ -51,7 +237,10 @@
                 <label>Tapez CONFIRMER</label>
                 <input type="text" name="confirmation" placeholder="CONFIRMER" required>
             </div>
-            <button type="submit" class="danger-btn">Purger définitivement</button>
+            <button type="submit" class="danger-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                Purger définitivement
+            </button>
         </div>
     </form>
 </div>

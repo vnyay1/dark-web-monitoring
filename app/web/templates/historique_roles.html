@@ -1,12 +1,179 @@
 {% extends "base.html" %}
+
 {% block title %}Historique des rôles — Sentinel{% endblock %}
 
+{% block extra_head %}
+<style>
+    .page-header {
+        margin-bottom: 24px;
+    }
+    .page-header h1 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .page-header h1::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 24px;
+        background: var(--accent);
+        border-radius: 3px;
+    }
+
+    .results-count {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .history-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        overflow: hidden;
+        font-size: 13px;
+    }
+    .history-table thead {
+        position: sticky;
+        top: 64px;
+        z-index: 10;
+    }
+    .history-table th {
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: left;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        white-space: nowrap;
+    }
+    .history-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        vertical-align: middle;
+    }
+    .history-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    .history-table tbody tr:hover {
+        background: color-mix(in srgb, var(--accent) 4%, transparent);
+    }
+
+    .history-date {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .history-user {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .history-modifier {
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+
+    .role-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .role-super_admin {
+        background: color-mix(in srgb, var(--crit) 15%, transparent);
+        color: var(--crit);
+    }
+    .role-admin {
+        background: color-mix(in srgb, var(--warn) 15%, transparent);
+        color: var(--warn);
+    }
+    .role-analyste, .role-analyst {
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
+        color: var(--accent);
+    }
+    .role-lecteur, .role-reader {
+        background: color-mix(in srgb, var(--success) 15%, transparent);
+        color: var(--success);
+    }
+    .role-inactif, .role-disabled {
+        background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+        color: var(--text-muted);
+    }
+
+    .role-change {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .role-arrow {
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 64px 24px;
+        background: var(--bg-card);
+        border: 1px dashed var(--border-subtle);
+        border-radius: 10px;
+        color: var(--text-muted);
+        text-align: center;
+    }
+    .empty-state svg {
+        width: 40px;
+        height: 40px;
+        opacity: 0.5;
+    }
+    .empty-state p {
+        margin: 0;
+        font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+        .history-table {
+            display: block;
+            overflow-x: auto;
+        }
+        .history-table thead {
+            top: 0;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+
+<div class="page-header">
+    <h1>Historique des rôles</h1>
+    <p class="text-muted">Traçabilité des modifications de privilèges utilisateurs.</p>
+</div>
 
 <div class="results-count">{{ entries|length }} changement(s) de rôle enregistré(s)</div>
 
 {% if entries %}
-<table class="expositions-table">
+<table class="history-table">
     <thead>
         <tr>
             <th>Date</th>
@@ -19,17 +186,27 @@
     <tbody>
         {% for e in entries %}
         <tr>
-            <td>{{ e.date_modification.strftime('%d/%m/%Y %H:%M') }}</td>
-            <td><strong>{{ e.user_cible.nom_utilisateur }}</strong></td>
-            <td><span class="role-badge role-{{ e.ancien_role.value }}">{{ e.ancien_role.value }}</span></td>
-            <td><span class="role-badge role-{{ e.nouveau_role.value }}">{{ e.nouveau_role.value }}</span></td>
-            <td>{{ e.modifie_par.nom_utilisateur }}</td>
+            <td><span class="history-date">{{ e.date_modification.strftime('%d/%m/%Y %H:%M') }}</span></td>
+            <td><span class="history-user">{{ e.user_cible.nom_utilisateur }}</span></td>
+            <td>
+                <span class="role-badge role-{{ e.ancien_role.value }}">{{ e.ancien_role.value }}</span>
+            </td>
+            <td>
+                <div class="role-change">
+                    <span class="role-arrow">→</span>
+                    <span class="role-badge role-{{ e.nouveau_role.value }}">{{ e.nouveau_role.value }}</span>
+                </div>
+            </td>
+            <td><span class="history-modifier">{{ e.modifie_par.nom_utilisateur }}</span></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 {% else %}
-<div class="empty-state">Aucun changement de rôle enregistré.</div>
+<div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    <p>Aucun changement de rôle enregistré.</p>
+</div>
 {% endif %}
 
 {% endblock %}
