@@ -313,11 +313,13 @@
       <input type="password" id="mot_de_passe" name="mot_de_passe" required minlength="8">
     </div>
 
-    <div class="form-field">
+  <div class="form-field">
       <label for="role">Rôle</label>
       <select id="role" name="role">
         {% for r in tous_roles %}
-        <option value="{{ r.value }}">{{ r.value }}</option>
+            {% if est_super_admin or r.value != 'super_admin' %}
+            <option value="{{ r.value }}">{{ r.value }}</option>
+            {% endif %}
         {% endfor %}
       </select>
     </div>
