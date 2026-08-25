@@ -1,7 +1,11 @@
 """
 Gestion des comptes utilisateurs - reserve aux roles admin et super_admin.
-La modification du ROLE d'un utilisateur est reservee au super_admin uniquement.
+La modification du ROLE d'un utilisateur est reservee au super_admin uniquement,
+sauf pour l'attribution/retrait du role super_admin qui reste strictement
+reserve au super_admin (un admin peut modifier tout role SAUF super_admin).
 """
+
+import re
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
@@ -13,6 +17,45 @@ from app.web.permissions import role_requis
 
 users_bp = Blueprint("users", __name__, url_prefix="/users")
 
+
+# ---------------------------------------------------------------------
+# Politique de robustesse des mots de passe
+# ---------------------------------------------------------------------
+
+CARACTERES_SPECIAUX = r"!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?~`"
+LONGUEUR_MINIMALE = 8
+
+
+def valider_mot_de_passe(mot_de_passe: str) -> tuple:
+    """
+    Verifie qu'un mot de passe respecte la politique de robustesse :
+    - au moins 8 caracteres
+    - au moins une majuscule
+    - au moins une minuscule
+    - au moins un caractere special
+
+    Retourne un tuple (valide: bool, message: str). Le message est vide
+    si le mot de passe est valide, sinon il decrit la premiere regle
+    non respectee.
+    """
+    if len(mot_de_passe) < LONGUEUR_MINIMALE:
+        return False, f"Le mot de passe doit contenir au moins {LONGUEUR_MINIMALE} caracteres."
+
+    if not re.search(r"[A-Z]", mot_de_passe):
+        return False, "Le mot de passe doit contenir au moins une majuscule."
+
+    if not re.search(r"[a-z]", mot_de_passe):
+        return False, "Le mot de passe doit contenir au moins une minuscule."
+
+    if not re.search(f"[{re.escape(CARACTERES_SPECIAUX)}]", mot_de_passe):
+        return False, "Le mot de passe doit contenir au moins un caractere special."
+
+    return True, ""
+
+
+# ---------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------
 
 @users_bp.route("/")
 @login_required
@@ -41,8 +84,14 @@ def creer():
     mot_de_passe = request.form.get("mot_de_passe", "")
     role_demande = request.form.get("role", RoleUtilisateur.USER.value)
 
-    if not nom_utilisateur or len(mot_de_passe) < 8:
-        flash("Nom d'utilisateur requis et mot de passe d'au moins 8 caracteres.", "error")
+    if not nom_utilisateur:
+        flash("Nom d'utilisateur requis.", "error")
+        session.close()
+        return redirect(url_for("users.liste"))
+
+    mot_de_passe_valide, message_erreur = valider_mot_de_passe(mot_de_passe)
+    if not mot_de_passe_valide:
+        flash(message_erreur, "error")
         session.close()
         return redirect(url_for("users.liste"))
 
@@ -57,8 +106,7 @@ def creer():
     except ValueError:
         role_enum = RoleUtilisateur.USER
 
-    # Seul un super_admin peut creer un compte super_admin (protection
-    # backend, independante de ce qui est affiche cote template)
+    # Seul un super_admin peut creer un compte super_admin
     if role_enum == RoleUtilisateur.SUPER_ADMIN and current_user.role != RoleUtilisateur.SUPER_ADMIN:
         flash("Seul un super-administrateur peut creer un compte super-admin.", "error")
         role_enum = RoleUtilisateur.USER
@@ -80,6 +128,12 @@ def creer():
 @login_required
 @role_requis(RoleUtilisateur.ADMIN)
 def changer_role(user_id):
+    """
+    Modification du role :
+    - admin peut modifier le role de tout utilisateur SAUF un super_admin
+      (ni le promouvoir vers super_admin, ni modifier un compte deja super_admin)
+    - super_admin peut modifier n'importe quel role, y compris vers/depuis super_admin
+    """
     session = get_session()
     user = session.query(User).filter_by(id=user_id).first()
 

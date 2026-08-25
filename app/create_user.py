@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash
 
 from app.db import get_session, init_db
 from app.models import User
+from app.web.users import valider_mot_de_passe
 
 
 def create_user():
@@ -32,8 +33,9 @@ def create_user():
         print("[ERREUR] Les mots de passe ne correspondent pas.")
         return
 
-    if len(mot_de_passe) < 8:
-        print("[ERREUR] Le mot de passe doit faire au moins 8 caracteres.")
+    mot_de_passe_valide, message_erreur = valider_mot_de_passe(mot_de_passe)
+    if not mot_de_passe_valide:
+        print(f"[ERREUR] {message_erreur}")
         return
 
     user = User(
