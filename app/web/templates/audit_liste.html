@@ -1,302 +1,352 @@
 {% extends "base.html" %}
-
-{% block title %}Journal d'audit — Sentinel{% endblock %}
+{% block title %}Journal d'Audit Système — Sentinel CIRT{% endblock %}
+{% block nav_audit %}active{% endblock %}
 
 {% block extra_head %}
 <style>
-    .page-header {
-        margin-bottom: 24px;
-    }
-    .page-header h1 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .page-header h1::before {
-        content: "";
-        display: inline-block;
-        width: 6px;
-        height: 24px;
-        background: var(--accent);
-        border-radius: 3px;
-    }
+  .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+  }
 
-    .filter-bar {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 16px;
-        align-items: end;
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        padding: 18px 20px;
-        margin-bottom: 18px;
-    }
-    .filter-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .filter-field label {
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-    }
-    .filter-field select,
-    .filter-field input {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        border-radius: 7px;
-        padding: 9px 12px;
-        color: var(--text-primary);
-        font-size: 13px;
-        outline: none;
-        transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    }
-    .filter-field select:focus,
-    .filter-field input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-    }
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-    .filter-submit,
-    .filter-reset {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 9px 16px;
-        border-radius: 7px;
-        font-size: 13px;
-        font-weight: 600;
-        text-decoration: none;
-        cursor: pointer;
-        transition: background 0.15s ease, transform 0.05s ease;
-        height: fit-content;
-    }
-    .filter-submit {
-        background: var(--accent);
-        color: var(--bg-deep);
-        border: none;
-    }
-    .filter-submit:hover {
-        background: color-mix(in srgb, var(--accent) 85%, white);
-    }
-    .filter-reset {
-        background: transparent;
-        color: var(--text-muted);
-        border: 1px solid var(--border-subtle);
-    }
-    .filter-reset:hover {
-        background: var(--bg-elevated);
-        color: var(--text-primary);
-    }
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: var(--r-full);
+  }
 
-    .results-count {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-bottom: 14px;
-        font-family: 'JetBrains Mono', monospace;
-    }
+  .header-left p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
 
-    .audit-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        overflow: hidden;
-        font-size: 13px;
-    }
-    .audit-table thead {
-        position: sticky;
-        top: 64px;
-        z-index: 10;
-    }
-    .audit-table th {
-        background: var(--bg-elevated);
-        color: var(--text-secondary);
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        text-align: left;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border-subtle);
-        white-space: nowrap;
-    }
-    .audit-table td {
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        vertical-align: top;
-    }
-    .audit-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-    .audit-table tbody tr:hover {
-        background: color-mix(in srgb, var(--accent) 4%, transparent);
-    }
+  /* Filter Toolbar */
+  .filter-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+  }
 
-    .audit-timestamp {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        color: var(--text-secondary);
-        white-space: nowrap;
-    }
-    .audit-source {
-        font-weight: 500;
-        color: var(--text-primary);
-    }
-    .audit-details {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        color: var(--text-muted);
-        line-height: 1.45;
-        word-break: break-word;
-    }
+  .filter-form-grid {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
 
-    .result-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-    .result-badge::before {
-        content: "";
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-    }
-    .result-succes {
-        background: color-mix(in srgb, var(--success) 12%, transparent);
-        color: var(--success);
-    }
-    .result-succes::before {
-        background: var(--success);
-    }
-    .result-echec {
-        background: color-mix(in srgb, var(--crit) 12%, transparent);
-        color: var(--crit);
-    }
-    .result-echec::before {
-        background: var(--crit);
-    }
+  .filter-field-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+  }
 
-    .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 14px;
-        padding: 64px 24px;
-        background: var(--bg-card);
-        border: 1px dashed var(--border-subtle);
-        border-radius: 10px;
-        color: var(--text-muted);
-        text-align: center;
-    }
-    .empty-state svg {
-        width: 40px;
-        height: 40px;
-        opacity: 0.5;
-    }
-    .empty-state p {
-        margin: 0;
-        font-size: 14px;
-    }
+  .filter-label-txt {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
 
-    @media (max-width: 640px) {
-        .filter-bar {
-            grid-template-columns: 1fr;
-        }
-        .audit-table {
-            display: block;
-            overflow-x: auto;
-        }
-        .audit-table thead {
-            top: 0;
-        }
-    }
+  .filter-select-ctrl {
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .filter-select-ctrl:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .btn-filter-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .btn-filter-action.apply {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #05141B;
+  }
+  .btn-filter-action.apply:hover {
+    background: var(--accent-hover);
+  }
+
+  .btn-filter-action.reset {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+  }
+  .btn-filter-action.reset:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+
+  /* Table Card */
+  .table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .count-tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .count-tag strong { color: var(--accent); }
+
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table thead {
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    vertical-align: top;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--bg-elevated);
+  }
+
+  .audit-ts {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .audit-source-tag {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  .status-badge-audit {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .status-badge-audit.succes {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+  }
+
+  .status-badge-audit.echec {
+    background: var(--crit-bg);
+    color: var(--crit);
+    border: 1px solid var(--crit-border);
+  }
+
+  .status-badge-audit .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+  .status-badge-audit.succes .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .status-badge-audit.echec .dot { background: var(--crit); box-shadow: 0 0 6px var(--crit); }
+
+  .audit-details-code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    word-break: break-word;
+    background: var(--bg-deep);
+    padding: 4px 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-subtle);
+    display: inline-block;
+  }
+
+  /* Empty State */
+  .empty-audit {
+    padding: 64px 20px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .empty-audit-icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+<header class="page-header">
+  <div class="header-left">
+    <h1>Journal d'Audit Système (FR-17)</h1>
+    <p>Registre immuable (append-only) de traçabilité des opérations des connecteurs et des accès.</p>
+  </div>
+  <span class="role-tag super_admin">Accès Réservé Super-Admin</span>
+</header>
 
-<div class="page-header">
-    <h1>Journal d'audit</h1>
-    <p class="text-muted">Traces d'exécution des collecteurs et opérations système.</p>
-</div>
+<!-- Filtres -->
+<form class="filter-panel" method="GET" action="{{ url_for('audit.liste') }}">
+  <div class="filter-form-grid">
+    <div class="filter-field-box">
+      <label class="filter-label-txt" for="audit-source">Source surveillée</label>
+      <select class="filter-select-ctrl" id="audit-source" name="source_id">
+        <option value="">Toutes les sources</option>
+        {% for s in toutes_sources %}
+        <option value="{{ s.id }}" {% if filtres_actifs.source_id == s.id %}selected{% endif %}>{{ s.nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-<form class="filter-bar" method="get">
-    <div class="filter-field">
-        <label>Source</label>
-        <select name="source_id">
-            <option value="">Toutes</option>
-            {% for s in toutes_sources %}
-            <option value="{{ s.id }}" {% if filtres_actifs.source_id == s.id %}selected{% endif %}>{{ s.nom }}</option>
-            {% endfor %}
-        </select>
+    <div class="filter-field-box">
+      <label class="filter-label-txt" for="audit-resultat">Résultat d'exécution</label>
+      <select class="filter-select-ctrl" id="audit-resultat" name="resultat">
+        <option value="">Tous les résultats</option>
+        <option value="succes" {% if filtres_actifs.resultat == "succes" %}selected{% endif %}>Succès</option>
+        <option value="echec" {% if filtres_actifs.resultat == "echec" %}selected{% endif %}>Échec</option>
+      </select>
     </div>
-    <div class="filter-field">
-        <label>Résultat</label>
-        <select name="resultat">
-            <option value="">Tous</option>
-            <option value="succes" {% if filtres_actifs.resultat == "succes" %}selected{% endif %}>Succès</option>
-            <option value="echec" {% if filtres_actifs.resultat == "echec" %}selected{% endif %}>Échec</option>
-        </select>
-    </div>
-    <button type="submit" class="filter-submit">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
-        Filtrer
+
+    <button type="submit" class="btn-filter-action apply">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      Filtrer
     </button>
-    <a href="{{ url_for('audit.liste') }}" class="filter-reset">Réinitialiser</a>
+    <a href="{{ url_for('audit.liste') }}" class="btn-filter-action reset">Réinitialiser</a>
+  </div>
 </form>
 
-<div class="results-count">{{ entries|length }} entrée(s) (limité à 500 les plus récentes)</div>
+<div class="table-toolbar">
+  <div class="count-tag">
+    Affichage de <strong>{{ entries|length }}</strong> entrée(s) récentes (limité à 500)
+  </div>
+</div>
 
 {% if entries %}
-<table class="audit-table">
+<div class="table-card">
+  <table class="data-table">
     <thead>
-        <tr>
-            <th>Horodatage</th>
-            <th>Source</th>
-            <th>Résultat</th>
-            <th>Détails</th>
-        </tr>
+      <tr>
+        <th>Horodatage UTC</th>
+        <th>Source / Connecteur</th>
+        <th>Résultat</th>
+        <th>Détails techniques</th>
+      </tr>
     </thead>
     <tbody>
-        {% for e in entries %}
-        <tr>
-            <td><span class="audit-timestamp">{{ e.horodatage.strftime('%d/%m/%Y %H:%M:%S') }}</span></td>
-            <td><span class="audit-source">{{ e.source.nom if e.source else "—" }}</span></td>
-            <td>
-                <span class="result-badge result-{{ e.resultat.value }}">
-                    {{ e.resultat.value }}
-                </span>
-            </td>
-            <td class="audit-details">{{ e.details or "—" }}</td>
-        </tr>
-        {% endfor %}
+      {% for e in entries %}
+      <tr>
+        <td>
+          <span class="audit-ts">{{ e.horodatage.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+        </td>
+        <td>
+          <span class="audit-source-tag">{{ e.source.nom if e.source else "Système Interne" }}</span>
+        </td>
+        <td>
+          <span class="status-badge-audit {{ e.resultat.value }}">
+            <span class="dot"></span>
+            {{ e.resultat.value }}
+          </span>
+        </td>
+        <td>
+          {% if e.details %}
+          <code class="audit-details-code">{{ e.details }}</code>
+          {% else %}
+          <span style="color: var(--text-dim);">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
     </tbody>
-</table>
+  </table>
+</div>
 {% else %}
-<div class="empty-state">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-    <p>Aucune entrée d'audit ne correspond aux critères.</p>
+<div class="table-card">
+  <div class="empty-audit">
+    <svg class="empty-audit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+    <p>Aucun événement d'audit ne correspond aux filtres sélectionnés.</p>
+  </div>
 </div>
 {% endif %}
-
 {% endblock %}

@@ -1,386 +1,445 @@
 {% extends "base.html" %}
-
-{% block title %}Gestion des comptes — Sentinel{% endblock %}
+{% block title %}Gestion des Comptes — Sentinel CIRT{% endblock %}
 {% block nav_comptes %}active{% endblock %}
 
 {% block extra_head %}
 <style>
   .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
   }
 
-  .page-header h1 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 22px;
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
-    margin: 0 0 6px 0;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
-  .page-header p {
-    color: var(--text-muted);
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--warn);
+    border-radius: var(--r-full);
+  }
+
+  .header-left p {
     font-size: 13px;
-    margin: 0;
+    color: var(--text-secondary);
   }
 
+  /* Create User Card */
   .create-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    padding: 20px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 22px 24px;
     margin-bottom: 28px;
+    box-shadow: var(--shadow-sm);
   }
 
-  .create-card h2 {
-    font-family: 'Space Grotesk', sans-serif;
+  .create-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .create-card-title {
+    font-family: var(--font-display);
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 18px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .create-form {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+  .password-requirements-hint {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-deep);
+    border: 1px solid var(--border-subtle);
+    padding: 4px 10px;
+    border-radius: var(--r-full);
+  }
+
+  .create-form-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 1fr auto;
+    gap: 14px;
     align-items: flex-end;
   }
 
-  .form-field {
+  .form-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
   }
 
-  .form-field label {
-    font-size: 11px;
+  .form-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
   }
 
-  .form-field input,
-  .form-field select {
-    background: var(--bg-base);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    min-width: 180px;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-
-  .form-field input:focus,
-  .form-field select:focus {
-    outline: none;
-    border-color: var(--accent-info);
-    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
-  }
-
-  .btn-create {
-    background: var(--accent-info);
-    color: var(--bg-base);
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s ease, transform 0.05s ease;
-  }
-
-  .btn-create:hover {
-    opacity: 0.92;
-  }
-
-  .btn-create:active {
-    transform: translateY(1px);
-  }
-
-  .users-table {
+  .form-input,
+  .form-select {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    padding: 9px 12px;
+    border-radius: var(--r-sm);
+    font-family: var(--font-body);
+    font-size: 13px;
+    transition: all 0.15s ease;
+  }
+
+  .form-input:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+    background: var(--bg-base);
+  }
+
+  .btn-submit-create {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 18px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #05141B;
+    border-radius: var(--r-sm);
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    height: 38px;
+  }
+
+  .btn-submit-create:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 4px 12px rgba(0, 229, 192, 0.3);
+  }
+
+  /* Users Table */
+  .table-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
     overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 13px;
   }
 
-  .users-table thead {
+  .data-table thead {
     background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
   }
 
-  .users-table th {
-    padding: 12px 16px;
+  .data-table th {
     text-align: left;
-    font-size: 11px;
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
     color: var(--text-muted);
-    border-bottom: 1px solid var(--border-subtle);
     white-space: nowrap;
   }
 
-  .users-table td {
+  .data-table td {
     padding: 14px 16px;
     border-bottom: 1px solid var(--border-subtle);
     color: var(--text-primary);
     vertical-align: middle;
   }
 
-  .users-table tbody tr:last-child td {
+  .data-table tbody tr:last-child td {
     border-bottom: none;
   }
 
-  .users-table tbody tr:hover {
-    background: rgba(45, 212, 191, 0.04);
+  .data-table tbody tr:hover {
+    background: var(--bg-elevated);
   }
 
-  .user-name {
+  .user-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .user-avatar-sm {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .user-name-title {
     font-weight: 600;
     color: var(--text-primary);
   }
 
-  .role-select {
-    background: var(--bg-base);
-    border: 1px solid var(--border-subtle);
+  .role-select-inline {
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
     color: var(--text-primary);
-    padding: 6px 10px;
-    border-radius: 6px;
+    padding: 6px 24px 6px 10px;
+    border-radius: var(--r-sm);
+    font-family: var(--font-mono);
     font-size: 12px;
-    min-width: 140px;
+    font-weight: 600;
     cursor: pointer;
-    transition: border-color 0.15s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: all 0.15s ease;
   }
 
-  .role-select:hover {
-    border-color: var(--accent-info);
+  .role-select-inline:hover {
+    border-color: var(--accent);
   }
 
-  .role-badge {
+  .role-select-inline:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .role-badge-static {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
     font-size: 11px;
-    font-weight: 500;
-    padding: 4px 10px;
-    border-radius: 4px;
-    border: 1px solid transparent;
+    font-weight: 600;
+    text-transform: uppercase;
   }
+  .role-badge-static.super_admin { background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit-border); }
+  .role-badge-static.admin { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+  .role-badge-static.supervisor { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(0, 229, 192, 0.3); }
+  .role-badge-static.user { background: rgba(148, 163, 184, 0.12); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
 
-  .role-user {
-    background: rgba(107, 120, 145, 0.12);
-    color: #9aa3b2;
-    border-color: rgba(107, 120, 145, 0.25);
-  }
-
-  .role-supervisor {
-    background: rgba(45, 212, 191, 0.10);
-    color: #2dd4bf;
-    border-color: rgba(45, 212, 191, 0.25);
-  }
-
-  .role-admin {
-    background: rgba(232, 169, 58, 0.12);
-    color: #f0b232;
-    border-color: rgba(232, 169, 58, 0.25);
-  }
-
-  .role-super_admin {
-    background: rgba(232, 73, 58, 0.12);
-    color: #f87171;
-    border-color: rgba(232, 73, 58, 0.25);
-  }
-
-  .status-badge {
+  .status-tag {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 4px 10px;
-    border-radius: 999px;
+    padding: 3px 10px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
   }
 
-  .status-badge::before {
-    content: '';
-    width: 6px;
-    height: 6px;
+  .status-tag.active {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+  }
+  .status-tag.inactive {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .status-dot-sm {
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
   }
+  .status-tag.active .status-dot-sm { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .status-tag.inactive .status-dot-sm { background: var(--text-muted); }
 
-  .status-actif {
-    background: rgba(34, 197, 94, 0.12);
-    color: #4ade80;
-  }
-
-  .status-actif::before {
-    background: #4ade80;
-  }
-
-  .status-inactif {
-    background: rgba(107, 120, 145, 0.12);
-    color: #9aa3b2;
-  }
-
-  .status-inactif::before {
-    background: #6b7891;
-  }
-
-  .btn-toggle {
-    background: transparent;
-    border: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
+  .btn-toggle-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 5px 12px;
-    border-radius: 6px;
+    border-radius: var(--r-sm);
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-toggle:hover {
-    border-color: var(--accent-info);
-    color: var(--accent-info);
-    background: rgba(45, 212, 191, 0.06);
+  .btn-toggle-user:hover {
+    border-color: var(--warn);
+    color: var(--warn);
+    background: var(--warn-bg);
   }
 
-  .btn-toggle:disabled,
-  .btn-toggle[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .action-muted {
+  .action-disabled {
     color: var(--text-muted);
+    font-family: var(--font-mono);
     font-size: 12px;
   }
 
-  @media (max-width: 768px) {
-    .create-form {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .form-field input,
-    .form-field select {
-      width: 100%;
-    }
-
-    .users-table {
-      display: block;
-      overflow-x: auto;
+  @media (max-width: 900px) {
+    .create-form-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Gestion des comptes</h1>
-  <p>Création, rôles et activation des utilisateurs Sentinel.</p>
-</div>
+<header class="page-header">
+  <div class="header-left">
+    <h1>Gestion des Utilisateurs &amp; Privilèges</h1>
+    <p>Création des comptes analystes, affectation des rôles et contrôle des accès Sentinel.</p>
+  </div>
+</header>
 
+<!-- Formulaire de Création de Compte -->
 <div class="create-card">
-  <h2>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-      <circle cx="9" cy="7" r="4"></circle>
-      <line x1="19" y1="8" x2="19" y2="14"></line>
-      <line x1="22" y1="11" x2="16" y2="11"></line>
-    </svg>
-    Créer un compte
-  </h2>
+  <div class="create-card-header">
+    <h2 class="create-card-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+      Créer un nouvel analyste
+    </h2>
+    <div class="password-requirements-hint">
+      Requis : 8+ car., 1 maj., 1 min., 1 car. spécial
+    </div>
+  </div>
 
-  <form class="create-form" method="post" action="{{ url_for('users.creer') }}">
-    <div class="form-field">
-      <label for="nom_utilisateur">Nom d'utilisateur</label>
-      <input type="text" id="nom_utilisateur" name="nom_utilisateur" required autocomplete="off">
+  <form class="create-form-grid" method="POST" action="{{ url_for('users.creer') }}">
+    <div class="form-group">
+      <label class="form-label" for="nom_utilisateur">Nom d'utilisateur</label>
+      <input class="form-input" type="text" id="nom_utilisateur" name="nom_utilisateur" placeholder="j.dupont" required autocomplete="off">
     </div>
 
-    <div class="form-field">
-      <label for="mot_de_passe">Mot de passe</label>
-      <input type="password" id="mot_de_passe" name="mot_de_passe" required minlength="8">
+    <div class="form-group">
+      <label class="form-label" for="mot_de_passe">Mot de passe temporaire</label>
+      <input class="form-input" type="password" id="mot_de_passe" name="mot_de_passe" placeholder="••••••••••••" required minlength="8">
     </div>
 
-  <div class="form-field">
-      <label for="role">Rôle</label>
-      <select id="role" name="role">
+    <div class="form-group">
+      <label class="form-label" for="role">Rôle attribué</label>
+      <select class="form-select" id="role" name="role">
         {% for r in tous_roles %}
-            {% if est_super_admin or r.value != 'super_admin' %}
-            <option value="{{ r.value }}">{{ r.value }}</option>
-            {% endif %}
+          {% if est_super_admin or r.value != 'super_admin' %}
+          <option value="{{ r.value }}">{{ r.value }}</option>
+          {% endif %}
         {% endfor %}
       </select>
     </div>
 
-    <button type="submit" class="btn-create">Créer</button>
+    <button type="submit" class="btn-submit-create">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      Créer le compte
+    </button>
   </form>
 </div>
 
-<table class="users-table">
-  <thead>
-    <tr>
-      <th>Utilisateur</th>
-      <th>Rôle</th>
-      <th>Statut</th>
-      <th>Créé le</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for u in utilisateurs %}
-    <tr>
-      <td>
-        <span class="user-name">{{ u.nom_utilisateur }}</span>
-      </td>
-      <td>
+<!-- Table des Utilisateurs -->
+<div class="table-card">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Utilisateur</th>
+        <th>Rôle &amp; Privilèges</th>
+        <th>Statut</th>
+        <th>Date de création</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in utilisateurs %}
+      <tr>
+        <td>
+          <div class="user-cell">
+            <div class="user-avatar-sm">{{ u.nom_utilisateur[:1]|upper }}</div>
+            <span class="user-name-title">{{ u.nom_utilisateur }}</span>
+          </div>
+        </td>
+        <td>
           {% set cible_est_super_admin = u.role.value == 'super_admin' %}
           {% if peut_modifier_role and (est_super_admin or not cible_est_super_admin) %}
-          <form method="post" action="{{ url_for('users.changer_role', user_id=u.id) }}">
-              <select name="role" class="role-select" onchange="this.form.submit()">
-                  {% for r in tous_roles %}
-                      {% if est_super_admin or r.value != 'super_admin' %}
-                      <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
-                      {% endif %}
-                  {% endfor %}
-              </select>
+          <form method="POST" action="{{ url_for('users.changer_role', user_id=u.id) }}">
+            <select name="role" class="role-select-inline" onchange="this.form.submit()" aria-label="Changer le rôle de {{ u.nom_utilisateur }}">
+              {% for r in tous_roles %}
+                {% if est_super_admin or r.value != 'super_admin' %}
+                <option value="{{ r.value }}" {% if u.role == r %}selected{% endif %}>{{ r.value }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
           </form>
           {% else %}
-          <span class="role-badge role-{{ u.role.value }}">{{ u.role.value }}</span>
+          <span class="role-badge-static {{ u.role.value }}">{{ u.role.value }}</span>
           {% endif %}
-      </td>
-      <td>
-        <span class="status-badge {% if u.actif %}status-actif{% else %}status-inactif{% endif %}">
-          {{ "Actif" if u.actif else "Désactivé" }}
-        </span>
-      </td>
-      <td>{{ u.date_creation.strftime('%d/%m/%Y') }}</td>
-      <td>
-        {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
-        {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
-        {% if peut_agir %}
-        <form method="post" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
-          <button type="submit" class="btn-toggle">
-            {{ "Désactiver" if u.actif else "Activer" }}
-          </button>
-        </form>
-        {% else %}
-        <span class="action-muted">—</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        </td>
+        <td>
+          <span class="status-tag {% if u.actif %}active{% else %}inactive{% endif %}">
+            <span class="status-dot-sm"></span>
+            {{ "Actif" if u.actif else "Désactivé" }}
+          </span>
+        </td>
+        <td>
+          <span style="font-family: var(--font-mono); color: var(--text-secondary);">
+            {{ u.date_creation.strftime('%d/%m/%Y') }}
+          </span>
+        </td>
+        <td>
+          {% set cible_protegee = u.role.value in ['admin', 'super_admin'] %}
+          {% set peut_agir = (u.id != current_user.id) and (not cible_protegee or current_user.role.value == 'super_admin') %}
+          {% if peut_agir %}
+          <form method="POST" action="{{ url_for('users.toggle_actif', user_id=u.id) }}">
+            <button type="submit" class="btn-toggle-user" aria-label="{{ 'Désactiver' if u.actif else 'Activer' }} le compte {{ u.nom_utilisateur }}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+              {{ "Désactiver" if u.actif else "Activer" }}
+            </button>
+          </form>
+          {% else %}
+          <span class="action-disabled">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}

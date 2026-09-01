@@ -1,80 +1,107 @@
 {% extends "base.html" %}
-{% block title %}Expositions — Sentinel{% endblock %}
+{% block title %}Expositions détectées — Sentinel CIRT{% endblock %}
 {% block nav_expositions %}active{% endblock %}
 
 {% block extra_head %}
 <style>
   .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
   }
 
-  .page-header h1 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 22px;
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
-    margin: 0 0 4px 0;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
-  .page-header p {
-    margin: 0;
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: var(--r-full);
+  }
+
+  .header-left p {
     font-size: 13px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
   }
 
-  .filter-card {
+  /* Filter Card */
+  .filter-panel {
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    padding: 16px 18px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 18px 20px;
     margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
   }
 
   .filter-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 14px;
-    align-items: end;
+    grid-template-columns: 1.4fr repeat(4, 1fr) 0.9fr auto;
+    gap: 12px;
+    align-items: flex-end;
   }
 
-  .filter-field {
+  .filter-item {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
   }
 
-  .filter-field label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
+  .filter-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
   }
 
-  .filter-field input,
-  .filter-field select {
-    background: var(--bg-base);
-    border: 1px solid var(--border-subtle);
+  .filter-input,
+  .filter-select {
+    width: 100%;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
     color: var(--text-primary);
     padding: 8px 10px;
-    border-radius: 6px;
-    font-family: 'Inter', sans-serif;
+    border-radius: var(--r-sm);
+    font-family: var(--font-body);
     font-size: 13px;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: all 0.15s ease;
   }
 
-  .filter-field input:focus,
-  .filter-field select:focus {
+  .filter-input:focus,
+  .filter-select:focus {
     outline: none;
-    border-color: var(--accent-neutral);
-    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+    background: var(--bg-base);
+  }
+
+  .filter-select {
+    cursor: pointer;
   }
 
   .filter-actions {
     display: flex;
-    gap: 10px;
-    align-items: end;
+    align-items: center;
+    gap: 8px;
   }
 
   .btn {
@@ -82,368 +109,426 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    border: none;
-    border-radius: 6px;
     padding: 8px 14px;
-    font-size: 13px;
+    border-radius: var(--r-sm);
+    font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.05s ease, opacity 0.15s ease;
-  }
-
-  .btn:active {
-    transform: translateY(1px);
+    text-decoration: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    border: 1px solid transparent;
   }
 
   .btn-primary {
-    background: var(--accent-neutral);
-    color: #0b0f17;
+    background: var(--accent);
+    color: #05141B;
+    border-color: var(--accent);
   }
-
   .btn-primary:hover {
-    opacity: 0.92;
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
   }
 
   .btn-ghost {
     background: transparent;
-    color: var(--text-muted);
-    text-decoration: none;
-    border: 1px solid var(--border-subtle);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
   }
-
   .btn-ghost:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border-strong);
     color: var(--text-primary);
-    border-color: var(--text-muted);
   }
 
-  .toolbar {
+  /* Table Container */
+  .table-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
 
-  .results-count {
-    font-family: 'JetBrains Mono', monospace;
+  .results-pill {
+    font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    padding: 5px 10px;
-    border-radius: 6px;
+    padding: 5px 12px;
+    border-radius: var(--r-full);
+  }
+  .results-pill strong {
+    color: var(--accent);
   }
 
   .table-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
     overflow: hidden;
+    box-shadow: var(--shadow-sm);
   }
 
-  .expositions-table {
+  .data-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
   }
 
-  .expositions-table thead {
-    background: var(--bg-base);
+  .data-table thead {
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
   }
 
-  .expositions-table th {
+  .data-table th {
     text-align: left;
     padding: 12px 16px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
     font-weight: 600;
-    border-bottom: 1px solid var(--border-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
-  .expositions-table td {
+  .data-table td {
     padding: 13px 16px;
     border-bottom: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
+    color: var(--text-primary);
     vertical-align: middle;
   }
 
-  .expositions-table tbody tr:last-child td {
+  .data-table tbody tr:last-child td {
     border-bottom: none;
   }
 
-  .expositions-table tbody tr:hover {
-    background: var(--bg-card-hover);
+  .data-table tbody tr {
+    transition: background 0.12s ease;
   }
 
-  .expositions-table td strong {
-    color: var(--text-primary);
+  .data-table tbody tr:hover {
+    background: var(--bg-elevated);
+  }
+
+  .entity-title {
     font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .entity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
   }
 
   .cell-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
-  }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    font-family: 'Inter', sans-serif;
-  }
-
-  .badge-category {
-    background: rgba(107, 120, 145, 0.14);
     color: var(--text-secondary);
   }
 
-  .score-badge {
-    font-family: 'JetBrains Mono', monospace;
+  /* Badges */
+  .badge-category {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--info);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    text-transform: lowercase;
+  }
+
+  .score-badge-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .score-bar-mini {
+    width: 44px;
+    height: 6px;
+    background: var(--bg-deep);
+    border-radius: var(--r-full);
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: var(--r-full);
+  }
+
+  .score-pill {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+
+  .score-pill.high {
+    background: var(--crit-bg);
+    color: var(--crit);
+    border: 1px solid var(--crit-border);
+  }
+  .score-bar-fill.high { background: var(--crit); }
+
+  .score-pill.mid {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn-border);
+  }
+  .score-bar-fill.mid { background: var(--warn); }
+
+  .score-pill.low {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+  }
+  .score-bar-fill.low { background: var(--text-muted); }
+
+  .sources-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  /* Statut Dropdown / Badge */
+  .statut-dropdown {
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    padding: 5px 24px 5px 9px;
+    border-radius: var(--r-sm);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    transition: all 0.15s ease;
+  }
+
+  .statut-dropdown:hover {
+    border-color: var(--accent);
+  }
+
+  .statut-dropdown:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .statut-pill-static {
+    font-family: var(--font-mono);
+    font-size: 11px;
     font-weight: 600;
     padding: 3px 8px;
     border-radius: 4px;
-    font-size: 12px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    text-transform: uppercase;
   }
 
-  .score-high {
-    background: rgba(248, 113, 113, 0.12);
-    color: #f87171;
-  }
-
-  .score-mid {
-    background: rgba(251, 191, 36, 0.12);
-    color: #fbbf24;
-  }
-
-  .score-low {
-    background: rgba(148, 163, 184, 0.12);
-    color: #94a3b8;
-  }
-
-  .statut-select {
-    background: var(--bg-base);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    padding: 5px 22px 5px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-    font-family: 'Inter', sans-serif;
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7891' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 7px center;
-    transition: border-color 0.15s ease;
-  }
-
-  .statut-select:hover {
-    border-color: var(--accent-neutral);
-  }
-
-  .statut-select:focus {
-    outline: none;
-    border-color: var(--accent-neutral);
-    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
-  }
-
+  /* Empty state */
   .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 20px;
     text-align: center;
-    padding: 64px 24px;
     color: var(--text-muted);
   }
 
-  .empty-state-icon {
-    width: 44px;
-    height: 44px;
-    margin: 0 auto 16px auto;
-    color: var(--text-muted);
-    opacity: 0.5;
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 14px;
+    opacity: 0.4;
   }
 
-  .empty-state h3 {
-    font-family: 'Space Grotesk', sans-serif;
+  .empty-title {
+    font-family: var(--font-display);
     font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 0 0 6px 0;
+    margin-bottom: 6px;
   }
 
-  .empty-state p {
-    margin: 0;
-    font-size: 13px;
+  @media (max-width: 1200px) {
+    .filter-grid {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
   }
 
   @media (max-width: 768px) {
     .filter-grid {
       grid-template-columns: 1fr;
     }
-
-    .filter-actions {
-      width: 100%;
-    }
-
-    .filter-actions .btn {
-      flex: 1;
-    }
-
-    .expositions-table,
-    .expositions-table thead,
-    .expositions-table tbody,
-    .expositions-table th,
-    .expositions-table td,
-    .expositions-table tr {
+    .data-table {
       display: block;
-    }
-
-    .expositions-table thead {
-      display: none;
-    }
-
-    .expositions-table td {
-      border-bottom: none;
-      padding: 8px 16px;
-      position: relative;
-      padding-left: 40%;
-    }
-
-    .expositions-table td::before {
-      content: attr(data-label);
-      position: absolute;
-      left: 16px;
-      top: 8px;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-
-    .expositions-table tr {
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 10px 0;
-    }
-
-    .expositions-table tr:last-child {
-      border-bottom: none;
+      overflow-x: auto;
     }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Expositions</h1>
-  <p>Liste des fuites détectées et suivi de leur traitement</p>
-</div>
+<header class="page-header">
+  <div class="header-left">
+    <h1>Expositions Détectées</h1>
+    <p>Registre centralisé des fuites de données et suivi du traitement opérationnel CIRT.</p>
+  </div>
+</header>
 
-<form class="filter-card" method="get">
+<!-- Barre de Recherche et Filtres -->
+<form class="filter-panel" method="GET" action="{{ url_for('expositions.liste') }}">
   <div class="filter-grid">
-    <div class="filter-field">
-      <label for="f-q">Recherche</label>
-      <input id="f-q" type="text" name="q" placeholder="Nom de l'entité…" value="{{ filtres_actifs.q }}">
+    <div class="filter-item">
+      <label class="filter-label" for="f-q">Entité ciblée</label>
+      <input class="filter-input" id="f-q" type="text" name="q" placeholder="Ex: CAMTEL, Ministère..." value="{{ filtres_actifs.q }}">
     </div>
 
-    <div class="filter-field">
-      <label for="f-secteur">Secteur</label>
-      <select id="f-secteur" name="secteur">
-        <option value="">Tous</option>
+    <div class="filter-item">
+      <label class="filter-label" for="f-secteur">Secteur</label>
+      <select class="filter-select" id="f-secteur" name="secteur">
+        <option value="">Tous les secteurs</option>
         {% for s in tous_secteurs %}
         <option value="{{ s }}" {% if filtres_actifs.secteur == s %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <div class="filter-field">
-      <label for="f-categorie">Catégorie</label>
-      <select id="f-categorie" name="categorie">
-        <option value="">Toutes</option>
+    <div class="filter-item">
+      <label class="filter-label" for="f-categorie">Catégorie</label>
+      <select class="filter-select" id="f-categorie" name="categorie">
+        <option value="">Toutes catégories</option>
         {% for c in toutes_categories %}
         <option value="{{ c.value }}" {% if filtres_actifs.categorie == c.value %}selected{% endif %}>{{ c.value }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <div class="filter-field">
-      <label for="f-statut">Statut</label>
-      <select id="f-statut" name="statut">
-        <option value="">Tous</option>
+    <div class="filter-item">
+      <label class="filter-label" for="f-statut">Statut</label>
+      <select class="filter-select" id="f-statut" name="statut">
+        <option value="">Tous statuts</option>
         {% for s in tous_statuts %}
         <option value="{{ s.value }}" {% if filtres_actifs.statut == s.value %}selected{% endif %}>{{ s.value }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <div class="filter-field">
-      <label for="f-periode">Période (jours)</label>
-      <input id="f-periode" type="number" min="1" name="periode" placeholder="ex: 30" value="{{ filtres_actifs.periode }}">
+    <div class="filter-item">
+      <label class="filter-label" for="f-periode">Période (jours)</label>
+      <input class="filter-input" id="f-periode" type="number" min="1" name="periode" placeholder="Ex: 30" value="{{ filtres_actifs.periode }}">
     </div>
 
-    <div class="filter-field">
-      <label for="f-confiance">Confiance min.</label>
-      <input id="f-confiance" type="number" name="confiance_min" placeholder="0.0 – 1.0" step="0.05" min="0" max="1" value="{{ filtres_actifs.confiance_min }}">
+    <div class="filter-item">
+      <label class="filter-label" for="f-confiance">Confiance min.</label>
+      <input class="filter-input" id="f-confiance" type="number" name="confiance_min" placeholder="0.0 – 1.0" step="0.05" min="0" max="1" value="{{ filtres_actifs.confiance_min }}">
     </div>
 
     <div class="filter-actions">
-      <button type="submit" class="btn btn-primary" style="color: aliceblue;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <button type="submit" class="btn btn-primary" title="Appliquer les filtres">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         Filtrer
       </button>
-      <a href="{{ url_for('expositions.liste') }}" class="btn btn-ghost">Réinitialiser</a>
+      <a href="{{ url_for('expositions.liste') }}" class="btn btn-ghost" title="Réinitialiser les filtres">Effacer</a>
     </div>
   </div>
 </form>
 
-<div class="toolbar">
-  <div class="results-count">{{ expositions|length }} exposition(s) trouvée(s)</div>
+<div class="table-toolbar">
+  <div class="results-pill">
+    <strong>{{ expositions|length }}</strong> exposition(s) répertoriée(s)
+  </div>
 </div>
 
 {% if expositions %}
 <div class="table-card">
-  <table class="expositions-table">
+  <table class="data-table">
     <thead>
       <tr>
-        <th>Entité</th>
-        <th>Secteur</th>
-        <th>Catégorie</th>
-        <th>Détection</th>
+        <th>Entité concernée</th>
+        <th>Secteur d'activité</th>
+        <th>Catégorie de fuite</th>
+        <th>1ère Détection</th>
         <th>Confiance</th>
         <th>Sources</th>
-        <th>Statut</th>
+        <th>Statut opérationnel</th>
       </tr>
     </thead>
     <tbody>
       {% for exp in expositions %}
       <tr>
-        <td data-label="Entité"><strong>{{ exp.nom_entite }}</strong></td>
-        <td data-label="Secteur">{{ exp.secteur_activite or '—' }}</td>
-        <td data-label="Catégorie">
-          <span class="badge badge-category">{{ exp.categorie_fuite.value }}</span>
+        <td>
+          <div class="entity-title">
+            <span class="entity-dot"></span>
+            <strong>{{ exp.nom_entite }}</strong>
+          </div>
         </td>
-        <td data-label="Détection" class="cell-mono">{{ exp.date_premiere_detection.strftime('%d/%m/%Y') }}</td>
-        <td data-label="Confiance">
-          <span class="score-badge {% if exp.score_confiance >= 0.7 %}score-high{% elif exp.score_confiance >= 0.4 %}score-mid{% else %}score-low{% endif %}">
-            {{ "%.2f"|format(exp.score_confiance) }}
+        <td>
+          <span style="color: var(--text-secondary);">{{ exp.secteur_activite or '—' }}</span>
+        </td>
+        <td>
+          <span class="badge-category">{{ exp.categorie_fuite.value }}</span>
+        </td>
+        <td>
+          <span class="cell-mono">{{ exp.date_premiere_detection.strftime('%d/%m/%Y %H:%M') }}</span>
+        </td>
+        <td>
+          {% set score_val = exp.score_confiance %}
+          {% set score_lvl = 'high' if score_val >= 0.7 else ('mid' if score_val >= 0.4 else 'low') %}
+          <div class="score-badge-wrap">
+            <div class="score-bar-mini">
+              <div class="score-bar-fill {{ score_lvl }}" style="width: {{ (score_val * 100) | int }}%;"></div>
+            </div>
+            <span class="score-pill {{ score_lvl }}">
+              {{ "%.2f"|format(score_val) }}
+            </span>
+          </div>
+        </td>
+        <td>
+          <span class="sources-badge" title="{{ exp.sources|length }} source(s) distincte(s)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            {{ exp.sources|length }}
           </span>
         </td>
-        <td data-label="Sources" class="cell-mono">{{ exp.sources|length }}</td>
-        <td data-label="Status">
-            {% if current_user.role.value in ['supervisor', 'admin', 'super_admin'] %}
-            <form method="post" action="{{ url_for('expositions.changer_statut', exposition_id=exp.id) }}">
-                <select name="statut" class="statut-select" onchange="this.form.submit()">
-                    {% for s in tous_statuts %}
-                    <option value="{{ s.value }}" {% if exp.statut == s %}selected{% endif %}>{{ s.value }}</option>
-                    {% endfor %}
-                </select>
-            </form>
-            {% else %}
-            <span class="score-badge score-low">{{ exp.statut.value }}</span>
-            {% endif %}
+        <td>
+          {% if current_user.role.value in ['supervisor', 'admin', 'super_admin'] %}
+          <form method="POST" action="{{ url_for('expositions.changer_statut', exposition_id=exp.id) }}">
+            <select name="statut" class="statut-dropdown" onchange="this.form.submit()" aria-label="Changer le statut de {{ exp.nom_entite }}">
+              {% for s in tous_statuts %}
+              <option value="{{ s.value }}" {% if exp.statut == s %}selected{% endif %}>{{ s.value }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          {% else %}
+          <span class="statut-pill-static">{{ exp.statut.value }}</span>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -451,10 +536,12 @@
   </table>
 </div>
 {% else %}
-<div class="empty-state">
-  <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-  <h3>Aucune exposition trouvée</h3>
-  <p>Essayez d'assouplir les critères de filtre.</p>
+<div class="table-card">
+  <div class="empty-state">
+    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <div class="empty-title">Aucune exposition correspondante</div>
+    <p>Aucun enregistrement ne correspond aux critères de recherche actuels.</p>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

@@ -1,212 +1,230 @@
 {% extends "base.html" %}
-
-{% block title %}Historique des rôles — Sentinel{% endblock %}
+{% block title %}Historique des Rôles — Sentinel CIRT{% endblock %}
+{% block nav_roles %}active{% endblock %}
 
 {% block extra_head %}
 <style>
-    .page-header {
-        margin-bottom: 24px;
-    }
-    .page-header h1 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .page-header h1::before {
-        content: "";
-        display: inline-block;
-        width: 6px;
-        height: 24px;
-        background: var(--accent);
-        border-radius: 3px;
-    }
+  .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+  }
 
-    .results-count {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-bottom: 14px;
-        font-family: 'JetBrains Mono', monospace;
-    }
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-    .history-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        overflow: hidden;
-        font-size: 13px;
-    }
-    .history-table thead {
-        position: sticky;
-        top: 64px;
-        z-index: 10;
-    }
-    .history-table th {
-        background: var(--bg-elevated);
-        color: var(--text-secondary);
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        text-align: left;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border-subtle);
-        white-space: nowrap;
-    }
-    .history-table td {
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        vertical-align: middle;
-    }
-    .history-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-    .history-table tbody tr:hover {
-        background: color-mix(in srgb, var(--accent) 4%, transparent);
-    }
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--warn);
+    border-radius: var(--r-full);
+  }
 
-    .history-date {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 12px;
-        color: var(--text-secondary);
-        white-space: nowrap;
-    }
-    .history-user {
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-    .history-modifier {
-        color: var(--text-muted);
-        font-size: 12px;
-    }
+  .header-left p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
 
-    .role-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-    .role-super_admin {
-        background: color-mix(in srgb, var(--crit) 15%, transparent);
-        color: var(--crit);
-    }
-    .role-admin {
-        background: color-mix(in srgb, var(--warn) 15%, transparent);
-        color: var(--warn);
-    }
-    .role-analyste, .role-analyst {
-        background: color-mix(in srgb, var(--accent) 15%, transparent);
-        color: var(--accent);
-    }
-    .role-lecteur, .role-reader {
-        background: color-mix(in srgb, var(--success) 15%, transparent);
-        color: var(--success);
-    }
-    .role-inactif, .role-disabled {
-        background: color-mix(in srgb, var(--text-muted) 15%, transparent);
-        color: var(--text-muted);
-    }
+  .table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
 
-    .role-change {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .role-arrow {
-        color: var(--text-muted);
-        font-size: 12px;
-    }
+  .results-count-pill {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    padding: 5px 12px;
+    border-radius: var(--r-full);
+  }
+  .results-count-pill strong { color: var(--accent); }
 
-    .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 14px;
-        padding: 64px 24px;
-        background: var(--bg-card);
-        border: 1px dashed var(--border-subtle);
-        border-radius: 10px;
-        color: var(--text-muted);
-        text-align: center;
-    }
-    .empty-state svg {
-        width: 40px;
-        height: 40px;
-        opacity: 0.5;
-    }
-    .empty-state p {
-        margin: 0;
-        font-size: 14px;
-    }
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
 
-    @media (max-width: 640px) {
-        .history-table {
-            display: block;
-            overflow-x: auto;
-        }
-        .history-table thead {
-            top: 0;
-        }
-    }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table thead {
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--bg-elevated);
+  }
+
+  .history-ts {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .target-user {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .role-transition {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .role-arrow-icon {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .role-badge-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .role-badge-tag.super_admin { background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit-border); }
+  .role-badge-tag.admin { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+  .role-badge-tag.supervisor { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(0, 229, 192, 0.3); }
+  .role-badge-tag.user { background: rgba(148, 163, 184, 0.12); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+
+  .modifier-user {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-deep);
+    padding: 3px 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* Empty state */
+  .empty-history {
+    padding: 64px 20px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .empty-history-icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+<header class="page-header">
+  <div class="header-left">
+    <h1>Historique des Privilèges &amp; Rôles</h1>
+    <p>Traçabilité et audit des modifications d'habilitation attribuées aux comptes analystes.</p>
+  </div>
+  <span class="role-tag super_admin">Réservé Super-Admin</span>
+</header>
 
-<div class="page-header">
-    <h1>Historique des rôles</h1>
-    <p class="text-muted">Traçabilité des modifications de privilèges utilisateurs.</p>
+<div class="table-toolbar">
+  <div class="results-count-pill">
+    <strong>{{ entries|length }}</strong> modification(s) de privilège enregistrée(s)
+  </div>
 </div>
-
-<div class="results-count">{{ entries|length }} changement(s) de rôle enregistré(s)</div>
 
 {% if entries %}
-<table class="history-table">
+<div class="table-card">
+  <table class="data-table">
     <thead>
-        <tr>
-            <th>Date</th>
-            <th>Utilisateur concerné</th>
-            <th>Ancien rôle</th>
-            <th>Nouveau rôle</th>
-            <th>Modifié par</th>
-        </tr>
+      <tr>
+        <th>Date &amp; Heure (UTC)</th>
+        <th>Compte concerné</th>
+        <th>Évolution des privilèges</th>
+        <th>Opérateur modificateur</th>
+      </tr>
     </thead>
     <tbody>
-        {% for e in entries %}
-        <tr>
-            <td><span class="history-date">{{ e.date_modification.strftime('%d/%m/%Y %H:%M') }}</span></td>
-            <td><span class="history-user">{{ e.user_cible.nom_utilisateur }}</span></td>
-            <td>
-                <span class="role-badge role-{{ e.ancien_role.value }}">{{ e.ancien_role.value }}</span>
-            </td>
-            <td>
-                <div class="role-change">
-                    <span class="role-arrow">→</span>
-                    <span class="role-badge role-{{ e.nouveau_role.value }}">{{ e.nouveau_role.value }}</span>
-                </div>
-            </td>
-            <td><span class="history-modifier">{{ e.modifie_par.nom_utilisateur }}</span></td>
-        </tr>
-        {% endfor %}
+      {% for e in entries %}
+      <tr>
+        <td>
+          <span class="history-ts">{{ e.date_modification.strftime('%d/%m/%Y %H:%M') }}</span>
+        </td>
+        <td>
+          <span class="target-user">{{ e.user_cible.nom_utilisateur }}</span>
+        </td>
+        <td>
+          <div class="role-transition">
+            <span class="role-badge-tag {{ e.ancien_role.value }}">{{ e.ancien_role.value }}</span>
+            <span class="role-arrow-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </span>
+            <span class="role-badge-tag {{ e.nouveau_role.value }}">{{ e.nouveau_role.value }}</span>
+          </div>
+        </td>
+        <td>
+          <span class="modifier-user">{{ e.modifie_par.nom_utilisateur }}</span>
+        </td>
+      </tr>
+      {% endfor %}
     </tbody>
-</table>
+  </table>
+</div>
 {% else %}
-<div class="empty-state">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-    <p>Aucun changement de rôle enregistré.</p>
+<div class="table-card">
+  <div class="empty-history">
+    <svg class="empty-history-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+    <p>Aucun changement d'habilitation n'a encore été enregistré dans le système.</p>
+  </div>
 </div>
 {% endif %}
-
 {% endblock %}

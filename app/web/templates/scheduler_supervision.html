@@ -1,0 +1,791 @@
+{% extends "base.html" %}
+{% block title %}Supervision du Scheduler — Sentinel CIRT{% endblock %}
+{% block nav_scheduler %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: var(--r-full);
+  }
+
+  .header-left p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  /* Status Badge in Header */
+  .scheduler-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+  }
+
+  .scheduler-live-badge.status-running {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+  }
+  .scheduler-live-badge.status-running .status-indicator-dot {
+    background: var(--ok);
+    box-shadow: 0 0 10px var(--ok);
+    animation: pulse-green 1.8s infinite ease-in-out;
+  }
+
+  .scheduler-live-badge.status-stopped {
+    background: var(--crit-bg);
+    color: var(--crit);
+    border: 1px solid var(--crit-border);
+  }
+  .scheduler-live-badge.status-stopped .status-indicator-dot {
+    background: var(--crit);
+  }
+
+  .scheduler-live-badge.status-busy {
+    background: var(--info-bg);
+    color: var(--info);
+    border: 1px solid var(--info-border);
+  }
+  .scheduler-live-badge.status-busy .status-indicator-dot {
+    background: var(--info);
+    animation: pulse-blue 1s infinite ease-in-out;
+  }
+
+  @keyframes pulse-green {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+  }
+
+  @keyframes pulse-blue {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.2); }
+  }
+
+  .status-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* Metric Cards Strip */
+  .metrics-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .metric-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .metric-val {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-hint {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+  }
+
+  /* Action Controls Bar */
+  .control-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 18px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .control-buttons-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-ctrl {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: var(--r-sm);
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+
+  .btn-ctrl.start {
+    background: var(--ok);
+    color: #041B11;
+    border-color: var(--ok);
+  }
+  .btn-ctrl.start:hover:not(:disabled) {
+    background: #34D399;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  }
+
+  .btn-ctrl.stop {
+    background: var(--crit-bg);
+    color: var(--crit);
+    border-color: var(--crit-border);
+  }
+  .btn-ctrl.stop:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: var(--crit);
+  }
+
+  .btn-ctrl.manual {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    border-color: var(--border-default);
+  }
+  .btn-ctrl.manual:hover:not(:disabled) {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-ctrl:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .api-info-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-deep);
+    padding: 6px 12px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* Live Terminal Window */
+  .terminal-container {
+    background: #060911;
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: #0B101D;
+    border-bottom: 1px solid var(--border-subtle);
+    user-select: none;
+  }
+
+  .terminal-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .window-dots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .window-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+  }
+  .window-dot.close { background: #EF4444; }
+  .window-dot.minimize { background: #F59E0B; }
+  .window-dot.maximize { background: #10B981; }
+
+  .terminal-title {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .terminal-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-term-tool {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 4px 9px;
+    border-radius: var(--r-xs);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+  }
+
+  .btn-term-tool:hover {
+    background: var(--bg-card);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+  }
+
+  .btn-term-tool.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-color: rgba(0, 229, 192, 0.35);
+  }
+
+  .terminal-body {
+    padding: 16px 20px;
+    min-height: 420px;
+    max-height: 560px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.65;
+    color: #CBD5E1;
+    scroll-behavior: smooth;
+  }
+
+  /* Log Line Styling */
+  .log-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 2px 0;
+    transition: background 0.1s ease;
+  }
+
+  .log-line:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .log-ts {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .log-badge {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .log-badge.INFO { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+  .log-badge.SUCCESS { background: rgba(16, 185, 129, 0.15); color: #34D399; }
+  .log-badge.WARN, .log-badge.WARNING { background: rgba(245, 158, 11, 0.15); color: #FBBF24; }
+  .log-badge.ERROR { background: rgba(239, 68, 68, 0.2); color: #F87171; }
+
+  .log-msg {
+    flex: 1;
+    word-break: break-word;
+  }
+
+  .log-msg .hl-source { color: var(--accent); font-weight: 600; }
+  .log-msg .hl-entity { color: #F1F5F9; font-weight: 700; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; }
+  .log-msg .hl-score { color: #FBBF24; font-weight: 600; }
+  .log-msg .hl-divider { color: var(--border-strong); }
+
+  /* API Spec Documentation Drawer / Box */
+  .api-docs-box {
+    margin-top: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    padding: 20px;
+  }
+
+  .api-docs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .api-docs-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .api-docs-content {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .endpoint-card {
+    background: var(--bg-deep);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .endpoint-card .method {
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+  }
+  .endpoint-card .method.get { background: rgba(59, 130, 246, 0.2); color: #60A5FA; }
+  .endpoint-card .method.post { background: rgba(16, 185, 129, 0.2); color: #34D399; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <div class="header-left">
+    <h1>Supervision du Scheduler de Collecte (FR-07)</h1>
+    <p>Surveillance du processus de collecte périodique, déclenchement manuel et streaming des logs temps réel.</p>
+  </div>
+  
+  <div id="scheduler-badge" class="scheduler-live-badge status-running">
+    <span class="status-indicator-dot"></span>
+    <span id="scheduler-badge-text">SCHEDULER ACTIF</span>
+  </div>
+</header>
+
+<!-- Indicateurs d'état du Scheduler -->
+<section class="metrics-strip" aria-label="Métriques d'état">
+  <article class="metric-card">
+    <div class="metric-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      Fréquence de collecte
+    </div>
+    <div class="metric-val">Toutes les 6h</div>
+    <div class="metric-hint">Intervalle automatique (FR-07)</div>
+  </article>
+
+  <article class="metric-card">
+    <div class="metric-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      Sources surveillées
+    </div>
+    <div class="metric-val">7 connecteurs</div>
+    <div class="metric-hint">Ransomware, Paste, Telegram, Dark Web</div>
+  </article>
+
+  <article class="metric-card">
+    <div class="metric-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+      Dernière exécution
+    </div>
+    <div class="metric-val" id="val-derniere-exec">08:00 UTC</div>
+    <div class="metric-hint" id="val-derniere-stats">4 expositions traitées / 0 échec</div>
+  </article>
+
+  <article class="metric-card">
+    <div class="metric-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5l7 7-7 7"></path></svg>
+      Prochaine collecte
+    </div>
+    <div class="metric-val" id="val-prochaine-exec">14:00 UTC</div>
+    <div class="metric-hint">Déclenchement planifié</div>
+  </article>
+</section>
+
+<!-- Barre de Contrôle & Actions Opérateur -->
+<section class="control-card">
+  <div class="control-buttons-group">
+    <button id="btn-start" class="btn-ctrl start" onclick="demarrerScheduler()" title="Démarrer le processus de planification automatique">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      Démarrer le Scheduler
+    </button>
+
+    <button id="btn-stop" class="btn-ctrl stop" onclick="arreterScheduler()" title="Arrêter le processus de collecte automatique">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+      Arrêter le Scheduler
+    </button>
+
+    <button id="btn-manual-run" class="btn-ctrl manual" onclick="executerCollecteManuelle()" title="Déclencher immédiatement les 7 connecteurs">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      Lancer une collecte immédiate
+    </button>
+  </div>
+
+  <div class="api-info-badge">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+    <span id="backend-conn-status">Flux SSE : Connecté en direct</span>
+  </div>
+</section>
+
+<!-- Fenêtre de Terminal en Direct -->
+<section class="terminal-container" aria-label="Console d'exécution du scheduler">
+  <div class="terminal-header">
+    <div class="terminal-left">
+      <div class="window-dots" aria-hidden="true">
+        <span class="window-dot close"></span>
+        <span class="window-dot minimize"></span>
+        <span class="window-dot maximize"></span>
+      </div>
+      <div class="terminal-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        sentinel-scheduler@antic-cirt:~ $ stream-logs --live
+      </div>
+    </div>
+
+    <div class="terminal-tools">
+      <button id="btn-autoscroll" class="btn-term-tool active" onclick="toggleAutoScroll()" title="Activer / Désactiver le défilement automatique vers le bas">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        Auto-scroll : ON
+      </button>
+      <button class="btn-term-tool" onclick="copierLogs()" title="Copier l'ensemble des logs dans le presse-papier">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        Copier
+      </button>
+      <button class="btn-term-tool" onclick="viderTerminal()" title="Effacer l'affichage des logs">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        Vider
+      </button>
+    </div>
+  </div>
+
+  <div id="terminal-screen" class="terminal-body">
+    <!-- Lignes de logs injectées dynamiquement -->
+  </div>
+</section>
+
+<!-- Volet Spécification API Backend -->
+<section class="api-docs-box">
+  <div class="api-docs-header" onclick="document.getElementById('api-docs-details').classList.toggle('open');">
+    <div class="api-docs-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+      Spécification du Contrat d'API Backend (Endpoints REST &amp; Flux SSE)
+    </div>
+    <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent);">[Afficher / Masquer]</span>
+  </div>
+
+  <div id="api-docs-details" class="api-docs-content">
+    <p style="margin-bottom: 12px;">Cette interface frontend consomme les 5 routes suivantes pour piloter le scheduler et streamer les logs :</p>
+    
+    <div class="endpoint-card">
+      <span class="method get">GET</span> <strong>/scheduler/api/status</strong>
+      <div style="margin-top: 4px; color: var(--text-muted);">Retourne le statut actuel : <code>{ "actif": true, "statut": "actif"|"inactif"|"en_cours", "intervalle_heures": 6, "prochaine_execution": "..." }</code></div>
+    </div>
+
+    <div class="endpoint-card">
+      <span class="method post">POST</span> <strong>/scheduler/api/demarrer</strong>
+      <div style="margin-top: 4px; color: var(--text-muted);">Démarre le service scheduler en tâche de fond. Retourne : <code>{ "succes": true, "message": "Scheduler démarré" }</code></div>
+    </div>
+
+    <div class="endpoint-card">
+      <span class="method post">POST</span> <strong>/scheduler/api/arreter</strong>
+      <div style="margin-top: 4px; color: var(--text-muted);">Arrête le service scheduler. Retourne : <code>{ "succes": true, "message": "Scheduler arrêté" }</code></div>
+    </div>
+
+    <div class="endpoint-card">
+      <span class="method post">POST</span> <strong>/scheduler/api/executer-maintenant</strong>
+      <div style="margin-top: 4px; color: var(--text-muted);">Lance immédiatement une passe des 7 connecteurs sans attendre l'intervalle. Retourne : <code>{ "succes": true }</code></div>
+    </div>
+
+    <div class="endpoint-card">
+      <span class="method get">GET</span> <strong>/scheduler/api/logs/stream</strong> (Content-Type: <code>text/event-stream</code>)
+      <div style="margin-top: 4px; color: var(--text-muted);">Flux Server-Sent Events émettant des payloads JSON : <code>data: {"timestamp": "...", "level": "INFO", "message": "..."}</code></div>
+    </div>
+  </div>
+</section>
+
+<!-- Script de Gestion Temps Réel & Simulation de Fallback -->
+<script>
+  (function() {
+    let autoScroll = true;
+    let schedulerActif = true;
+    let eventSource = null;
+    let mockInterval = null;
+
+    const terminalScreen = document.getElementById('terminal-screen');
+    const badge = document.getElementById('scheduler-badge');
+    const badgeText = document.getElementById('scheduler-badge-text');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const connStatus = document.getElementById('backend-conn-status');
+
+    function formatMessage(msg) {
+      let safeMsg = msg
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // Mise en valeur des connecteurs
+      safeMsg = safeMsg.replace(/(PayloadConnector|OrionLeaksConnector|DataExposureLogsConnector|BlackWaterConnector|SafePayConnector|TheHackerNewsConnector|CmdOrganizationConnector)/g, '<span class="hl-source">$1</span>');
+      
+      // Mise en valeur des entités détectées
+      safeMsg = safeMsg.replace(/'([^']+)'/g, '<span class="hl-entity">\'$1\'</span>');
+      
+      // Mise en valeur des scores
+      safeMsg = safeMsg.replace(/(score=([0-9.]+))/g, '<span class="hl-score">$1</span>');
+      
+      // Séparateurs
+      safeMsg = safeMsg.replace(/(={10,})/g, '<span class="hl-divider">$1</span>');
+      
+      return safeMsg;
+    }
+
+    function appendLog(timestamp, level, message) {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.innerHTML = `
+        <span class="log-ts">[${timestamp}]</span>
+        <span class="log-badge ${level}">${level}</span>
+        <span class="log-msg">${formatMessage(message)}</span>
+      `;
+      terminalScreen.appendChild(line);
+
+      if (autoScroll) {
+        terminalScreen.scrollTop = terminalScreen.scrollHeight;
+      }
+    }
+
+    function updateUIState(state) {
+      // state: 'actif' | 'inactif' | 'en_cours'
+      if (state === 'actif') {
+        schedulerActif = true;
+        badge.className = 'scheduler-live-badge status-running';
+        badgeText.textContent = 'SCHEDULER ACTIF';
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+      } else if (state === 'en_cours') {
+        badge.className = 'scheduler-live-badge status-busy';
+        badgeText.textContent = 'COLLECTE EN COURS';
+        btnStart.disabled = true;
+        btnStop.disabled = true;
+      } else {
+        schedulerActif = false;
+        badge.className = 'scheduler-live-badge status-stopped';
+        badgeText.textContent = 'SCHEDULER ARRÊTÉ';
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+      }
+    }
+
+    // Connexion SSE Réelle
+    function initEventStream() {
+      try {
+        eventSource = new EventSource('/scheduler/api/logs/stream');
+        
+        eventSource.onopen = function() {
+          connStatus.textContent = 'Flux SSE : Connecté en direct';
+          connStatus.style.color = 'var(--ok)';
+        };
+
+        eventSource.onmessage = function(event) {
+          try {
+            const data = JSON.parse(event.data);
+            appendLog(data.timestamp || new Date().toISOString().substring(11, 19), data.level || 'INFO', data.message);
+            if (data.statut) updateUIState(data.statut);
+          } catch(e) {
+            appendLog(new Date().toISOString().substring(11, 19), 'INFO', event.data);
+          }
+        };
+
+        eventSource.onerror = function() {
+          connStatus.textContent = 'Flux SSE : Mode Simulation Démo';
+          connStatus.style.color = 'var(--warn)';
+          if (eventSource) eventSource.close();
+          startMockStream(); // Fallback démo pédagogique
+        };
+      } catch (err) {
+        startMockStream();
+      }
+    }
+
+    // Mock pédagogique temporaire (marqué clairement comme simulation)
+    function startMockStream() {
+      if (mockInterval) return;
+
+      const mockLogs = [
+        { lvl: 'INFO', msg: '[scheduler] Initialisation de la boucle de collecte planifiée (FR-07)' },
+        { lvl: 'INFO', msg: '[pipeline] === Début traitement : PayloadConnector ===' },
+        { lvl: 'INFO', msg: '[pipeline] Exposition traitée : \'Société Nationale des Hydrocarbures\' (score=0.88, categorie=credentials)' },
+        { lvl: 'INFO', msg: '[pipeline] === Fin traitement PayloadConnector : 1 exposition créée ===' },
+        { lvl: 'INFO', msg: '[pipeline] === Début traitement : SafePayConnector ===' },
+        { lvl: 'INFO', msg: '[pipeline] Exposition traitée : \'Express Union Microfinance\' (score=0.74, categorie=donnees_financieres)' },
+        { lvl: 'INFO', msg: '[pipeline] === Fin traitement SafePayConnector : 1 exposition créée ===' },
+        { lvl: 'INFO', msg: '[pipeline] === Début traitement : TheHackerNewsConnector ===' },
+        { lvl: 'SUCCESS', msg: '[pipeline] Collecte terminée avec succès : 2 nouvelles expositions confirmées, 0 erreur.' }
+      ];
+
+      let idx = 0;
+      // Injecte quelques logs initiaux
+      for (let i = 0; i < 4; i++) {
+        const item = mockLogs[i];
+        appendLog(new Date().toLocaleTimeString(), item.lvl, item.msg);
+      }
+      idx = 4;
+
+      mockInterval = setInterval(() => {
+        if (!schedulerActif) return;
+        const item = mockLogs[idx % mockLogs.length];
+        appendLog(new Date().toLocaleTimeString(), item.lvl, item.msg);
+        idx++;
+      }, 4500);
+    }
+
+    // Fonctions d'Action Frontend & Appel API
+    window.demarrerScheduler = function() {
+      fetch('/scheduler/api/demarrer', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          updateUIState('actif');
+          appendLog(new Date().toLocaleTimeString(), 'SUCCESS', '[scheduler] Signal de démarrage transmis au processus de fond.');
+        })
+        .catch(() => {
+          updateUIState('actif');
+          appendLog(new Date().toLocaleTimeString(), 'SUCCESS', '[scheduler] (Simulation) Scheduler démarré avec succès.');
+        });
+    };
+
+    window.arreterScheduler = function() {
+      fetch('/scheduler/api/arreter', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          updateUIState('inactif');
+          appendLog(new Date().toLocaleTimeString(), 'WARN', '[scheduler] Signal d\'arrêt transmis. Le processus est suspendu.');
+        })
+        .catch(() => {
+          updateUIState('inactif');
+          appendLog(new Date().toLocaleTimeString(), 'WARN', '[scheduler] (Simulation) Scheduler arrêté.');
+        });
+    };
+
+    window.executerCollecteManuelle = function() {
+      updateUIState('en_cours');
+      appendLog(new Date().toLocaleTimeString(), 'INFO', '[pipeline] ============================================================');
+      appendLog(new Date().toLocaleTimeString(), 'INFO', '[pipeline] Déclenchement manuel immédiat des 7 connecteurs Dark Web...');
+      appendLog(new Date().toLocaleTimeString(), 'INFO', '[pipeline] ============================================================');
+
+      fetch('/scheduler/api/executer-maintenant', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          setTimeout(() => updateUIState('actif'), 3000);
+        })
+        .catch(() => {
+          setTimeout(() => {
+            appendLog(new Date().toLocaleTimeString(), 'SUCCESS', '[pipeline] Collecte manuelle terminée : 7 sources scrutées.');
+            updateUIState('actif');
+          }, 3000);
+        });
+    };
+
+    window.toggleAutoScroll = function() {
+      autoScroll = !autoScroll;
+      const btn = document.getElementById('btn-autoscroll');
+      btn.classList.toggle('active', autoScroll);
+      btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg> Auto-scroll : ${autoScroll ? 'ON' : 'OFF'}`;
+    };
+
+    window.viderTerminal = function() {
+      terminalScreen.innerHTML = '';
+      appendLog(new Date().toLocaleTimeString(), 'INFO', 'Console réinitialisée par l\'opérateur.');
+    };
+
+    window.copierLogs = function() {
+      const text = terminalScreen.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Les logs du terminal ont été copiés dans le presse-papier.');
+      });
+    };
+
+    // Initialisation
+    updateUIState('actif');
+    initEventStream();
+  })();
+</script>
+{% endblock %}

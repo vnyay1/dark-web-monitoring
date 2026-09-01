@@ -1,107 +1,278 @@
 {% extends "base.html" %}
 
-{% block title %}Connexion — Sentinel{% endblock %}
+{% block title %}Connexion sécurisée — Sentinel CIRT{% endblock %}
 
 {% block extra_head %}
 <style>
-  .login-page {
+  .login-wrapper {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: calc(100vh - 60px); /* hauteur sans topbar */
-    padding: 24px;
+    min-height: calc(100vh - 160px);
+    padding: 24px 16px;
   }
-  .login-card {
+
+  .login-card-container {
     width: 100%;
-    max-width: 400px;
+    max-width: 440px;
+    position: relative;
   }
-  .login-card .card-body {
-    padding: 32px;
+
+  .login-card-container::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(135deg, rgba(0, 229, 192, 0.4), transparent 40%, rgba(59, 130, 246, 0.2));
+    border-radius: calc(var(--r-lg) + 1px);
+    z-index: 0;
+    pointer-events: none;
   }
-  .login-brand {
+
+  .login-card {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+
+  .login-header-banner {
+    padding: 32px 32px 24px;
     text-align: center;
-    margin-bottom: 28px;
+    background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-card) 100%);
+    border-bottom: 1px solid var(--border-subtle);
   }
-  .login-brand .logo {
-    width: 56px;
-    height: 56px;
-    margin: 0 auto 14px;
-    display: block;
+
+  .login-badge-seal {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    border-radius: var(--r-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   }
-  .login-brand h1 {
-    font-family: var(--display);
-    font-size: 22px;
+
+  .login-badge-seal img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+  }
+
+  .login-title {
+    font-family: var(--font-display);
+    font-size: 24px;
     font-weight: 700;
     letter-spacing: 0.04em;
+    color: var(--text-primary);
     text-transform: uppercase;
-    color: var(--fg);
+    margin-bottom: 6px;
   }
-  .login-brand p {
-    margin-top: 6px;
-    font-size: 13px;
-    color: var(--fg-2);
+
+  .login-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+    font-weight: 500;
   }
+
+  .security-notice-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 3px 10px;
+    background: rgba(0, 229, 192, 0.08);
+    border: 1px solid rgba(0, 229, 192, 0.2);
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .login-body {
+    padding: 28px 32px 32px;
+  }
+
   .login-form {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 20px;
   }
-  .login-form .btn-primary {
-    margin-top: 6px;
-    width: 100%;
-    padding: 11px 14px;
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
-  .login-footer {
-    margin-top: 24px;
-    text-align: center;
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
+
+  .field-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--fg-3);
+    color: var(--text-secondary);
   }
-  .login-footer::before {
-    content: "";
-    display: block;
-    width: 40px;
-    height: 1px;
-    background: var(--line-strong);
-    margin: 0 auto 14px;
+
+  .input-icon-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .input-icon {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .input-field {
+    width: 100%;
+    padding: 11px 12px 11px 38px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-sm);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    transition: all 0.15s ease;
+  }
+
+  .input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+    background: var(--bg-base);
+  }
+
+  .input-field::placeholder {
+    color: var(--text-dim);
+  }
+
+  .btn-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 16px;
+    margin-top: 8px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-sm);
+    color: #05141B;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 4px 14px rgba(0, 229, 192, 0.3);
+  }
+
+  .btn-submit:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    box-shadow: 0 6px 20px rgba(0, 229, 192, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-submit:active {
+    transform: translateY(1px);
+  }
+
+  .login-footer-disclaimer {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-subtle);
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .login-footer-disclaimer strong {
+    color: var(--text-secondary);
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="login-page">
-  <section class="card login-card" aria-labelledby="login-title">
-    <div class="card-body">
-      <div class="login-brand">
-
-        <img class="logo" src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="ANTIC" class="brand-mark">
-        <h1 id="login-title">Sentinel</h1>
-        <p>ANTIC — Surveillance Dark Web / Accès réservé</p>
+<div class="login-wrapper">
+  <div class="login-card-container">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="login-header-banner">
+        <div class="login-badge-seal">
+          <img src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="Logo ANTIC">
+        </div>
+        <h1 id="login-title" class="login-title">Sentinel</h1>
+        <div class="login-subtitle">Plateforme Nationale de Surveillance Dark Web</div>
+        <div class="security-notice-pill">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          Portail CIRT Authentifié
+        </div>
       </div>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="flash flash-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endwith %}
-      <form class="login-form" method="POST">
-        <div class="field">
-          <label class="label" for="username">Nom d'utilisateur</label>
-          <input class="input" type="text" id="username" name="nom_utilisateur" autocomplete="username" required autofocus>
+
+      <div class="login-body">
+        <form class="login-form" method="POST" autocomplete="on">
+          <div class="field-group">
+            <label class="field-label" for="username">
+              <span>Nom d'utilisateur</span>
+              <span style="color: var(--accent);">*</span>
+            </label>
+            <div class="input-icon-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <input class="input-field" type="text" id="username" name="nom_utilisateur" placeholder="Identifiant analyste" autocomplete="username" required autofocus>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="password">
+              <span>Mot de passe</span>
+              <span style="color: var(--accent);">*</span>
+            </label>
+            <div class="input-icon-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <input class="input-field" type="password" id="password" name="mot_de_passe" placeholder="••••••••••••" autocomplete="current-password" required>
+            </div>
+          </div>
+
+          <button class="btn-submit" type="submit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+              <polyline points="10 17 15 12 10 7"></polyline>
+              <line x1="15" y1="12" x2="3" y2="12"></line>
+            </svg>
+            Se connecter
+          </button>
+        </form>
+
+        <div class="login-footer-disclaimer">
+          <strong>Accès strictement restreint</strong><br>
+          Usage réservé aux personnels habilités de l'ANTIC et du CIRT. Toute tentative d'accès non autorisée fait l'objet d'une journalisation systématique (FR-17).
         </div>
-
-        <div class="field">
-          <label class="label" for="password">Mot de passe</label>
-          <input class="input" type="password" id="password" name="mot_de_passe" autocomplete="current-password" required>
-        </div>
-
-        <button class="btn btn-primary" type="submit">Se connecter</button>
-      </form>
-
-      <div class="login-footer">Accès interne — CIRT / ANTIC</div>
-    </div>
-  </section>
+      </div>
+    </section>
+  </div>
 </div>
 {% endblock %}

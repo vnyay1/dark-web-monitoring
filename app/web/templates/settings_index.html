@@ -1,307 +1,405 @@
 {% extends "base.html" %}
-
-{% block title %}Configuration — Sentinel{% endblock %}
+{% block title %}Configuration Système &amp; Sélecteurs — Sentinel CIRT{% endblock %}
+{% block nav_config %}active{% endblock %}
 
 {% block extra_head %}
 <style>
-    .page-header {
-        margin-bottom: 24px;
-    }
-    .page-header h1 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        margin-bottom: 6px;
-    }
-    .page-header p {
-        color: var(--text-muted);
-        font-size: 13px;
-    }
+  .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+  }
 
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: var(--r-full);
+  }
+
+  .header-left p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .settings-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-body {
+    padding: 20px;
+  }
+
+  /* Configuration Rows */
+  .config-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .config-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .config-item:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .config-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .config-key {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .config-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  .config-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .config-input {
+    width: 100px;
+    padding: 7px 10px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    text-align: right;
+  }
+
+  .config-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .btn-save {
+    padding: 7px 12px;
+    border-radius: var(--r-sm);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #05141B;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-save:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Selector Add Form */
+  .add-selector-box {
+    padding: 16px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-md);
+    margin-bottom: 20px;
+  }
+
+  .add-selector-title {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .add-selector-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .selector-input {
+    flex: 1.4;
+    min-width: 160px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+
+  .selector-select {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-sm);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+
+  .selector-input:focus, .selector-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  /* Selector Table / List */
+  .selector-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .selector-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-sm);
+    transition: all 0.15s ease;
+  }
+
+  .selector-item:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border-default);
+  }
+
+  .selector-item.inactive {
+    opacity: 0.5;
+  }
+  .selector-item.inactive .selector-val {
+    text-decoration: line-through;
+    color: var(--text-muted);
+  }
+
+  .selector-val {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    word-break: break-all;
+    flex: 1;
+  }
+
+  .selector-cat-pill {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: var(--r-full);
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--info);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+
+  .btn-toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+  }
+
+  .btn-toggle-switch.is-active:hover {
+    border-color: var(--warn);
+    color: var(--warn);
+    background: var(--warn-bg);
+  }
+
+  .btn-toggle-switch.is-inactive {
+    color: var(--ok);
+    border-color: var(--ok-border);
+  }
+  .btn-toggle-switch.is-inactive:hover {
+    background: var(--ok-bg);
+  }
+
+  @media (max-width: 960px) {
     .settings-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 20px;
+      grid-template-columns: 1fr;
     }
-    @media (min-width: 1100px) {
-        .settings-grid {
-            grid-template-columns: 1.1fr 0.9fr;
-        }
-    }
-
-    .settings-panel {
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    .settings-panel-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--border-subtle);
-        background: var(--bg-elevated);
-    }
-    .settings-panel-header h3 {
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: 14px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .settings-panel-header h3 svg {
-        width: 16px;
-        height: 16px;
-        color: var(--accent);
-    }
-    .settings-panel-body {
-        padding: 8px 20px 20px;
-    }
-
-    .config-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 16px;
-        padding: 14px 0;
-        border-bottom: 1px solid var(--border-subtle);
-    }
-    .config-row:last-child {
-        border-bottom: none;
-    }
-    .config-info {
-        flex: 1;
-        min-width: 0;
-    }
-    .config-cle {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--text-primary);
-        word-break: break-word;
-    }
-    .config-desc {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-top: 4px;
-        line-height: 1.45;
-    }
-    .config-form {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-shrink: 0;
-    }
-    .config-form input {
-        width: 110px;
-        background: var(--bg-base);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        padding: 8px 11px;
-        border-radius: 6px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 13px;
-        transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .config-form input:focus {
-        outline: none;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-    }
-
-    .selecteur-row {
-        display: flex;
-        align-items: center;
-        gap: 90px;
-        padding: 12px 0;
-        border-bottom: 1px solid var(--border-subtle);
-        font-size: 13px;
-    }
-    .selecteur-row:last-child {
-        border-bottom: none;
-    }
-    .selecteur-valeur {
-        flex: 1;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 13px;
-        color: var(--text-primary);
-        word-break: break-word;
-    }
-    .selecteur-cat {
-        color: var(--text-muted);
-        width: 150px;
-        flex-shrink: 0;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-    .selecteur-inactif {
-        opacity: 0.45;
-    }
-    .selecteur-inactif .selecteur-valeur {
-        text-decoration: line-through;
-        text-decoration-color: var(--text-muted);
-    }
-
-    .add-selecteur-form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 18px;
-        padding-top: 18px;
-        border-top: 1px solid var(--border-subtle);
-    }
-    .add-selecteur-form input,
-    .add-selecteur-form select {
-        background: var(--bg-base);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        padding: 9px 11px;
-        border-radius: 6px;
-        font-size: 13px;
-        transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .add-selecteur-form input:focus,
-    .add-selecteur-form select:focus {
-        outline: none;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-    }
-    .add-selecteur-form input {
-        flex: 1;
-        min-width: 160px;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .add-selecteur-form select {
-        width: 180px;
-        cursor: pointer;
-    }
-
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 600;
-        border: 1px solid transparent;
-        cursor: pointer;
-        transition: background 0.15s, border-color 0.15s, color 0.15s;
-        white-space: nowrap;
-    }
-    .btn-primary {
-        background: var(--accent);
-        color: var(--bg-base);
-    }
-    .btn-primary:hover {
-        background: var(--accent-hover);
-    }
-    .btn-toggle {
-        background: transparent;
-        border-color: var(--border-subtle);
-        color: var(--text-secondary);
-        min-width: 95px;
-    }
-    .btn-toggle:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-    }
-    .btn-toggle.on {
-        border-color: var(--low);
-        color: var(--low);
-    }
-    .btn-toggle.on:hover {
-        background: color-mix(in srgb, var(--low) 10%, transparent);
-    }
-    .btn-toggle.off {
-        border-color: var(--medium);
-        color: var(--medium);
-    }
-    .btn-toggle.off:hover {
-        background: color-mix(in srgb, var(--medium) 10%, transparent);
-    }
-
-    .flash {
-        margin-bottom: 18px;
-    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">{{ message }}</div>
-    {% endfor %}
-{% endwith %}
-
-<div class="page-header">
-    <h1>Configuration</h1>
-    <p>Seuils d'alerte et catalogue de sélecteurs de surveillance.</p>
-</div>
+<header class="page-header">
+  <div class="header-left">
+    <h1>Paramètres &amp; Catalogue de Surveillance</h1>
+    <p>Configuration des seuils décisionnels du moteur de scoring et gestion des sélecteurs nationaux.</p>
+  </div>
+</header>
 
 <div class="settings-grid">
-    <section class="settings-panel">
-       <div class="settings-panel">
-    <h3>Seuils d'alerte (FR-25/FR-26) — réservé super-admin</h3>
-    {% for conf in configurations %}
-    <div class="config-row">
-        <div class="config-info">
-            <div class="config-cle">{{ conf.cle }}</div>
-            <div class="config-desc">{{ conf.description or "—" }}</div>
-        </div>
-        {% if peut_modifier_seuils %}
-        <form class="config-form" method="post" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
-            <input type="text" name="valeur" value="{{ conf.valeur }}">
-            <button type="submit" class="btn btn-primary">Mettre à jour</button>
-        </form>
-            {% else %}
-            <span style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:13px;">{{ conf.valeur }}</span>
-            {% endif %}
+  <!-- Panneau des Seuils d'Alerte -->
+  <section class="settings-card" aria-labelledby="seuils-title">
+    <div class="card-header">
+      <h2 id="seuils-title" class="card-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Seuils d'Alerte (FR-25 / FR-26)
+      </h2>
+      <span class="role-tag super_admin">Super Admin Requis</span>
+    </div>
+
+    <div class="card-body">
+      <div class="config-list">
+        {% for conf in configurations %}
+        <div class="config-item">
+          <div class="config-info">
+            <div class="config-key">{{ conf.cle }}</div>
+            <div class="config-description">{{ conf.description or "Paramètre système de détection." }}</div>
+          </div>
+          {% if peut_modifier_seuils %}
+          <form class="config-form" method="POST" action="{{ url_for('settings.update_config', cle=conf.cle) }}">
+            <input class="config-input" type="text" name="valeur" value="{{ conf.valeur }}" required>
+            <button type="submit" class="btn-save" title="Sauvegarder la nouvelle valeur">Enregistrer</button>
+          </form>
+          {% else %}
+          <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); background: var(--bg-deep); padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-default);">
+            {{ conf.valeur }}
+          </span>
+          {% endif %}
         </div>
         {% endfor %}
+      </div>
     </div>
-</section>
+  </section>
 
-<section class="settings-panel">
+  <!-- Catalogue des Sélecteurs -->
+  <section class="settings-card" aria-labelledby="selecteurs-title">
+    <div class="card-header">
+      <h2 id="selecteurs-title" class="card-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        Catalogue de Sélecteurs (FR-08)
+      </h2>
+      <span class="panel-badge">{{ selecteurs|length }} actifs</span>
+    </div>
 
-                <h3>
-                    + Ajouter un sélécteur
-                </h3>
-
-        <form class="add-selecteur-form" method="post" action="{{ url_for('settings.ajouter_selecteur') }}">
-            <input type="text" name="valeur" placeholder="Nouveau sélecteur..." required>
-            <select name="categorie" required>
-                {% for c in toutes_categories %}
-                <option value="{{ c.value }}">{{ c.value }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-primary">Ajouter</button>
-        </form>
-        <div class="settings-panel-header">
-            <h3>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                Catalogue de sélecteurs
-            </h3>
-            <span class="badge badge-info">{{ selecteurs|length }} entrées</span>
+    <div class="card-body">
+      <!-- Formulaire d'ajout rapide -->
+      <div class="add-selector-box">
+        <div class="add-selector-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Ajouter un sélecteur de surveillance
         </div>
-        <div class="settings-panel-body">
-            {% for sel in selecteurs %}
-            <div class="selecteur-row {% if not sel.actif %}selecteur-inactif{% endif %}">
-                <div class="selecteur-valeur">{{ sel.valeur }}</div>
-                <div class="selecteur-cat">{{ sel.categorie.value }}</div>
-                <form method="post" action="{{ url_for('settings.toggle_selecteur', selecteur_id=sel.id) }}">
-                    <button type="submit" class="btn btn-toggle {{ 'on' if sel.actif else 'off' }}">
-                        {{ "Désactiver" if sel.actif else "Activer" }}
-                    </button>
-                </form>
-            </div>
+        <form class="add-selector-form" method="POST" action="{{ url_for('settings.ajouter_selecteur') }}">
+          <input class="selector-input" type="text" name="valeur" placeholder="Ex: minader.cm, +237..." required autocomplete="off">
+          <select class="selector-select" name="categorie" required>
+            {% for c in toutes_categories %}
+            <option value="{{ c.value }}">{{ c.value }}</option>
             {% endfor %}
-            
+          </select>
+          <button type="submit" class="btn-save">Ajouter</button>
+        </form>
+      </div>
+
+      <!-- Liste scrollable des sélecteurs -->
+      <div class="selector-list">
+        {% for sel in selecteurs %}
+        <div class="selector-item {% if not sel.actif %}inactive{% endif %}">
+          <span class="selector-val">{{ sel.valeur }}</span>
+          <span class="selector-cat-pill">{{ sel.categorie.value }}</span>
+          <form method="POST" action="{{ url_for('settings.toggle_selecteur', selecteur_id=sel.id) }}">
+            <button type="submit" class="btn-toggle-switch {% if sel.actif %}is-active{% else %}is-inactive{% endif %}">
+              {{ "Désactiver" if sel.actif else "Activer" }}
+            </button>
+          </form>
         </div>
-    </section>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
 </div>
 {% endblock %}

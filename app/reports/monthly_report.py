@@ -14,7 +14,6 @@ from pathlib import Path
 from datetime import timedelta
 from collections import Counter
 
-from weasyprint import HTML
 from flask import render_template
 
 from app.db import get_session
@@ -128,18 +127,7 @@ def generer_rapport_html(mois: int, annee: int) -> str:
 
 
 def generer_rapport_pdf(mois: int, annee: int, chemin_sortie: str) -> str:
-    """
-    Genere le rapport au format PDF a partir du meme template HTML,
-    via WeasyPrint. Retourne le chemin du fichier genere.
-
-    Le HTML issu de generer_rapport_html contient des references du
-    type src="/static/images/logo-antic.png" (chemin absolu, produit
-    par url_for). WeasyPrint resout un tel chemin comme une racine
-    filesystem absolue et non relativement a base_url, quel que soit
-    le format de ce dernier. On rend donc ces references relatives
-    (src="static/images/logo-antic.png") avant de les passer a
-    WeasyPrint, qui les resout alors correctement contre base_url.
-    """
+    from weasyprint import HTML
     html_content = generer_rapport_html(mois, annee)
     html_content_pdf = _rendre_chemins_static_relatifs(html_content)
     HTML(string=html_content_pdf, base_url=str(_WEB_DIR)).write_pdf(chemin_sortie)

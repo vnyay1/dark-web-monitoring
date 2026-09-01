@@ -1,27 +1,44 @@
 {% extends "base.html" %}
-
-{% block title %}Alertes — Sentinel{% endblock %}
+{% block title %}Alertes de Sécurité — Sentinel CIRT{% endblock %}
 {% block nav_alerts %}active{% endblock %}
 
 {% block extra_head %}
 <style>
   .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
   }
 
-  .page-header h1 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 22px;
+  .header-left h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
-    margin: 0 0 6px 0;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
-  .page-header p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 14px;
+  .header-left h1::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 22px;
+    background: var(--crit);
+    border-radius: var(--r-full);
+  }
+
+  .header-left p {
+    font-size: 13px;
+    color: var(--text-secondary);
   }
 
   .alerts-toolbar {
@@ -29,217 +46,243 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
     flex-wrap: wrap;
   }
 
-  .alerts-count {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    color: var(--text-muted);
+  .alerts-count-pill {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
     background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    padding: 6px 12px;
-    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    padding: 6px 14px;
+    border-radius: var(--r-full);
   }
-
-  .alerts-count strong {
+  .alerts-count-pill strong {
     color: var(--text-primary);
   }
 
-  .alert-list {
+  .alerts-feed {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   .alert-card {
+    position: relative;
     display: flex;
-    align-items: flex-start;
-    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-left: 3px solid var(--accent-neutral);
-    border-radius: var(--radius-md);
-    padding: 16px 18px;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+    border-radius: var(--r-md);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.15s ease;
   }
 
   .alert-card:hover {
     background: var(--bg-elevated);
     border-color: var(--border-default);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
-  .alert-card.non-lue {
-    border-left-color: var(--accent-alert);
-    background: color-mix(in srgb, var(--accent-alert) 5%, var(--bg-card));
+  /* Alerte non lue - Forte visibilité */
+  .alert-card.is-unread {
+    border-left: 4px solid var(--crit);
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, var(--bg-card) 100%);
+    border-color: rgba(239, 68, 68, 0.35);
   }
 
-  .alert-card.non-lue:hover {
-    background: color-mix(in srgb, var(--accent-alert) 8%, var(--bg-elevated));
+  .alert-card.is-unread:hover {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, var(--bg-elevated) 100%);
   }
 
-  .alert-icon {
-    flex-shrink: 0;
-    width: 34px;
-    height: 34px;
+  .alert-main-content {
     display: flex;
     align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-md);
-    background: var(--bg-elevated);
-    color: var(--text-muted);
-    font-size: 16px;
-    margin-top: 2px;
-  }
-
-  .alert-card.non-lue .alert-icon {
-    background: color-mix(in srgb, var(--accent-alert) 12%, transparent);
-    color: var(--accent-alert);
-  }
-
-  .alert-body {
+    gap: 16px;
+    min-width: 0;
     flex: 1;
+  }
+
+  .alert-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r-sm);
+    display: grid;
+    place-items: center;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .alert-card.is-unread .alert-icon-box {
+    background: var(--crit-bg);
+    border-color: var(--crit-border);
+    color: var(--crit);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+  }
+
+  .alert-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     min-width: 0;
   }
 
-  .alert-title-row {
+  .alert-headline {
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 6px;
   }
 
-  .alert-entite {
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 600;
+  .alert-entity-name {
+    font-family: var(--font-display);
     font-size: 15px;
+    font-weight: 700;
     color: var(--text-primary);
-    line-height: 1.3;
+    line-height: 1.2;
   }
 
-  .badge-nouvelle {
+  .badge-unread-pill {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: color-mix(in srgb, var(--accent-alert) 14%, transparent);
-    color: var(--accent-alert);
-    font-family: 'Inter', sans-serif;
+    padding: 2px 8px;
+    border-radius: var(--r-full);
+    font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    padding: 3px 8px;
-    border-radius: var(--radius-sm);
-    border: 1px solid color-mix(in srgb, var(--accent-alert) 25%, transparent);
+    background: var(--crit-bg);
+    color: var(--crit);
+    border: 1px solid var(--crit-border);
   }
 
-  .badge-nouvelle::before {
-    content: '';
+  .badge-unread-dot {
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: currentColor;
+    background: var(--crit);
+    box-shadow: 0 0 6px var(--crit);
   }
 
-  .alert-meta {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.5;
-  }
-
-  .alert-meta .dot {
-    margin: 0 6px;
-    color: var(--border-default);
-  }
-
-  .alert-score {
-    color: var(--accent-alert);
-    font-weight: 600;
-  }
-
-  .alert-actions {
-    flex-shrink: 0;
+  .alert-meta-line {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
   }
 
-  .alert-mark-btn {
+  .meta-tag {
+    color: var(--info);
+  }
+
+  .meta-dot {
+    color: var(--border-strong);
+  }
+
+  .meta-score {
+    font-weight: 700;
+  }
+  .meta-score.high { color: var(--crit); }
+  .meta-score.mid { color: var(--warn); }
+  .meta-score.low { color: var(--text-secondary); }
+
+  .meta-time {
+    color: var(--text-muted);
+  }
+
+  .alert-action-wrap {
+    flex-shrink: 0;
+  }
+
+  .btn-mark-read {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: transparent;
-    border: 1px solid var(--border-subtle);
-    color: var(--text-muted);
-    padding: 7px 12px;
-    border-radius: var(--radius-md);
+    padding: 7px 14px;
+    border-radius: var(--r-sm);
+    background: var(--bg-deep);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    white-space: nowrap;
     transition: all 0.15s ease;
+    white-space: nowrap;
   }
 
-  .alert-mark-btn:hover {
-    border-color: var(--accent-neutral);
-    color: var(--text-primary);
-    background: var(--bg-elevated);
+  .btn-mark-read:hover {
+    background: var(--accent-dim);
+    border-color: rgba(0, 229, 192, 0.4);
+    color: var(--accent);
   }
 
-  .alert-mark-btn:active {
+  .btn-mark-read:active {
     transform: translateY(1px);
   }
 
-  .empty-state {
+  /* Empty state */
+  .empty-alerts {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
     padding: 72px 24px;
-    color: var(--text-muted);
     background: var(--bg-card);
-    border: 1px dashed var(--border-subtle);
-    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border-default);
+    border-radius: var(--r-lg);
+    text-align: center;
   }
 
-  .empty-state-icon {
-    font-size: 32px;
-    margin-bottom: 14px;
-    opacity: 0.5;
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+    color: var(--ok);
+    background: var(--ok-bg);
+    border: 1px solid var(--ok-border);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    margin-bottom: 16px;
   }
 
-  .empty-state h3 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 16px;
-    font-weight: 600;
+  .empty-title {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 6px 0;
+    margin-bottom: 6px;
   }
 
-  .empty-state p {
-    margin: 0;
-    font-size: 14px;
+  .empty-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 420px;
+    line-height: 1.5;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .alert-card {
       flex-direction: column;
-      gap: 12px;
+      align-items: flex-start;
+      gap: 14px;
     }
-
-    .alert-icon {
-      margin-top: 0;
-    }
-
-    .alert-actions {
+    .alert-action-wrap {
       width: 100%;
     }
-
-    .alert-mark-btn {
+    .btn-mark-read {
       width: 100%;
       justify-content: center;
     }
@@ -248,58 +291,74 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Alertes</h1>
-  <p>Notifications générées à partir des expositions détectées sur le dark web.</p>
-</div>
+<header class="page-header">
+  <div class="header-left">
+    <h1>Centre d'Alertes de Sécurité</h1>
+    <p>Notifications critiques déclenchées lors de la découverte d'expositions prioritaires.</p>
+  </div>
+</header>
 
 <div class="alerts-toolbar">
-  <div class="alerts-count">
-    <strong>{{ alertes|length }}</strong> alerte{{ 's' if alertes|length > 1 else '' }}
+  <div class="alerts-count-pill">
+    <strong>{{ alertes|length }}</strong> alerte(s) au total
   </div>
 </div>
 
 {% if alertes %}
-  <div class="alert-list" role="list" aria-label="Liste des alertes">
-    {% for alerte in alertes %}
-    <article class="alert-card {% if not alerte.lue %}non-lue{% endif %}" role="listitem">
-      <div class="alert-icon" aria-hidden="true">
-        {% if alerte.lue %}&#x2713;{% else %}&#x26A0;{% endif %}
+<div class="alerts-feed" role="list" aria-label="Liste des alertes de sécurité">
+  {% for alerte in alertes %}
+  {% set score = alerte.exposition.score_confiance %}
+  <article class="alert-card {% if not alerte.lue %}is-unread{% endif %}" role="listitem">
+    <div class="alert-main-content">
+      <div class="alert-icon-box" aria-hidden="true">
+        {% if alerte.lue %}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        {% else %}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        {% endif %}
       </div>
 
-      <div class="alert-body">
-        <div class="alert-title-row">
-          <div class="alert-entite">{{ alerte.exposition.nom_entite }}</div>
+      <div class="alert-details">
+        <div class="alert-headline">
+          <span class="alert-entity-name">{{ alerte.exposition.nom_entite }}</span>
           {% if not alerte.lue %}
-          <span class="badge-nouvelle">Non lue</span>
+          <span class="badge-unread-pill">
+            <span class="badge-unread-dot"></span>
+            Non lue
+          </span>
           {% endif %}
         </div>
-        <div class="alert-meta">
-          {{ alerte.exposition.categorie_fuite.value }}
-          <span class="dot">·</span>
-          score <span class="alert-score">{{ "%.2f"|format(alerte.exposition.score_confiance) }}</span>
-          <span class="dot">·</span>
-          {{ alerte.date_creation.strftime('%d/%m/%Y %H:%M') }}
+        
+        <div class="alert-meta-line">
+          <span class="meta-tag">{{ alerte.exposition.categorie_fuite.value }}</span>
+          <span class="meta-dot">·</span>
+          <span>Score : <strong class="meta-score {% if score >= 0.7 %}high{% elif score >= 0.4 %}mid{% else %}low{% endif %}">{{ "%.2f"|format(score) }}</strong></span>
+          <span class="meta-dot">·</span>
+          <span class="meta-time">{{ alerte.date_creation.strftime('%d/%m/%Y à %H:%M') }}</span>
         </div>
       </div>
+    </div>
 
-      {% if not alerte.lue %}
-      <div class="alert-actions">
-        <form method="post" action="{{ url_for('alerts.marquer_lue', alerte_id=alerte.id) }}">
-          <button type="submit" class="alert-mark-btn" aria-label="Marquer l'alerte de {{ alerte.exposition.nom_entite }} comme lue">
-            <span>Marquer comme lue</span>
-          </button>
-        </form>
-      </div>
-      {% endif %}
-    </article>
-    {% endfor %}
-  </div>
+    {% if not alerte.lue %}
+    <div class="alert-action-wrap">
+      <form method="POST" action="{{ url_for('alerts.marquer_lue', alerte_id=alerte.id) }}">
+        <button type="submit" class="btn-mark-read" aria-label="Marquer l'alerte pour {{ alerte.exposition.nom_entite }} comme lue">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Marquer comme lue
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
 {% else %}
-  <div class="empty-state">
-    <div class="empty-state-icon" aria-hidden="true">&#x1F514;</div>
-    <h3>Aucune alerte</h3>
-    <p>Les alertes apparaîtront ici dès qu'une exposition déclenchera un seuil de notification.</p>
+<div class="empty-alerts">
+  <div class="empty-icon">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
   </div>
+  <div class="empty-title">Aucune alerte en attente</div>
+  <p class="empty-desc">Toutes les alertes d'exposition ont été traitées ou aucun dépassement de seuil critique n'a été enregistré.</p>
+</div>
 {% endif %}
 {% endblock %}
