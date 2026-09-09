@@ -448,3 +448,109 @@ class EntreeCollectee(Base):
 
     def __repr__(self):
         return f"<EntreeCollectee {self.identifiant_entree} [{self.statut_detail.value}]>"
+
+
+# ---------------------------------------------------------------------
+# Supervision du scheduler (FR-07)
+# ---------------------------------------------------------------------
+
+class StatutScheduler(enum.Enum):
+    ARRETE = "arrete"
+    EN_ATTENTE = "en_attente"           # planifie, en veille jusqu'a la prochaine echeance
+    COLLECTE_EN_COURS = "collecte_en_cours"
+
+
+class TypeEvenementCollecte(enum.Enum):
+    DEBUT_CYCLE = "debut_cycle"
+    DEBUT_SOURCE = "debut_source"
+    FIN_SOURCE = "fin_source"
+    NOUVELLE_EXPOSITION = "nouvelle_exposition"
+    FIN_CYCLE = "fin_cycle"
+
+
+class EtatScheduler(Base):
+    """
+    Ligne UNIQUE (id=1) portant l'etat du processus de collecte.
+
+    Elle remplit deux roles :
+
+    1. VERROU D'INSTANCE UNIQUE. Le scheduler tourne dans un processus
+       separe du serveur web ; sans etat partage, rien n'empechait de
+       lancer une seconde collecte par-dessus la premiere (depuis
+       l'interface, ou par un `python -m app.scheduler` en ligne de
+       commande). Le verrou vivant en BASE et non en memoire, il vaut
+       pour les deux chemins.
+
+       La peremption par heartbeat est indispensable : un processus tue
+       (kill -9, coupure de la VM) ne libere pas son verrou, et sans
+       expiration le scheduler serait definitivement bloque.
+
+    2. TABLEAU DE BORD. L'interface de supervision lit ici la source en
+       cours d'analyse, l'heure de lancement et la prochaine echeance.
+
+    CN-03/CN-04 : uniquement des metadonnees d'exploitation (etat, dates,
+    nom de source, PID). Aucune donnee collectee.
+    """
+    __tablename__ = "etat_scheduler"
+
+    id = Column(Integer, primary_key=True, default=1)
+
+    actif = Column(Boolean, nullable=False, default=False)
+    statut = Column(SAEnum(StatutScheduler), nullable=False,
+                     default=StatutScheduler.ARRETE)
+
+    pid = Column(Integer, nullable=True)
+    hostname = Column(String(255), nullable=True)
+
+    demarre_le = Column(DateTime(timezone=True), nullable=True)
+    heartbeat = Column(DateTime(timezone=True), nullable=True)
+
+    source_en_cours = Column(String(255), nullable=True)
+
+    derniere_execution = Column(DateTime(timezone=True), nullable=True)
+    prochaine_execution = Column(DateTime(timezone=True), nullable=True)
+    derniere_stats = Column(Text, nullable=True)  # resume JSON du dernier cycle
+
+    collecte_immediate_demandee = Column(Boolean, nullable=False, default=False)
+
+    def __repr__(self):
+        return f"<EtatScheduler {self.statut.value} pid={self.pid}>"
+
+
+class EvenementCollecte(Base):
+    """
+    Journal des evenements d'un cycle de collecte, consomme par la console
+    de supervision en temps reel.
+
+    Cle primaire ENTIERE (et non UUID comme le reste du modele) : la
+    console demande "les evenements posterieurs a l'id X", ce qui exige un
+    ordre total bon marche. Un UUID obligerait a trier par horodatage, non
+    unique a la milliseconde pres.
+
+    LES ERREURS N'ONT PAS LEUR PLACE ICI : elles sont deja journalisees
+    dans JournalAudit par BaseConnector, avec le detail necessaire a
+    l'audit (FR-17), et consultables dans la page dediee. Les dupliquer
+    ici noierait le fil de supervision, dont l'objet est de montrer
+    l'avancement et les detections.
+
+    Retention courte (purger_evenements) : c'est un fil d'activite, pas
+    une archive.
+    """
+    __tablename__ = "evenements_collecte"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    horodatage = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    type_evenement = Column(SAEnum(TypeEvenementCollecte), nullable=False)
+
+    source = Column(String(255), nullable=True)
+    message = Column(String(500), nullable=False)
+
+    exposition_id = Column(String(36), ForeignKey("expositions.id"), nullable=True)
+
+    __table_args__ = (
+        Index("ix_evenements_horodatage", "horodatage"),
+    )
+
+    def __repr__(self):
+        return f"<EvenementCollecte {self.type_evenement.value} {self.message[:40]}>"

@@ -36,7 +36,10 @@ from app.crawl.registre import (
     purger_registre,
 )
 from app.db import get_session, init_db
-from app.models import Selecteur, Source, TypeSource, utc_now
+from app.models import (
+    Selecteur, Source, TypeEvenementCollecte, TypeSource, utc_now,
+)
+from app import supervision
 from app.matching.engine import match_text_against_catalogue
 from app.matching.exclusion import filtrer_faux_positifs
 from app.matching.criticite import calculer_criticite
@@ -199,6 +202,19 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     )
 
     stats["nb_expositions_creees_ou_maj"] += 1
+
+    # Seules les NOUVELLES expositions remontent dans la console : une
+    # redetection sans gain de criticite n'apprend rien a l'operateur qui
+    # regarde le cycle avancer.
+    if est_nouvelle:
+        supervision.emettre(
+            TypeEvenementCollecte.NOUVELLE_EXPOSITION,
+            f"{nom_entite} - criticite {detail.resume()} - {categorie_fuite.value}",
+            source=source.nom,
+            exposition_id=exposition.id,
+            session=session,
+        )
+
     logger.info(
         f"[pipeline] Exposition traitee : '{nom_entite}' "
         f"(criticite={detail.resume()}, categorie={categorie_fuite.value}, "
@@ -242,6 +258,15 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
 
     logger.info(f"[pipeline] === Debut traitement : {connector.SOURCE_NAME} ===")
 
+    # Publie la source en cours d'analyse pour la console de supervision.
+    supervision.battre_coeur(source_en_cours=connector.SOURCE_NAME)
+    supervision.emettre(
+        TypeEvenementCollecte.DEBUT_SOURCE,
+        f"Analyse de la source {connector.SOURCE_NAME}...",
+        source=connector.SOURCE_NAME,
+        session=session,
+    )
+
     # Le connecteur ne lit pas la base : on lui passe ce qu'il doit ignorer.
     connues = identifiants_traites(session, source.id)
 
@@ -264,6 +289,17 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
     stats.update(result.get("statistiques_crawl", {}))
 
     if not result["success"]:
+        # Le DETAIL de l'erreur ne remonte PAS dans la console : il est deja
+        # journalise dans JournalAudit par BaseConnector et consultable dans
+        # la page Audit. On emet neanmoins une ligne de cloture, sans quoi la
+        # console resterait bloquee sur "Analyse de la source X..." sans
+        # jamais indiquer que le pipeline est passe a la suivante.
+        supervision.emettre(
+            TypeEvenementCollecte.FIN_SOURCE,
+            f"{connector.SOURCE_NAME} : source non joignable ce cycle (detail dans Audit)",
+            source=connector.SOURCE_NAME,
+            session=session,
+        )
         logger.error(f"[pipeline] Collecte echouee pour {connector.SOURCE_NAME} : {result['error']}")
         # Mise a jour du compteur d'erreurs de la source (FR-04)
         source.nombre_erreurs += 1
@@ -329,6 +365,16 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
     session.commit()
 
     logger.info(f"[pipeline] === Fin traitement {connector.SOURCE_NAME} : {stats} ===")
+
+    supervision.emettre(
+        TypeEvenementCollecte.FIN_SOURCE,
+        f"{connector.SOURCE_NAME} : {stats['nb_entries_brutes']} entree(s) analysee(s), "
+        f"{stats['nb_expositions_creees_ou_maj']} exposition(s), "
+        f"{stats['nb_hors_periode']} hors periode",
+        source=connector.SOURCE_NAME,
+        session=session,
+    )
+
     return stats
 
 
@@ -417,6 +463,7 @@ def executer_tous_les_connecteurs(budget_global=None, profondeur_max=None,
         tous_les_stats.append(stats)
 
     purger_registre(session)
+    supervision.purger_evenements(session)
     session.close()
     return tous_les_stats
 
