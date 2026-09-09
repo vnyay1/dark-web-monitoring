@@ -12,6 +12,13 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = Config.FLASK_SECRET_KEY
 
+    # Durcissement du cookie de session. SameSite=Lax empeche qu'il soit
+    # envoye lors d'une navigation declenchee par un site tiers, ce qui
+    # constitue la premiere barriere CSRF ; la seconde est l'en-tete
+    # X-Requested-With exige par la couche API.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
     init_db()
 
     from app.web.auth import auth_bp, login_manager
@@ -35,6 +42,11 @@ def create_app():
     app.register_blueprint(audit_bp)
     app.register_blueprint(compliance_bp)
     app.register_blueprint(scheduler_bp)
+
+    # Couche API JSON consommee par l'interface React. Montee APRES les
+    # blueprints Jinja, dont elle prendra la place page par page.
+    from app.web.api import enregistrer_api
+    enregistrer_api(app)
 
     @app.context_processor
     def inject_alertes_count():
