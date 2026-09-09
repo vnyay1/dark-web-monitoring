@@ -1,0 +1,180 @@
+/* Barre superieure et navigation. */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(11, 16, 29, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.topbar-inner {
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(135deg, var(--accent), var(--info));
+  box-shadow: var(--shadow-glow);
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.brand-sub {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: var(--r-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+}
+
+.user-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.role-super_admin { color: var(--role-super-admin); background: var(--crit-bg); }
+.role-admin { color: var(--role-admin); background: var(--warn-bg); }
+.role-supervisor { color: var(--role-supervisor); background: var(--accent-dim); }
+.role-user { color: var(--role-user); }
+
+.nav {
+  border-top: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.nav-inner {
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  gap: 2px;
+}
+
+.nav-item {
+  position: relative;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+}
+
+.nav-item.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.nav-badge {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--crit);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Le bouton Menu n'apparait que sur ecran etroit, ou la navigation
+   horizontale devient penible a faire defiler. */
+.nav-toggle {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .nav.is-open {
+    display: block;
+  }
+
+  .nav-inner {
+    flex-direction: column;
+    padding: 6px 16px 12px;
+  }
+
+  .nav-item {
+    border-bottom: none;
+    border-left: 2px solid transparent;
+    padding: 9px 10px;
+  }
+
+  .nav-item.is-active {
+    border-bottom-color: transparent;
+    border-left-color: var(--accent);
+    background: var(--accent-dim);
+    border-radius: var(--r-sm);
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .user-chip {
+    display: none;
+  }
+}

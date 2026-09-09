@@ -1,10 +1,18 @@
 """
-FR-27/FR-28 - Blueprint de generation de rapports et d'export de donnees.
-Reserve aux roles supervisor, admin, super_admin.
+FR-27/FR-28 - Generation de rapports et export de donnees.
+
+Ne subsistent ici que les TELECHARGEMENTS. L'ecran de selection est passe
+en React (frontend/src/pages/Rapports.jsx) ; ces routes restent servies par
+Flask parce qu'un lien natif conserve le nom de fichier et la progression
+du navigateur, ce que ne ferait pas un fetch() suivi d'une reconstruction
+cote client.
+
+Le rapport mensuel reste rendu par un gabarit Jinja
+(app/web/templates/rapport_mensuel.html) : c'est un document d'impression
+mis en page pour WeasyPrint, pas une page d'interface.
 """
 
-import io
-from flask import Blueprint, render_template, send_file, Response, request
+from flask import Blueprint, send_file, Response, request
 from flask_login import login_required
 
 from app.reports.monthly_report import generer_rapport_html, generer_rapport_pdf
@@ -13,14 +21,6 @@ from app.models import utc_now, RoleUtilisateur
 from app.web.permissions import role_requis
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
-
-
-@reports_bp.route("/")
-@login_required
-@role_requis(RoleUtilisateur.SUPERVISOR)
-def index():
-    maintenant = utc_now()
-    return render_template("reports_index.html", mois_courant=maintenant.month, annee_courante=maintenant.year)
 
 
 @reports_bp.route("/monthly/html")

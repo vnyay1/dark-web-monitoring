@@ -8,7 +8,7 @@ from werkzeug.security import generate_password_hash
 
 from app.db import get_session, init_db
 from app.models import User
-from app.web.users import valider_mot_de_passe
+from app.securite import valider_mot_de_passe
 
 
 def create_user():

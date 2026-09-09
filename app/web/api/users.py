@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash
 from app.db import get_session
 from app.models import HistoriqueRole, RoleUtilisateur, User
 from app.web.permissions import role_requis
-from app.web.users import valider_mot_de_passe
+from app.securite import valider_mot_de_passe
 
 
 def _serialiser(user) -> dict:
