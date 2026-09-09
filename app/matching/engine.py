@@ -108,26 +108,27 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
 
 
 def _match_case_insensitive(texte: str, selecteur_valeur: str) -> list[MatchResult]:
-    """Recherche des occurrences insensibles a la casse (hors matches deja exacts)."""
-    results = []
+    """
+    Recherche des occurrences insensibles a la casse (hors matches deja
+    exacts).
 
+    CORRECTIF : desactive pour les selecteurs courts (<= 6 caracteres).
+    Les acronymes institutionnels camerounais (ART, CCA, MINFI, ANTIC...)
+    s'ecrivent toujours en MAJUSCULES dans un contexte reel de reference
+    a l'entite - jamais en minuscules ou casse mixte. L'insensibilite a
+    la casse sur ces selecteurs courts capturait massivement des faux
+    positifs (le mot anglais "art" dans "state-of-the-art", l'abreviation
+    juridique "Art." dans les references d'articles de loi/reglement,
+    etc.) meme avec la frontiere de mot stricte deja en place. Les
+    selecteurs courts ne sont donc plus detectes QUE sous leur forme
+    exacte en majuscules (via _match_exact), jamais en minuscules ou
+    casse mixte.
+    """
     if _est_selecteur_court(selecteur_valeur):
-        # Selecteur court : frontiere de mot obligatoire, insensible a la casse
-        pattern = _construire_pattern_mot_entier(selecteur_valeur)
-        for m in pattern.finditer(texte):
-            segment_reel = m.group()
-            if segment_reel != selecteur_valeur:  # exclut les vrais matches exacts
-                results.append(MatchResult(
-                    selecteur_valeur=selecteur_valeur,
-                    selecteur_categorie="",
-                    type_correspondance="insensible_casse",
-                    similarite=100.0,
-                    segment_trouve=segment_reel,
-                    position=m.start(),
-                ))
-        return results
+        return []
 
     # Selecteur long : comportement precedent (sous-chaine insensible a la casse)
+    results = []
     texte_lower = texte.lower()
     selecteur_lower = selecteur_valeur.lower()
     start = 0

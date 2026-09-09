@@ -26,16 +26,25 @@ SEUIL_SIMILARITE_NOM_ENTITE = 90  # score RapidFuzz (0-100)
 FENETRE_JOURS = 30
 
 
-def _trouver_exposition_existante(session, nom_entite: str, categorie_fuite: CategorieFuite):
+def _trouver_exposition_existante(session, nom_entite: str, categorie_fuite: CategorieFuite = None):
     """
-    Cherche parmi les expositions existantes (recentes) celle qui correspond
-    probablement au meme incident, selon la regle d'identite definie.
+    Cherche parmi les expositions existantes (recentes) celle qui
+    correspond probablement au meme incident.
+
+    CORRECTIF : la categorie de fuite n'est PLUS un critere de
+    correspondance. Deux posts sur la meme victime peuvent legitimement
+    porter sur des categories differentes (ex: un post sur des
+    identifiants, un autre sur des documents internes) sans etre des
+    incidents distincts - c'est le NOM DE L'ENTITE (avec tolerance
+    fuzzy) et la fenetre temporelle qui definissent l'identite de
+    l'incident, pas la nature de la donnee exposee dans chaque source.
+    Le parametre categorie_fuite est conserve pour compatibilite d'appel
+    mais n'est plus utilise dans le filtrage.
     """
     seuil_date = utc_now() - timedelta(days=FENETRE_JOURS)
 
     candidates = (
         session.query(Exposition)
-        .filter(Exposition.categorie_fuite == categorie_fuite)
         .filter(Exposition.date_premiere_detection >= seuil_date)
         .all()
     )
@@ -56,7 +65,6 @@ def _trouver_exposition_existante(session, nom_entite: str, categorie_fuite: Cat
         )
 
     return meilleure_correspondance
-
 
 def enregistrer_exposition(
     session,
@@ -81,7 +89,7 @@ def enregistrer_exposition(
       nouvelle exposition) - utile pour detecter une hausse significative
       (cf FR-25/FR-26, alerte de confirmation)
     """
-    exposition_existante = _trouver_exposition_existante(session, nom_entite, categorie_fuite)
+    exposition_existante = _trouver_exposition_existante(session, nom_entite)
 
     if exposition_existante:
         ancien_score = exposition_existante.score_confiance
