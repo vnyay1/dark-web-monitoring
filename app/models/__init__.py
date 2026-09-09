@@ -76,6 +76,22 @@ class StatutExposition(enum.Enum):
     CLOSED = "closed"
 
 
+class NiveauCriticite(enum.Enum):
+    """
+    FR-10 - Niveau de criticite d'une exposition, derive du NOMBRE de
+    selecteurs distincts du catalogue trouves dans l'entree analysee.
+
+    Remplace l'ancien score de confiance flottant : un analyste peut
+    justifier "3 selecteurs camerounais distincts dans la meme annonce",
+    la ou un 0.72 pondere n'etait explicable qu'en relisant le code.
+    Les paliers sont regles par l'administrateur (cf. app.config_system).
+    """
+    FAIBLE = "faible"
+    MOYENNE = "moyenne"
+    ELEVEE = "elevee"
+    CRITIQUE = "critique"
+
+
 class TypeSource(enum.Enum):
     RANSOMWARE_SITE = "ransomware_site"
     PASTE = "paste"
@@ -130,7 +146,19 @@ class Exposition(Base):
                                       default=utc_now)
 
     nombre_enregistrements_revendique = Column(Integer, nullable=True)
-    score_confiance = Column(Float, nullable=False, default=0.0)
+
+    # FR-10 - criticite = nombre de selecteurs DISTINCTS trouves dans
+    # l'entree ; niveau_criticite en est le palier lisible. On ne stocke
+    # PAS la liste des selecteurs eux-memes : CN-03 enumere les
+    # metadonnees autorisees et n'en fait pas partie.
+    criticite = Column(Integer, nullable=False, default=0)
+    niveau_criticite = Column(SAEnum(NiveauCriticite), nullable=False,
+                               default=NiveauCriticite.FAIBLE)
+
+    # Date de publication de l'annonce sur la source (pas du contenu
+    # divulgue) : la plus recente connue, dupliquee depuis
+    # SourceReference pour permettre tri et filtre sans jointure.
+    date_publication_source = Column(DateTime(timezone=True), nullable=True)
 
     statut = Column(SAEnum(StatutExposition), nullable=False,
                      default=StatutExposition.NEW)
@@ -139,7 +167,8 @@ class Exposition(Base):
         "SourceReference", back_populates="exposition",
         cascade="all, delete-orphan"
     )
-    alertes = relationship("Alerte", cascade="all, delete-orphan")
+    alertes = relationship("Alerte", back_populates="exposition",
+                            cascade="all, delete-orphan")
 
     def changer_statut(self, nouveau_statut: StatutExposition):
         self.statut = nouveau_statut
@@ -158,10 +187,23 @@ class SourceReference(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     exposition_id = Column(String(36), ForeignKey("expositions.id"), nullable=False)
 
+    # source_id relie le signalement a la Source surveillee, ce qui donne
+    # acces a son NOM ("payload", "safepay"...). type_source seul ne
+    # portait que la famille ("ransomware_site") : l'origine exacte d'une
+    # exposition etait donc introuvable depuis l'interface.
+    source_id = Column(String(36), ForeignKey("sources.id"), nullable=True)
+
     type_source = Column(SAEnum(TypeSource), nullable=False)
     reference_source = Column(String(500), nullable=False)  # URL/identifiant, jamais le contenu
 
+    # Date de publication de l'annonce sur CETTE source. Une meme
+    # exposition vue sur plusieurs sources a une date par signalement.
+    date_publication = Column(DateTime(timezone=True), nullable=True)
+
+    date_signalement = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
     exposition = relationship("Exposition", back_populates="sources")
+    source = relationship("Source")
 
     def __repr__(self):
         return f"<SourceReference {self.type_source.value} - {self.reference_source[:50]}>"
@@ -311,7 +353,7 @@ class Alerte(Base):
     lue = Column(Boolean, nullable=False, default=False)  # pour affichage interface (FR-25)
     details_echec = Column(Text, nullable=True)  # message d'erreur si echec d'envoi
 
-    exposition = relationship("Exposition")
+    exposition = relationship("Exposition", back_populates="alertes")
 
     def __repr__(self):
         return f"<Alerte {self.canal.value} - {self.statut_envoi.value}>"

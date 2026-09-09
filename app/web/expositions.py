@@ -11,10 +11,28 @@ from app.models import RoleUtilisateur
 
 from app.db import get_session
 from app.models import (
-    Exposition, CategorieFuite, StatutExposition, utc_now
+    Exposition, CategorieFuite, NiveauCriticite, StatutExposition, utc_now
 )
 
 expositions_bp = Blueprint("expositions", __name__, url_prefix="/expositions")
+
+
+def _seuil_du_niveau(niveau: str) -> int:
+    """
+    Nombre minimum de selecteurs correspondant a un palier de criticite.
+    Leve ValueError si le palier est inconnu (filtre alors ignore).
+    """
+    from app.config_system import get_config_int
+
+    niveau = NiveauCriticite(niveau)
+
+    if niveau == NiveauCriticite.CRITIQUE:
+        return get_config_int("seuil_criticite_critique")
+    if niveau == NiveauCriticite.ELEVEE:
+        return get_config_int("seuil_criticite_elevee")
+    if niveau == NiveauCriticite.MOYENNE:
+        return get_config_int("seuil_criticite_moyenne")
+    return 0
 
 @expositions_bp.route("/")
 @login_required
@@ -50,11 +68,16 @@ def liste():
         seuil = utc_now() - timedelta(days=int(periode))
         query = query.filter(Exposition.date_premiere_detection >= seuil)
 
-    # --- Filtre : score de confiance minimum ---
-    confiance_min = request.args.get("confiance_min", "").strip()
-    if confiance_min:
+    # --- Filtre : niveau de criticite minimum ---
+    #
+    # NiveauCriticite est une enumeration de chaines : comparer en SQL
+    # donnerait un ordre alphabetique ("critique" < "elevee" < "faible"),
+    # sans rapport avec la gravite. On filtre donc sur criticite, l'entier
+    # sous-jacent, en traduisant le palier demande par son seuil.
+    niveau_min = request.args.get("niveau_min", "").strip()
+    if niveau_min:
         try:
-            query = query.filter(Exposition.score_confiance >= float(confiance_min))
+            query = query.filter(Exposition.criticite >= _seuil_du_niveau(niveau_min))
         except ValueError:
             pass
 
@@ -76,13 +99,14 @@ def liste():
         expositions=expositions,
         tous_secteurs=tous_secteurs,
         toutes_categories=list(CategorieFuite),
+        tous_niveaux=list(NiveauCriticite),
         tous_statuts=list(StatutExposition),
         filtres_actifs={
             "secteur": secteur,
             "categorie": categorie,
             "statut": statut,
             "periode": periode,
-            "confiance_min": confiance_min,
+            "niveau_min": niveau_min,
             "q": recherche,
         },
     )

@@ -17,7 +17,9 @@ import logging
 from datetime import timedelta
 from rapidfuzz import fuzz
 
-from app.models import Exposition, SourceReference, CategorieFuite, TypeSource, utc_now
+from app.models import (
+    Exposition, SourceReference, CategorieFuite, NiveauCriticite, TypeSource, utc_now,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,57 +68,88 @@ def _trouver_exposition_existante(session, nom_entite: str, categorie_fuite: Cat
 
     return meilleure_correspondance
 
+def _ajouter_reference(session, exposition, type_source, reference_source,
+                       source_id, date_publication):
+    """
+    Ajoute un signalement de source a une exposition, sans doublon.
+    Retourne True si une reference a effectivement ete ajoutee.
+    """
+    for sr in exposition.sources:
+        if sr.reference_source == reference_source and sr.type_source == type_source:
+            # Meme signalement revu : on complete ce qu'on ignorait alors.
+            if sr.source_id is None and source_id is not None:
+                sr.source_id = source_id
+            if sr.date_publication is None and date_publication is not None:
+                sr.date_publication = date_publication
+            return False
+
+    session.add(SourceReference(
+        exposition_id=exposition.id,
+        source_id=source_id,
+        type_source=type_source,
+        reference_source=reference_source,
+        date_publication=date_publication,
+    ))
+    return True
+
+
 def enregistrer_exposition(
     session,
     nom_entite: str,
     categorie_fuite: CategorieFuite,
     type_source: TypeSource,
     reference_source: str,
-    score_confiance: float,
+    criticite: int,
+    niveau_criticite: NiveauCriticite,
     nombre_enregistrements: int = None,
     secteur_activite: str = None,
     type_entite=None,
+    source_id: str = None,
+    date_publication=None,
 ) -> tuple:
     """
     Point d'entree principal FR-12 : enregistre une detection en
     deduppliquant si un incident correspondant existe deja.
 
-    Retourne un tuple (exposition, est_nouvelle, ancien_score) :
+    Retourne un tuple (exposition, est_nouvelle, ancienne_criticite) :
     - exposition : l'Exposition (nouvelle ou existante mise a jour)
-    - est_nouvelle : True si l'exposition vient d'etre creee, False si
-      une exposition existante a ete mise a jour
-    - ancien_score : le score de confiance AVANT mise a jour (None si
+    - est_nouvelle : True si l'exposition vient d'etre creee
+    - ancienne_criticite : la criticite AVANT mise a jour (None si
       nouvelle exposition) - utile pour detecter une hausse significative
       (cf FR-25/FR-26, alerte de confirmation)
     """
     exposition_existante = _trouver_exposition_existante(session, nom_entite)
 
     if exposition_existante:
-        ancien_score = exposition_existante.score_confiance
+        ancienne_criticite = exposition_existante.criticite
 
         exposition_existante.date_derniere_detection = utc_now()
 
-        reference_deja_presente = any(
-            sr.reference_source == reference_source and sr.type_source == type_source
-            for sr in exposition_existante.sources
-        )
-
-        if not reference_deja_presente:
-            nouvelle_reference = SourceReference(
-                exposition_id=exposition_existante.id,
-                type_source=type_source,
-                reference_source=reference_source,
+        if _ajouter_reference(session, exposition_existante, type_source,
+                              reference_source, source_id, date_publication):
+            logger.info(
+                f"[FR-12] Nouvelle SourceReference ajoutee a l'exposition existante '{nom_entite}'."
             )
-            session.add(nouvelle_reference)
-            logger.info(f"[FR-12] Nouvelle SourceReference ajoutee a l'exposition existante '{nom_entite}'.")
         else:
             logger.info("[FR-12] Reference de source deja presente, aucun doublon ajoute.")
 
-        if score_confiance > exposition_existante.score_confiance:
-            exposition_existante.score_confiance = score_confiance
+        # Progression MONOTONE : une redetection partielle (moins de
+        # selecteurs visibles sur cette source-la) ne doit pas faire
+        # retomber une exposition deja qualifiee comme critique.
+        if criticite > exposition_existante.criticite:
+            exposition_existante.criticite = criticite
+            exposition_existante.niveau_criticite = niveau_criticite
+
+        # On garde la date de publication la plus RECENTE connue : elle
+        # traduit la derniere activite constatee autour de l'incident.
+        if date_publication is not None and (
+            exposition_existante.date_publication_source is None
+            or date_publication > exposition_existante.date_publication_source
+        ):
+            exposition_existante.date_publication_source = date_publication
 
         session.commit()
-        return exposition_existante, False, ancien_score
+        return exposition_existante, False, ancienne_criticite
 
     # Aucun incident correspondant : creation d'une nouvelle Exposition
     nouvelle_exposition = Exposition(
@@ -125,17 +158,15 @@ def enregistrer_exposition(
         type_entite=type_entite,
         categorie_fuite=categorie_fuite,
         nombre_enregistrements_revendique=nombre_enregistrements,
-        score_confiance=score_confiance,
+        criticite=criticite,
+        niveau_criticite=niveau_criticite,
+        date_publication_source=date_publication,
     )
     session.add(nouvelle_exposition)
     session.flush()
 
-    reference = SourceReference(
-        exposition_id=nouvelle_exposition.id,
-        type_source=type_source,
-        reference_source=reference_source,
-    )
-    session.add(reference)
+    _ajouter_reference(session, nouvelle_exposition, type_source,
+                       reference_source, source_id, date_publication)
     session.commit()
 
     logger.info(f"[FR-12] Nouvelle exposition creee : '{nom_entite}' ({categorie_fuite.value}).")

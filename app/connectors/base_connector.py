@@ -97,6 +97,10 @@ class BaseConnector:
     SUPPORTE_PAGINATION = False
     SUPPORTE_DETAIL = False
 
+    # Formats strptime propres a la source, essayes en premier par
+    # app.connectors.dates.parser_date() avant les formats communs.
+    DATE_FORMATS = ()
+
     MAX_PAGES_LISTING = 1
     PAGES_GRACE = 1          # pages explorees au-dela de la 1re page 100% connue
     MAX_DETAILS_PAR_RUN = 0

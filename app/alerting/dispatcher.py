@@ -5,7 +5,7 @@ pour une exposition donnee, selon les canaux determines par les regles.
 
 import logging
 
-from app.models import Alerte, CanalAlerte, StatutEnvoiAlerte, utc_now
+from app.models import Alerte, CanalAlerte, NiveauCriticite, StatutEnvoiAlerte, utc_now
 from app.alerting.rules import determiner_canaux
 from app.alerting.senders import SENDERS
 
@@ -25,10 +25,13 @@ DESTINATAIRES = {
 def _construire_message(exposition, est_confirmation: bool = False) -> tuple:
     """Construit le sujet et le corps du message d'alerte."""
     prefixe = "[CONFIRMATION]" if est_confirmation else "[NOUVELLE ALERTE]"
-    sujet = f"{prefixe} SENTINEL - {exposition.nom_entite} - score {exposition.score_confiance:.2f}"
+    sujet = (
+        f"{prefixe} SENTINEL - {exposition.nom_entite} - "
+        f"criticite {exposition.niveau_criticite.value.upper()}"
+    )
 
     intro = (
-        "Le score de confiance de cette exposition deja connue a augmente significativement suite a une nouvelle source."
+        "La criticite de cette exposition deja connue a augmente suite a une nouvelle source."
         if est_confirmation
         else "Une nouvelle exposition potentielle a ete detectee."
     )
@@ -37,34 +40,52 @@ def _construire_message(exposition, est_confirmation: bool = False) -> tuple:
         f"{intro}\n\n"
         f"Entite : {exposition.nom_entite}\n"
         f"Categorie : {exposition.categorie_fuite.value}\n"
-        f"Score de confiance : {exposition.score_confiance:.2f}\n"
+        f"Criticite : {exposition.niveau_criticite.value.upper()} "
+        f"({exposition.criticite} selecteur(s) camerounais distinct(s))\n"
         f"Detection : {exposition.date_premiere_detection.strftime('%d/%m/%Y %H:%M')}\n"
         f"Consultez le tableau de bord Sentinel pour plus de details."
     )
     return sujet, message
 
 
-def declencher_alertes(session, exposition, est_nouvelle: bool = True, ancien_score: float = None,
-                        seuil_minimum: float = 0.6) -> list:
+# Ordre des paliers, du moins au plus grave. Sert a comparer le niveau
+# d'une exposition au niveau minimum configure : NiveauCriticite est une
+# enumeration de chaines, donc non ordonnable telle quelle.
+ORDRE_NIVEAUX = {
+    NiveauCriticite.FAIBLE: 0,
+    NiveauCriticite.MOYENNE: 1,
+    NiveauCriticite.ELEVEE: 2,
+    NiveauCriticite.CRITIQUE: 3,
+}
+
+
+def declencher_alertes(session, exposition, est_nouvelle: bool = True,
+                        ancienne_criticite: int = None,
+                        niveau_minimum=None) -> list:
     """
     FR-25 - Point d'entree : declenche les alertes pour une exposition.
+
+    niveau_minimum : palier en dessous duquel aucune alerte n'est emise.
+    Laisse a None (le cas normal), il est lu depuis la configuration
+    systeme. L'ancienne version prenait ici une valeur par defaut en dur
+    (0.6) qui n'etait donc JAMAIS None : le seuil regle par
+    l'administrateur n'a jamais ete applique.
     """
-    from app.config_system import get_config_float
+    from app.config_system import get_config_int, get_config_niveau
 
-    if seuil_minimum is None:
-        seuil_minimum = get_config_float("seuil_alerte_minimum")
+    if niveau_minimum is None:
+        niveau_minimum = get_config_niveau("niveau_alerte_minimum")
 
-    if exposition.score_confiance < seuil_minimum:
+    if ORDRE_NIVEAUX[exposition.niveau_criticite] < ORDRE_NIVEAUX[niveau_minimum]:
         return []
 
     est_confirmation = False
 
     if not est_nouvelle:
-        if ancien_score is None:
+        if ancienne_criticite is None:
             return []
-        seuil_hausse = get_config_float("seuil_hausse_confirmation")
-        hausse = exposition.score_confiance - ancien_score
-        if hausse < seuil_hausse:
+        hausse_minimale = get_config_int("hausse_criticite_confirmation")
+        if (exposition.criticite - ancienne_criticite) < hausse_minimale:
             return []
         est_confirmation = True
 

@@ -39,6 +39,9 @@ class TheHackerNewsConnector(BaseConnector):
 
     TARGET_URL = "https://thehackernews.com/search/label/Vulnerability"
 
+    # <span class="h-datetime">Aug 13, 2026</span>
+    DATE_FORMATS = ("%b %d, %Y",)
+
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")

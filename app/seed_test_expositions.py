@@ -11,11 +11,35 @@ from datetime import timedelta
 
 from app.db import get_session, init_db
 from app.models import (
-    Exposition, SourceReference, TypeEntite, CategorieFuite,
+    Exposition, Source, SourceReference, TypeEntite, CategorieFuite,
     StatutExposition, TypeSource, utc_now
 )
+from app.matching.criticite import niveau_pour
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+def _source_de_test(session, data):
+    """
+    Retrouve (ou cree) la Source correspondant a l'URL du jeu de test, pour
+    que les expositions de demonstration affichent une origine nommee comme
+    celles produites par le pipeline.
+    """
+    from urllib.parse import urlparse
+
+    nom = urlparse(data["source_ref"]).hostname or "source_de_test"
+    nom = nom.split(".")[0]
+
+    source = session.query(Source).filter_by(nom=nom).first()
+    if source is None:
+        source = Source(
+            nom=nom,
+            type_source=data["source_type"],
+            url_ou_identifiant=data["source_ref"],
+        )
+        session.add(source)
+        session.flush()
+    return source
+
 
 TEST_DATA = [
     {
@@ -23,7 +47,7 @@ TEST_DATA = [
         "secteur_activite": "Administration publique",
         "type_entite": TypeEntite.PUBLIQUE,
         "categorie_fuite": CategorieFuite.CREDENTIALS,
-        "score_confiance": 0.87,
+        "criticite": 4,
         "statut": StatutExposition.NEW,
         "jours_ecoules": 2,
         "nb_enregistrements": 15000,
@@ -35,7 +59,7 @@ TEST_DATA = [
         "secteur_activite": "Finance",
         "type_entite": TypeEntite.PRIVEE,
         "categorie_fuite": CategorieFuite.DONNEES_FINANCIERES,
-        "score_confiance": 0.72,
+        "criticite": 3,
         "statut": StatutExposition.UNDER_REVIEW,
         "jours_ecoules": 5,
         "nb_enregistrements": 8200,
@@ -47,7 +71,7 @@ TEST_DATA = [
         "secteur_activite": "Education",
         "type_entite": TypeEntite.PUBLIQUE,
         "categorie_fuite": CategorieFuite.DONNEES_PERSONNELLES,
-        "score_confiance": 0.45,
+        "criticite": 2,
         "statut": StatutExposition.NEW,
         "jours_ecoules": 12,
         "nb_enregistrements": 3400,
@@ -59,7 +83,7 @@ TEST_DATA = [
         "secteur_activite": "Telecommunications",
         "type_entite": TypeEntite.PRIVEE,
         "categorie_fuite": CategorieFuite.DOCUMENTS_INTERNES,
-        "score_confiance": 0.91,
+        "criticite": 5,
         "statut": StatutExposition.CONFIRMED,
         "jours_ecoules": 1,
         "nb_enregistrements": None,
@@ -71,7 +95,7 @@ TEST_DATA = [
         "secteur_activite": "Telecommunications",
         "type_entite": TypeEntite.PUBLIQUE,
         "categorie_fuite": CategorieFuite.CODE_SOURCE,
-        "score_confiance": 0.38,
+        "criticite": 1,
         "statut": StatutExposition.FALSE_POSITIVE,
         "jours_ecoules": 20,
         "nb_enregistrements": None,
@@ -83,7 +107,7 @@ TEST_DATA = [
         "secteur_activite": "Energie",
         "type_entite": TypeEntite.PUBLIQUE,
         "categorie_fuite": CategorieFuite.DOCUMENTS_INTERNES,
-        "score_confiance": 0.68,
+        "criticite": 3,
         "statut": StatutExposition.NOTIFIED,
         "jours_ecoules": 40,
         "nb_enregistrements": 500,
@@ -95,7 +119,7 @@ TEST_DATA = [
         "secteur_activite": "Finance",
         "type_entite": TypeEntite.PRIVEE,
         "categorie_fuite": CategorieFuite.DONNEES_FINANCIERES,
-        "score_confiance": 0.79,
+        "criticite": 4,
         "statut": StatutExposition.CLOSED,
         "jours_ecoules": 55,
         "nb_enregistrements": 12000,
@@ -120,7 +144,8 @@ def seed_test_data():
             date_premiere_detection=date_detection,
             date_derniere_detection=date_detection,
             nombre_enregistrements_revendique=data["nb_enregistrements"],
-            score_confiance=data["score_confiance"],
+            criticite=data["criticite"],
+            niveau_criticite=niveau_pour(data["criticite"]),
             statut=data["statut"],
         )
         session.add(exposition)
@@ -128,8 +153,10 @@ def seed_test_data():
 
         source_ref = SourceReference(
             exposition_id=exposition.id,
+            source_id=_source_de_test(session, data).id,
             type_source=data["source_type"],
             reference_source=data["source_ref"],
+            date_publication=date_detection,
         )
         session.add(source_ref)
 

@@ -1,7 +1,8 @@
 """
 Interface de configuration systeme.
 - Catalogue de selecteurs (FR-08) : admin et super_admin
-- Seuils d'alerte critiques (FR-25/FR-26) : super_admin uniquement
+- Paliers de criticite, fenetre de collecte et seuils d'alerte
+  (FR-10/FR-25/FR-26) : super_admin uniquement
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
@@ -9,7 +10,7 @@ from flask_login import login_required, current_user
 
 from app.db import get_session
 from app.models import ConfigurationSysteme, Selecteur, CategorieSelecteur, RoleUtilisateur
-from app.config_system import init_config_defaults
+from app.config_system import init_config_defaults, valider_valeur
 from app.web.permissions import role_requis
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/settings")
@@ -44,10 +45,16 @@ def update_config(cle):
 
     valeur = request.form.get("valeur", "").strip()
 
+    # La validation est portee par app.config_system, qui connait le TYPE
+    # de chaque cle. Un float() systematique rejetait des reglages
+    # legitimes comme niveau_alerte_minimum = "moyenne".
     try:
-        float(valeur)
-    except ValueError:
-        flash(f"Valeur invalide pour {cle} : doit etre un nombre.", "error")
+        valeur = valider_valeur(cle, valeur)
+    except KeyError:
+        flash(f"Cle de configuration inconnue : {cle}", "error")
+        return redirect(url_for("settings.index"))
+    except ValueError as erreur:
+        flash(f"Valeur invalide pour {cle} : {erreur}", "error")
         return redirect(url_for("settings.index"))
 
     set_config(cle, valeur)

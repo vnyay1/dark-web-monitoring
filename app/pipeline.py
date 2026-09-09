@@ -1,6 +1,7 @@
 """
-Pipeline complet : Connecteur -> Matching Engine -> Scoring -> Filtrage
-faux positifs -> Categorisation -> Deduplication -> Persistance -> Audit.
+Pipeline complet : Connecteur -> Fenetre temporelle -> Matching Engine ->
+Filtrage faux positifs -> Criticite -> Categorisation -> Deduplication ->
+Persistance -> Audit.
 
 Chaque connecteur retourne un dict {"entries": [...], "texte_global": ...,
 "nb_entries": int}. Le pipeline traite CHAQUE entree individuellement
@@ -22,9 +23,11 @@ ferait echouer toutes les entrees suivantes).
 
 import argparse
 import logging
+from datetime import timedelta
 
-from app.config_system import get_config_float
+from app.config_system import get_config_int
 from app.connectors import connecteurs_actifs, connecteur_par_nom
+from app.connectors.dates import parser_date
 from app.crawl.registre import (
     enregistrer_entrees_vues,
     identifiants_traites,
@@ -36,7 +39,7 @@ from app.db import get_session, init_db
 from app.models import Selecteur, Source, TypeSource, utc_now
 from app.matching.engine import match_text_against_catalogue
 from app.matching.exclusion import filtrer_faux_positifs
-from app.matching.scoring import calculer_score_confiance
+from app.matching.criticite import calculer_criticite
 from app.matching.categorisation import categoriser_texte
 from app.matching.deduplication import enregistrer_exposition
 from app.alerting.dispatcher import declencher_alertes
@@ -56,6 +59,9 @@ BUDGET_DETAILS_GLOBAL_PAR_RUN = 250
 # Cles possibles pour un meme concept, par ordre de preference.
 CLES_NOM = ("nom_entite_detecte", "titre", "nom_entite")
 CLES_REFERENCE = ("reference_source", "lien_detail", "lien_article")
+# Les sources ne nomment pas la date de la meme facon : dataexposurelogs
+# expose "discovery_date", everest "date", les autres "date_publication".
+CLES_DATE = ("date_publication", "discovery_date", "date")
 
 # SourceReference.reference_source est une String(500).
 LONGUEUR_MAX_REFERENCE = 500
@@ -104,6 +110,12 @@ def _normaliser_entry(entry, connector) -> dict:
         or "unknown"
     )
 
+    date_publication = parser_date(
+        _premier_non_vide(entry, CLES_DATE),
+        getattr(connector, "DATE_FORMATS", ()),
+        source=connector.SOURCE_NAME,
+    )
+
     return {
         "identifiant_entree": (
             entry.get("identifiant_entree") or connector.identifiant_entree(entry)
@@ -111,6 +123,7 @@ def _normaliser_entry(entry, connector) -> dict:
         "nom_entite": _premier_non_vide(entry, CLES_NOM),
         "texte_brut": entry.get("texte_brut") or "",
         "reference_source": str(reference)[:LONGUEUR_MAX_REFERENCE],
+        "date_publication": date_publication,
         "niveau_detail": entry.get("niveau_detail", "listing"),
         "a_page_detail": (
             bool(connector.url_detail(entry)) if connector.SUPPORTE_DETAIL else False
@@ -119,13 +132,25 @@ def _normaliser_entry(entry, connector) -> dict:
     }
 
 
-def _traiter_une_entree(session, source, entry, selecteurs, seuil, stats) -> bool:
+def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bool:
     """
     Applique la chaine d'analyse a UNE entree normalisee.
     Retourne True si l'entree a produit (ou mis a jour) une Exposition.
+
+    seuils : dict issu de _seuils_du_run() (criticite minimale + date limite).
     """
     texte = entry["texte_brut"]
     if not texte:
+        return False
+
+    # FR-03 : fenetre temporelle reglee par l'administrateur.
+    #
+    # Une entree SANS date exploitable est analysee quand meme : trois de
+    # nos sources (payload, safepay, cmd_organization) ne datent pas leurs
+    # annonces, les ecarter reviendrait a cesser de les surveiller.
+    date_publication = entry.get("date_publication")
+    if date_publication is not None and date_publication < seuils["date_limite"]:
+        stats["nb_hors_periode"] += 1
         return False
 
     # FR-09 : matching
@@ -139,15 +164,11 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuil, stats) -> boo
         stats["nb_rejetees_faux_positif"] += 1
         return False
 
-    # FR-10 : scoring
-    score_detail = calculer_score_confiance(
-        matches_filtres,
-        nombre_erreurs_source=source.nombre_erreurs,
-        nombre_collectes_total_source=None,  # historique detaille non tracke pour l'instant
-    )
+    # FR-10 : criticite (nombre de selecteurs distincts)
+    detail = calculer_criticite(matches_filtres)
 
-    if score_detail.score_final < seuil:
-        stats["nb_rejetees_score_faible"] += 1
+    if detail.nb_selecteurs < seuils["criticite_minimum"]:
+        stats["nb_rejetees_criticite_faible"] += 1
         return False
 
     # FR-13 : categorisation
@@ -156,26 +177,51 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuil, stats) -> boo
     nom_entite = entry["nom_entite"] or matches_filtres[0].selecteur_valeur or "Entite inconnue"
 
     # FR-12 : deduplication + persistance
-    exposition, est_nouvelle, ancien_score = enregistrer_exposition(
+    exposition, est_nouvelle, ancienne_criticite = enregistrer_exposition(
         session=session,
         nom_entite=nom_entite,
         categorie_fuite=categorie_fuite,
         type_source=source.type_source,
         reference_source=entry["reference_source"],
-        score_confiance=score_detail.score_final,
+        criticite=detail.nb_selecteurs,
+        niveau_criticite=detail.niveau,
         nombre_enregistrements=None,
+        source_id=source.id,
+        date_publication=date_publication,
     )
 
     # FR-25/FR-26 : declenchement des alertes (nouvelle detection ou
-    # confirmation par hausse significative du score)
-    declencher_alertes(session, exposition, est_nouvelle=est_nouvelle, ancien_score=ancien_score)
+    # confirmation par hausse significative de la criticite)
+    declencher_alertes(
+        session, exposition,
+        est_nouvelle=est_nouvelle,
+        ancienne_criticite=ancienne_criticite,
+    )
 
     stats["nb_expositions_creees_ou_maj"] += 1
     logger.info(
         f"[pipeline] Exposition traitee : '{nom_entite}' "
-        f"(score={score_detail.score_final}, categorie={categorie_fuite.value})"
+        f"(criticite={detail.resume()}, categorie={categorie_fuite.value}, "
+        f"selecteurs={detail.selecteurs})"
     )
     return True
+
+
+def _seuils_du_run() -> dict:
+    """
+    Lit en UNE fois les reglages administrateur qui bornent le run.
+
+    Les lire ici plutot qu'a chaque entree evite une requete par entree
+    (get_config ouvre et ferme une session a chaque appel), tout en
+    garantissant qu'un meme cycle applique des reglages coherents meme si
+    l'administrateur les modifie pendant la collecte.
+    """
+    periode_jours = get_config_int("periode_collecte_jours")
+    return {
+        "criticite_minimum": get_config_int("criticite_minimum_enregistrement"),
+        "date_limite": utc_now() - timedelta(days=periode_jours),
+        "periode_jours": periode_jours,
+    }
 
 
 def traiter_connecteur(connector_class, db_session=None, budget_details=None,
@@ -211,7 +257,8 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         "nb_entries_brutes": 0,
         "nb_expositions_creees_ou_maj": 0,
         "nb_rejetees_faux_positif": 0,
-        "nb_rejetees_score_faible": 0,
+        "nb_rejetees_criticite_faible": 0,
+        "nb_hors_periode": 0,
         "nb_entrees_en_erreur": 0,
     }
     stats.update(result.get("statistiques_crawl", {}))
@@ -256,12 +303,16 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
 
     # Selecteurs actifs charges une seule fois pour toutes les entrees
     selecteurs = session.query(Selecteur).filter_by(actif=True).all()
-    seuil = get_config_float("seuil_enregistrement_minimum")
+    seuils = _seuils_du_run()
+    logger.info(
+        f"[pipeline] Fenetre d'analyse : {seuils['periode_jours']} jours "
+        f"(entrees publiees avant le {seuils['date_limite'].date()} ignorees)."
+    )
 
     for entree in entrees:
         try:
             a_produit = _traiter_une_entree(
-                session, source, entree, selecteurs, seuil, stats
+                session, source, entree, selecteurs, seuils, stats
             )
             _marquer_dans_le_registre(session, source.id, connector, entree, a_produit)
         except Exception as e:
@@ -416,8 +467,9 @@ if __name__ == "__main__":
               f" (echecs : {r.get('details_echec', 0)},"
               f" hors budget : {r.get('details_ignores', 0)})")
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
+        print(f"  Rejetees (hors periode) : {r.get('nb_hors_periode', 0)}")
         print(f"  Rejetees (faux positif) : {r.get('nb_rejetees_faux_positif', 0)}")
-        print(f"  Rejetees (score trop faible) : {r.get('nb_rejetees_score_faible', 0)}")
+        print(f"  Rejetees (criticite trop faible) : {r.get('nb_rejetees_criticite_faible', 0)}")
         print(f"  Entrees en erreur : {r.get('nb_entrees_en_erreur', 0)}")
         print(f"  Motif d'arret du crawl : {r.get('arret', '-')}"
               f" ({r.get('duree_s', 0)}s)")

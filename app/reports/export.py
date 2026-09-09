@@ -24,7 +24,15 @@ def _exposition_vers_dict(exposition) -> dict:
         "date_premiere_detection": exposition.date_premiere_detection.date().isoformat(),
         "date_derniere_detection": exposition.date_derniere_detection.date().isoformat(),
         "nombre_enregistrements_revendique": exposition.nombre_enregistrements_revendique,
-        "score_confiance": exposition.score_confiance,
+        "criticite": exposition.criticite,
+        "niveau_criticite": exposition.niveau_criticite.value,
+        "date_publication_source": (
+            exposition.date_publication_source.date().isoformat()
+            if exposition.date_publication_source else None
+        ),
+        "sources": ", ".join(sorted({
+            sr.source.nom for sr in exposition.sources if sr.source is not None
+        })),
         "statut": exposition.statut.value,
         "nb_sources": len(exposition.sources),
     }

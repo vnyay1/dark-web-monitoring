@@ -17,7 +17,7 @@ from collections import Counter
 from flask import render_template
 
 from app.db import get_session
-from app.models import Exposition, utc_now
+from app.models import Exposition, NiveauCriticite, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +87,17 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
         e.statut.value for e in expositions_du_mois
     )
 
-    score_moyen = (
-        sum(e.score_confiance for e in expositions_du_mois) / total_periode
-        if total_periode > 0 else 0.0
+    # La criticite est un palier, pas une grandeur continue : une
+    # "criticite moyenne" de 2,4 n'aurait aucun sens pour un lecteur du
+    # rapport. On publie donc la REPARTITION par niveau, plus la part des
+    # expositions de niveau eleve ou critique, qui est le chiffre que
+    # l'encadrement regarde reellement.
+    repartition_criticite = Counter(
+        e.niveau_criticite.value for e in expositions_du_mois
+    )
+    nb_niveaux_hauts = sum(
+        1 for e in expositions_du_mois
+        if e.niveau_criticite in (NiveauCriticite.ELEVEE, NiveauCriticite.CRITIQUE)
     )
 
     # Liste des entites concernees - nom d'entite/organisation uniquement,
@@ -99,10 +107,14 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
             "nom": e.nom_entite,
             "secteur": e.secteur_activite or "Non renseigne",
             "categorie": e.categorie_fuite.value,
-            "score": round(e.score_confiance, 2),
+            "criticite": e.criticite,
+            "niveau_criticite": e.niveau_criticite.value,
+            "sources": sorted({
+                sr.source.nom for sr in e.sources if sr.source is not None
+            }),
             "statut": e.statut.value,
         }
-        for e in sorted(expositions_du_mois, key=lambda x: x.score_confiance, reverse=True)
+        for e in sorted(expositions_du_mois, key=lambda x: x.criticite, reverse=True)
     ]
 
     session.close()
@@ -111,7 +123,8 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
         "mois": mois,
         "annee": annee,
         "total_periode": total_periode,
-        "score_moyen": round(score_moyen, 2),
+        "repartition_criticite": dict(repartition_criticite),
+        "nb_niveaux_hauts": nb_niveaux_hauts,
         "repartition_secteur": dict(repartition_secteur),
         "repartition_categorie": dict(repartition_categorie),
         "repartition_statut": dict(repartition_statut),

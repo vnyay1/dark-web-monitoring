@@ -324,9 +324,9 @@
             <div class="stat-hint">sur la periode analysee</div>
         </div>
         <div class="stat-box accent-warn">
-            <div class="stat-label">Score de confiance moyen</div>
-            <div class="stat-value">{{ score_moyen }}</div>
-            <div class="stat-hint">moyenne ponderee</div>
+            <div class="stat-label">Criticite elevee ou critique</div>
+            <div class="stat-value">{{ nb_niveaux_hauts }}</div>
+            <div class="stat-hint">expositions a traiter en priorite</div>
         </div>
         <div class="stat-box accent-info">
             <div class="stat-label">Secteurs touches</div>
@@ -415,7 +415,7 @@
     <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
     {% endif %}
 
-    <h2>Détail des expositions <span class="count">triées par score de confiance</span></h2>
+    <h2>Détail des expositions <span class="count">triées par criticité décroissante</span></h2>
     {% if entites %}
     <table>
         <thead>
@@ -424,7 +424,8 @@
                 <th>Secteur</th>
                 <th>Catégorie</th>
                 <th>Statut</th>
-                <th>Score</th>
+                <th>Sources</th>
+                <th>Criticité</th>
             </tr>
         </thead>
         <tbody>
@@ -434,9 +435,10 @@
                 <td>{{ e.secteur }}</td>
                 <td>{{ e.categorie }}</td>
                 <td><span class="status-pill">{{ e.statut }}</span></td>
+                <td>{{ e.sources|join(', ') if e.sources else '—' }}</td>
                 <td class="num">
-                    <span class="badge {% if e.score >= 70 %}badge-high{% elif e.score >= 40 %}badge-mid{% else %}badge-low{% endif %}">
-                        {{ e.score }}
+                    <span class="badge {% if e.niveau_criticite == 'critique' %}badge-high{% elif e.niveau_criticite == 'elevee' %}badge-high{% elif e.niveau_criticite == 'moyenne' %}badge-mid{% else %}badge-low{% endif %}">
+                        {{ e.niveau_criticite|capitalize }} ({{ e.criticite }})
                     </span>
                 </td>
             </tr>
@@ -449,7 +451,8 @@
 
     <div class="footnote">
         Rapport genere automatiquement par Sentinel — systeme de surveillance dark web de l'ANTIC.
-        Les scores de confiance sont indicatifs et doivent etre corroborés par une analyse CIRT avant toute action operationnelle.
+        La criticite indique le nombre de selecteurs camerounais distincts reperes dans l'annonce ; elle est indicative
+        et doit etre corroborée par une analyse CIRT avant toute action operationnelle.
     </div>
 
 </body>

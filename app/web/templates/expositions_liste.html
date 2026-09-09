@@ -249,53 +249,71 @@
     text-transform: lowercase;
   }
 
-  .score-badge-wrap {
+  /* Criticite : quatre paliers nommes, plus une jauge continue.
+     Le nombre de selecteurs reste affiche a cote du palier : c'est lui
+     qui justifie le niveau aupres de l'analyste. */
+  .crit-wrap {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .score-bar-mini {
-    width: 44px;
-    height: 6px;
-    background: var(--bg-deep);
-    border-radius: var(--r-full);
-    overflow: hidden;
-  }
-
-  .score-bar-fill {
-    height: 100%;
-    border-radius: var(--r-full);
-  }
-
-  .score-pill {
-    font-family: var(--font-mono);
+  .crit-pill {
     font-size: 11px;
     font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 4px;
+    letter-spacing: 0.02em;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    white-space: nowrap;
   }
 
-  .score-pill.high {
+  .crit-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .crit-pill.crit-critique {
     background: var(--crit-bg);
     color: var(--crit);
     border: 1px solid var(--crit-border);
   }
-  .score-bar-fill.high { background: var(--crit); }
 
-  .score-pill.mid {
+  .crit-pill.crit-elevee {
+    background: var(--high-bg);
+    color: var(--high);
+    border: 1px solid var(--high-border);
+  }
+
+  .crit-pill.crit-moyenne {
     background: var(--warn-bg);
     color: var(--warn);
     border: 1px solid var(--warn-border);
   }
-  .score-bar-fill.mid { background: var(--warn); }
 
-  .score-pill.low {
+  .crit-pill.crit-faible {
     background: rgba(148, 163, 184, 0.12);
     color: var(--text-secondary);
     border: 1px solid var(--border-subtle);
   }
-  .score-bar-fill.low { background: var(--text-muted); }
+
+  .sources-liste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .source-tag {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(0, 229, 192, 0.08);
+    color: var(--accent);
+    border: 1px solid rgba(0, 229, 192, 0.22);
+    white-space: nowrap;
+  }
 
   .sources-badge {
     display: inline-flex;
@@ -447,8 +465,13 @@
     </div>
 
     <div class="filter-item">
-      <label class="filter-label" for="f-confiance">Confiance min.</label>
-      <input class="filter-input" id="f-confiance" type="number" name="confiance_min" placeholder="0.0 – 1.0" step="0.05" min="0" max="1" value="{{ filtres_actifs.confiance_min }}">
+      <label class="filter-label" for="f-niveau">Criticité min.</label>
+      <select class="filter-input" id="f-niveau" name="niveau_min">
+        <option value="">Toutes</option>
+        {% for n in tous_niveaux %}
+        <option value="{{ n.value }}" {% if filtres_actifs.niveau_min == n.value %}selected{% endif %}>{{ n.value|capitalize }}</option>
+        {% endfor %}
+      </select>
     </div>
 
     <div class="filter-actions">
@@ -476,7 +499,7 @@
         <th>Secteur d'activité</th>
         <th>Catégorie de fuite</th>
         <th>1ère Détection</th>
-        <th>Confiance</th>
+        <th>Criticité</th>
         <th>Sources</th>
         <th>Statut opérationnel</th>
       </tr>
@@ -500,22 +523,28 @@
           <span class="cell-mono">{{ exp.date_premiere_detection.strftime('%d/%m/%Y %H:%M') }}</span>
         </td>
         <td>
-          {% set score_val = exp.score_confiance %}
-          {% set score_lvl = 'high' if score_val >= 0.7 else ('mid' if score_val >= 0.4 else 'low') %}
-          <div class="score-badge-wrap">
-            <div class="score-bar-mini">
-              <div class="score-bar-fill {{ score_lvl }}" style="width: {{ (score_val * 100) | int }}%;"></div>
-            </div>
-            <span class="score-pill {{ score_lvl }}">
-              {{ "%.2f"|format(score_val) }}
+          {% set niveau = exp.niveau_criticite.value %}
+          <div class="crit-wrap">
+            <span class="crit-pill crit-{{ niveau }}">{{ niveau|capitalize }}</span>
+            <span class="crit-count" title="{{ exp.criticite }} sélecteur(s) camerounais distinct(s) trouvé(s) dans l'annonce">
+              {{ exp.criticite }} sél.
             </span>
           </div>
         </td>
         <td>
-          <span class="sources-badge" title="{{ exp.sources|length }} source(s) distincte(s)">
+          {% set noms = exp.sources | map(attribute='source') | select('defined') | reject('none') | map(attribute='nom') | unique | list %}
+          {% if noms %}
+          <div class="sources-liste">
+            {% for nom in noms %}
+            <span class="source-tag">{{ nom }}</span>
+            {% endfor %}
+          </div>
+          {% else %}
+          <span class="sources-badge" title="{{ exp.sources|length }} signalement(s), source non identifiée">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             {{ exp.sources|length }}
           </span>
+          {% endif %}
         </td>
         <td>
           {% if current_user.role.value in ['supervisor', 'admin', 'super_admin'] %}
