@@ -1,13 +1,13 @@
 """
-FR-25/FR-26 - Determination des canaux d'alerte selon le score de
-confiance et la priorite sectorielle.
+FR-25/FR-26 - Determination des canaux d'alerte selon la CRITICITE de
+l'exposition et la priorite sectorielle.
 
-Les seuils sont desormais lus depuis la configuration systeme (modifiable
-par admin/super_admin), plutot que fixes en dur dans le code.
+La criticite (nombre de selecteurs distincts, cf. app.matching.criticite)
+remplace l'ancien score de confiance : le routage se fait desormais sur
+des paliers nommes plutot que sur des seuils flottants.
 """
 
-from app.models import CanalAlerte
-from app.config_system import get_config_float
+from app.models import CanalAlerte, NiveauCriticite
 
 SECTEURS_PRIORITAIRES = [
     "finance", "banque", "telecommunications", "telecom",
@@ -29,27 +29,32 @@ def est_secteur_prioritaire(exposition) -> bool:
 def determiner_canaux(exposition) -> list:
     """
     FR-25/FR-26 - Retourne la liste des canaux a utiliser pour une
-    exposition donnee, selon son score de confiance et sa priorite
-    sectorielle.
-    """
-    seuil_critique = get_config_float("seuil_alerte_critique")
-    seuil_eleve = get_config_float("seuil_alerte_eleve")
+    exposition donnee, selon sa criticite et sa priorite sectorielle.
 
-    score = exposition.score_confiance
+    L'interface recoit TOUTE alerte : c'est la trace consultable par
+    l'analyste. Les canaux intrusifs (SMS, WhatsApp) sont reserves aux
+    niveaux hauts, et WhatsApp au seul croisement criticite maximale x
+    secteur prioritaire.
+    """
+    niveau = exposition.niveau_criticite
     prioritaire = est_secteur_prioritaire(exposition)
 
     canaux = [CanalAlerte.INTERFACE]
 
-    if score >= seuil_critique:
+    if niveau == NiveauCriticite.CRITIQUE:
         canaux.append(CanalAlerte.EMAIL)
         canaux.append(CanalAlerte.SMS)
         if prioritaire:
             canaux.append(CanalAlerte.WHATSAPP)
-    elif score >= seuil_eleve:
+    elif niveau == NiveauCriticite.ELEVEE:
         canaux.append(CanalAlerte.EMAIL)
         if prioritaire:
             canaux.append(CanalAlerte.SMS)
-    else:
+    elif niveau == NiveauCriticite.MOYENNE:
         canaux.append(CanalAlerte.EMAIL)
+
+    # NiveauCriticite.FAIBLE : interface uniquement. Une seule mention
+    # camerounaise dans une annonce ne justifie pas de reveiller une
+    # astreinte ; elle reste consultable dans le tableau de bord.
 
     return canaux

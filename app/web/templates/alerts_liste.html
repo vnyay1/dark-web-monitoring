@@ -192,12 +192,13 @@
     color: var(--border-strong);
   }
 
-  .meta-score {
+  .meta-crit {
     font-weight: 700;
   }
-  .meta-score.high { color: var(--crit); }
-  .meta-score.mid { color: var(--warn); }
-  .meta-score.low { color: var(--text-secondary); }
+  .meta-crit.crit-critique { color: var(--crit); }
+  .meta-crit.crit-elevee   { color: var(--high); }
+  .meta-crit.crit-moyenne  { color: var(--warn); }
+  .meta-crit.crit-faible   { color: var(--text-secondary); }
 
   .meta-time {
     color: var(--text-muted);
@@ -307,7 +308,7 @@
 {% if alertes %}
 <div class="alerts-feed" role="list" aria-label="Liste des alertes de sécurité">
   {% for alerte in alertes %}
-  {% set score = alerte.exposition.score_confiance %}
+  {% set niveau = alerte.exposition.niveau_criticite.value %}
   <article class="alert-card {% if not alerte.lue %}is-unread{% endif %}" role="listitem">
     <div class="alert-main-content">
       <div class="alert-icon-box" aria-hidden="true">
@@ -332,7 +333,7 @@
         <div class="alert-meta-line">
           <span class="meta-tag">{{ alerte.exposition.categorie_fuite.value }}</span>
           <span class="meta-dot">·</span>
-          <span>Score : <strong class="meta-score {% if score >= 0.7 %}high{% elif score >= 0.4 %}mid{% else %}low{% endif %}">{{ "%.2f"|format(score) }}</strong></span>
+          <span>Criticité : <strong class="meta-crit crit-{{ niveau }}" title="{{ alerte.exposition.criticite }} sélecteur(s) camerounais distinct(s)">{{ niveau|capitalize }}</strong></span>
           <span class="meta-dot">·</span>
           <span class="meta-time">{{ alerte.date_creation.strftime('%d/%m/%Y à %H:%M') }}</span>
         </div>

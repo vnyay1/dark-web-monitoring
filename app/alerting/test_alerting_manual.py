@@ -1,70 +1,87 @@
 """
 Test manuel du systeme d'alertes (FR-25/FR-26), avec les senders mockes.
-Couvre : nouvelle exposition, mise a jour mineure (pas d'alerte), et
-confirmation par hausse significative du score.
+
+Couvre : nouvelle exposition, mise a jour sans gain de criticite (aucune
+alerte attendue), et confirmation par hausse de criticite.
+
+Le routage repose desormais sur la CRITICITE (nombre de selecteurs
+camerounais distincts) et non plus sur un score flottant.
+
+Usage : python -m app.alerting.test_alerting_manual
 """
 
 import logging
+
 from app.db import get_session
-from app.models import Exposition, CategorieFuite, TypeEntite, StatutExposition, TypeSource
+from app.models import CategorieFuite, TypeSource
+from app.matching.criticite import niveau_pour
 from app.matching.deduplication import enregistrer_exposition
 from app.alerting.dispatcher import declencher_alertes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
+def _enregistrer(session, nom, categorie, type_source, reference, criticite, secteur=None):
+    """Raccourci : la criticite pilote le niveau, comme dans le pipeline."""
+    return enregistrer_exposition(
+        session=session,
+        nom_entite=nom,
+        categorie_fuite=categorie,
+        type_source=type_source,
+        reference_source=reference,
+        criticite=criticite,
+        niveau_criticite=niveau_pour(criticite),
+        secteur_activite=secteur,
+    )
+
+
 def run_test():
     session = get_session()
 
-    print("\n=== Cas 1 : nouvelle exposition, gov.cm, score 0.92 ===")
-    exp1, est_nouvelle1, ancien_score1 = enregistrer_exposition(
-        session=session,
-        nom_entite="portal.gov.cm",
-        categorie_fuite=CategorieFuite.CREDENTIALS,
-        type_source=TypeSource.RANSOMWARE_SITE,
-        reference_source="http://siteA.onion/leak1",
-        score_confiance=0.92,
-        secteur_activite="Administration publique",
+    print("\n=== Cas 1 : nouvelle exposition, gov.cm, 4 selecteurs (CRITIQUE) ===")
+    exp1, nouvelle1, ancienne1 = _enregistrer(
+        session, "portal.gov.cm", CategorieFuite.CREDENTIALS,
+        TypeSource.RANSOMWARE_SITE, "http://siteA.onion/leak1", 4,
+        secteur="Administration publique",
     )
-    alertes1 = declencher_alertes(session, exp1, est_nouvelle=est_nouvelle1, ancien_score=ancien_score1)
-    print(f"est_nouvelle={est_nouvelle1} | Canaux declenches : {[a.canal.value for a in alertes1]}")
+    alertes1 = declencher_alertes(session, exp1, est_nouvelle=nouvelle1,
+                                  ancienne_criticite=ancienne1)
+    print(f"est_nouvelle={nouvelle1} | Canaux : {[a.canal.value for a in alertes1]}")
+    print("  attendu : interface, email, sms, whatsapp (secteur prioritaire)")
 
-    print("\n=== Cas 2 : meme entite, nouvelle source, score IDENTIQUE (mise a jour mineure) ===")
-    exp2, est_nouvelle2, ancien_score2 = enregistrer_exposition(
-        session=session,
-        nom_entite="portal.gov.cm",
-        categorie_fuite=CategorieFuite.CREDENTIALS,
-        type_source=TypeSource.FORUM,
-        reference_source="http://forumB.com/thread/1",
-        score_confiance=0.92,
+    print("\n=== Cas 2 : meme entite, nouvelle source, criticite IDENTIQUE ===")
+    exp2, nouvelle2, ancienne2 = _enregistrer(
+        session, "portal.gov.cm", CategorieFuite.CREDENTIALS,
+        TypeSource.FORUM, "http://forumB.com/thread/1", 4,
     )
-    alertes2 = declencher_alertes(session, exp2, est_nouvelle=est_nouvelle2, ancien_score=ancien_score2)
-    print(f"est_nouvelle={est_nouvelle2} | ancien_score={ancien_score2} | Canaux declenches : {[a.canal.value for a in alertes2]} (attendu : aucun, hausse insuffisante)")
+    alertes2 = declencher_alertes(session, exp2, est_nouvelle=nouvelle2,
+                                  ancienne_criticite=ancienne2)
+    print(f"est_nouvelle={nouvelle2} | ancienne_criticite={ancienne2} | "
+          f"Canaux : {[a.canal.value for a in alertes2]}")
+    print("  attendu : aucun (pas de gain de criticite)")
 
-    print("\n=== Cas 3 : meme entite, nouvelle source, score EN FORTE HAUSSE (confirmation) ===")
-    exp3, est_nouvelle3, ancien_score3 = enregistrer_exposition(
-        session=session,
-        nom_entite="Universite Test",
-        categorie_fuite=CategorieFuite.DONNEES_PERSONNELLES,
-        type_source=TypeSource.PASTE,
-        reference_source="http://pasteC.com/1",
-        score_confiance=0.55,
-        secteur_activite="Education",
+    print("\n=== Cas 3 : criticite sous le niveau minimum, puis hausse ===")
+    exp3, nouvelle3, ancienne3 = _enregistrer(
+        session, "Universite Test", CategorieFuite.DONNEES_PERSONNELLES,
+        TypeSource.PASTE, "http://pasteC.com/1", 1,
+        secteur="Education",
     )
-    alertes3a = declencher_alertes(session, exp3, est_nouvelle=est_nouvelle3, ancien_score=ancien_score3)
-    print(f"Premiere creation, score 0.55 (sous le seuil 0.6) | Canaux : {[a.canal.value for a in alertes3a]} (attendu : aucun)")
+    alertes3 = declencher_alertes(session, exp3, est_nouvelle=nouvelle3,
+                                  ancienne_criticite=ancienne3)
+    print(f"Creation avec 1 selecteur (FAIBLE) | Canaux : {[a.canal.value for a in alertes3]}")
+    print("  attendu : aucun (sous niveau_alerte_minimum = moyenne)")
 
-    # Nouvelle source sur la meme entite, score qui grimpe fortement
-    exp3b, est_nouvelle3b, ancien_score3b = enregistrer_exposition(
-        session=session,
-        nom_entite="Universite Test",
-        categorie_fuite=CategorieFuite.DONNEES_PERSONNELLES,
-        type_source=TypeSource.FORUM,
-        reference_source="http://forumD.com/2",
-        score_confiance=0.78,
+    exp3b, nouvelle3b, ancienne3b = _enregistrer(
+        session, "Universite Test", CategorieFuite.DONNEES_PERSONNELLES,
+        TypeSource.FORUM, "http://forumD.com/2", 3,
     )
-    alertes3b = declencher_alertes(session, exp3b, est_nouvelle=est_nouvelle3b, ancien_score=ancien_score3b)
-    print(f"Mise a jour, score 0.55 -> 0.78 (hausse 0.23) | Canaux : {[a.canal.value for a in alertes3b]} (attendu : email, car hausse significative)")
+    alertes3b = declencher_alertes(session, exp3b, est_nouvelle=nouvelle3b,
+                                   ancienne_criticite=ancienne3b)
+    print(f"Mise a jour 1 -> 3 selecteurs (ELEVEE) | "
+          f"Canaux : {[a.canal.value for a in alertes3b]}")
+    print("  attendu : interface, email (confirmation)")
+
+    print(f"\nSources rattachees a '{exp3b.nom_entite}' : {len(exp3b.sources)} (attendu : 2)")
 
     session.close()
 
