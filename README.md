@@ -10,7 +10,7 @@ Projet de stage — ANTIC (Agence Nationale des Technologies de l'Information) �
 
 Le système indexe **l'existence** d'une fuite de données — jamais les données elles-mêmes.
 
-- **CN-03** : seules les métadonnées autorisées sont stockées (entité, catégorie, source, date, score de confiance).
+- **CN-03** : seules les métadonnées autorisées sont stockées (entité, catégorie, source, date, criticité).
 - **CN-04** : aucun nom de personne, email, mot de passe, hash ou extrait de donnée divulguée n'est jamais conservé.
 - **CN-05** : toute analyse de contenu se fait uniquement en mémoire (RAM), jamais écrite sur disque.
 
@@ -24,19 +24,21 @@ Cette contrainte est non négociable et prévaut sur toute exigence fonctionnell
 ┌─────────────────────────────────────────────────────────┐
 │                    VM isolée (Kali Linux)                 │
 │                                                             │
-│  Scheduler (APScheduler, toutes les 6h)                   │
-│         │                                                   │
+│  Scheduler (APScheduler, 1×/jour à heure aléatoire)        │
+│         │  verrou d'instance unique en base                  │
 │         ▼                                                   │
-│  Connecteurs (7 sources réelles) ──► app/tor (Tor centralisé)│
-│         │                                                   │
+│  Connecteurs (8 sources réelles) ──► app/tor (Tor centralisé)│
+│         │  crawl incrémental : listing puis pages de détail  │
 │         ▼  texte en mémoire uniquement (CN-05)              │
-│  Matching Engine ─► Filtrage faux positifs ─► Scoring        │
-│         │            ─► Catégorisation ─► Déduplication      │
+│  Fenêtre temporelle ─► Matching ─► Filtrage faux positifs    │
+│         │            ─► Criticité ─► Catégorisation           │
+│         │            ─► Déduplication multi-source            │
 │         ▼                                                   │
 │  SQLAlchemy / SQLite                                        │
 │         │                                                   │
 │         ├──► Alerting (email / SMS / WhatsApp / interface)  │
-│         └──► Interface web Flask (7 blueprints, 4 rôles)     │
+│         ├──► API JSON Flask (4 rôles)                        │
+│         └──► Interface React (SPA, servie par Flask)         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -81,8 +83,17 @@ dark-web-monitoring/
 │   ├── tor/                    # module Tor centralisé (FR-01)
 │   │   └── __init__.py          # get_via_tor(), renouvellement de circuit
 │   │
+│   ├── crawl/                   # registre du crawl incrémental
+│   │   └── registre.py           # entrées déjà analysées, reprise de cycle
+│   │
+│   ├── supervision.py            # état partagé du scheduler + fil d'événements
+│   ├── securite.py               # politique de mots de passe (FR-24)
+│   │
 │   ├── connectors/              # connecteurs de sources (FR-02, FR-03)
 │   │   ├── base_connector.py     # interface commune, rate limiting, audit
+│   │   ├── dates.py              # normalisation des dates de publication
+│   │   ├── reconnaissance.py     # analyse structurelle d'une source
+│   │   ├── everest_connector.py
 │   │   ├── payload_connector.py
 │   │   ├── orionleaks_connector.py
 │   │   ├── dataexposurelogs_connector.py
@@ -93,7 +104,7 @@ dark-web-monitoring/
 │   │
 │   ├── matching/                # moteur de correspondance (FR-08 à FR-13)
 │   │   ├── engine.py             # matching exact / insensible / fuzzy
-│   │   ├── scoring.py            # score de confiance (FR-10)
+│   │   ├── criticite.py          # criticité = nb de sélecteurs distincts (FR-10)
 │   │   ├── exclusion.py          # filtrage faux positifs (FR-11)
 │   │   ├── categorisation.py     # catégorisation automatique (FR-13)
 │   │   ├── deduplication.py      # déduplication multi-source (FR-12)
@@ -110,18 +121,25 @@ dark-web-monitoring/
 │   │
 │   ├── config_system.py          # configuration dynamique (seuils, etc.)
 │   │
-│   └── web/                      # interface Flask (blueprints)
-│       ├── auth.py                # authentification (FR-24)
+│   └── web/                      # couche serveur
+│       ├── auth.py                # socle Flask-Login (FR-24)
 │       ├── permissions.py         # contrôle de privilèges (4 rôles)
-│       ├── dashboard.py           # tableau de bord (FR-19)
-│       ├── expositions.py         # liste, filtres, statuts (FR-20/FR-21)
-│       ├── alerts.py              # affichage des alertes
-│       ├── reports.py             # génération de rapports
-│       ├── users.py               # gestion des comptes et rôles
-│       ├── settings.py            # configuration système
-│       ├── audit.py               # journal d'audit (super-admin)
-│       ├── compliance.py          # export / purge de conformité (super-admin)
+│       ├── reports.py             # téléchargements PDF / JSON / CSV
+│       ├── compliance.py          # export de conformité (super-admin)
+│       ├── api/                   # API JSON consommée par l'interface
+│       │   ├── auth.py  dashboard.py  expositions.py  alerts.py
+│       │   ├── scheduler.py  settings.py  users.py  audit.py
+│       │   └── compliance.py  reports.py
 │       └── templates/
+│           └── rapport_mensuel.html   # document d'impression WeasyPrint
+│
+├── frontend/                     # interface React (Vite)
+│   ├── src/
+│   │   ├── api/                   # client HTTP, session, hooks
+│   │   ├── components/            # mise en page, briques, graphiques
+│   │   ├── pages/                 # 12 écrans
+│   │   └── theme/                 # jetons de design et styles de base
+│   └── dist/                      # build versionné (aucun Node requis sur la VM)
 │
 ├── migrations/                   # migrations Alembic
 └── docs/
@@ -168,6 +186,7 @@ Un utilisateur ne peut jamais se désactiver lui-même, ni désactiver/modifier 
 
 - Python 3.11+
 - Tor (`sudo apt install tor torsocks`)
+- Node 18+ **uniquement pour développer l'interface** (le build est versionné)
 - Une VM isolée dédiée à la collecte (voir *Sécurité opérationnelle* ci-dessous)
 
 ### Mise en place
@@ -210,19 +229,43 @@ python3 -m app.create_user
 ```bash
 python3 run.py
 ```
-Interface disponible sur `http://127.0.0.1:5000`.
+Interface disponible sur `http://127.0.0.1:5000` — Flask sert l'application
+React compilée (`frontend/dist`), versionnée dans le dépôt : **aucun Node n'est
+requis sur la VM de collecte**.
+
+### Développement de l'interface
+
+Uniquement sur un poste de développement, jamais sur la VM de collecte :
+```bash
+cd frontend
+npm install
+npm run dev     # http://localhost:5173, relaie /api vers Flask
+npm run build   # régénère frontend/dist, à commiter
+```
 
 ### Collecte automatique (FR-07)
 
-Processus indépendant, à lancer séparément (toutes les 6h) :
+Une collecte par jour, à une heure **tirée au hasard** dans la plage réglée
+par l'administrateur (`collecte_heure_min` / `collecte_heure_max`) : un passage
+à heure fixe dessinerait côté sources un schéma prévisible.
+
+Le processus est indépendant du serveur web. Il peut être lancé depuis
+l'interface (page *Collecte*, réservée aux administrateurs) ou en ligne de
+commande :
 ```bash
 python3 -m app.scheduler
+python3 -m app.scheduler --sans-collecte-initiale   # démarrer en veille
 ```
+
+**Un seul scheduler peut tourner à la fois.** Le verrou vit en base : une
+seconde instance est refusée qu'elle vienne de l'interface ou du terminal, et
+le verrou expire de lui-même si le processus disparaît sans arrêt propre.
 
 ### Collecte manuelle (test / debug)
 
 ```bash
-python3 -m app.pipeline
+python3 -m app.pipeline                        # toutes les sources
+python3 -m app.pipeline --source thehackernews # une seule source
 ```
 
 ---
