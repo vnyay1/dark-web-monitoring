@@ -10,10 +10,8 @@ MISE A JOUR : utilise desormais le module centralise app.tor.
 """
 
 import logging
-import re
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +22,6 @@ class BlackWaterConnector(BaseConnector):
 
     TARGET_URL = "http://ejzl7cjxmkx7lzhiqwidmrwtfjv45pkczbc4fnyaut3t7gll3yaiq5id.onion/"
 
-    URL_PATTERN = re.compile(r"https?://\S+")
-
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text
-
-    def _nettoyer_description(self, texte: str) -> str:
-        """Retire toute URL presente dans la description (CN-04/OS-03)."""
-        if not texte:
-            return texte
-        texte_sans_url = self.URL_PATTERN.sub("[LIEN RETIRE]", texte)
-        return texte_sans_url.strip()
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
@@ -57,7 +43,7 @@ class BlackWaterConnector(BaseConnector):
                 if texte.lower().startswith("publicated at"):
                     date_publication = texte.replace("Publicated at", "").strip()
                 else:
-                    description = self._nettoyer_description(texte)
+                    description = self.nettoyer_urls(texte)
 
             lien_detail_tag = card.select_one("a.btn")
             lien_detail = lien_detail_tag.get("href") if lien_detail_tag else None

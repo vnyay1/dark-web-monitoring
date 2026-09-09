@@ -9,7 +9,6 @@ import logging
 import re
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +22,6 @@ class DataExposureLogsConnector(BaseConnector):
     ONCLICK_URL_PATTERN = re.compile(r"window\.open\('([^']+)'")
     STATUS_CLASS_PATTERN = re.compile(r"status-([A-Za-z_]+)")
 
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
@@ -66,7 +62,12 @@ class DataExposureLogsConnector(BaseConnector):
                         statut = m.group(1)
                         break
 
-            texte_complet = " ".join(filter(None, [nom_entite, audit_id, discovery_date, statut]))
+            # On analyse le texte COMPLET de la card, pas seulement les quelques
+            # champs structures extraits ci-dessus : une mention camerounaise
+            # peut apparaitre n'importe ou dans la card (secteur, pays, note),
+            # et ce texte est deja telecharge - le restreindre ne coutait rien
+            # en reseau mais rendait le matching quasi impossible.
+            texte_complet = self.nettoyer_urls(card.get_text(separator=" ", strip=True))
 
             entries.append({
                 "nom_entite_detecte": nom_entite,

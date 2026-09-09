@@ -13,7 +13,6 @@ MISE A JOUR : utilise desormais le module centralise app.tor.
 import logging
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +23,6 @@ class OrionLeaksConnector(BaseConnector):
 
     TARGET_URL = "http://cjfntkj5qeizxowuy3srceg7zo6namc3kfeor7pfn6bpdkl3w265ooid.onion/news/home"
 
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
@@ -52,7 +48,9 @@ class OrionLeaksConnector(BaseConnector):
 
             lien_cache_present = card.select_one(".hidden-link-revealed a") is not None
 
-            texte_complet = " ".join(filter(None, [nom_entite, url_victime, message]))
+            texte_complet = " ".join(filter(
+                None, [nom_entite, url_victime, statut, date_publication, message]
+            ))
 
             entries.append({
                 "nom_entite_detecte": nom_entite,

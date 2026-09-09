@@ -12,9 +12,10 @@ MISE A JOUR : utilise desormais le module centralise app.tor.
 
 import logging
 import re
+from urllib.parse import urlparse
+
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +28,21 @@ class CmdOrganizationConnector(BaseConnector):
 
     VOLUME_PATTERN = re.compile(r"(\d+(?:[.,]\d+)?)\s*(GB|MB|TB)", re.IGNORECASE)
 
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text
+    @staticmethod
+    def _extraire_domaine(url):
+        """
+        Extrait le nom de domaine du site officiel de la victime, SANS
+        jamais visiter ce site (collecte passive, CN-09/CN-10 : le site de
+        la victime n'est pas une source surveillee).
+
+        Le domaine est un signal fort : un ".cm" correspond directement aux
+        selecteurs de categorie DOMAINE du catalogue.
+        """
+        if not url:
+            return None
+        hote = urlparse(url if "//" in url else "//" + url).netloc
+        return hote[4:] if hote.startswith("www.") else hote or None
+
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
@@ -57,11 +70,14 @@ class CmdOrganizationConnector(BaseConnector):
             liens_documents = card.select(".item-links a")
             nb_liens_documents = len(liens_documents)
 
-            texte_complet = " ".join(filter(None, [nom_entite, description]))
+            domaine_victime = self._extraire_domaine(site_officiel_victime)
+
+            texte_complet = " ".join(filter(None, [nom_entite, domaine_victime, description]))
 
             entries.append({
                 "nom_entite_detecte": nom_entite,
                 "site_officiel_victime": site_officiel_victime,
+                "domaine_victime": domaine_victime,
                 "description": description,
                 "volume_revendique": volume_extrait,
                 "nb_liens_documents": nb_liens_documents,

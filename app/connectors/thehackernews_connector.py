@@ -27,7 +27,6 @@ en amont par l'absence de correspondance de selecteurs.
 """
 
 import logging
-from app.tor import get_via_tor
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
 
@@ -40,9 +39,6 @@ class TheHackerNewsConnector(BaseConnector):
 
     TARGET_URL = "https://thehackernews.com/search/label/Vulnerability"
 
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")

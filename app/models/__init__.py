@@ -22,7 +22,9 @@ from sqlalchemy import (
     Boolean,
     Enum as SAEnum,
     ForeignKey,
+    Index,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -340,3 +342,67 @@ class HistoriqueRole(Base):
 
     user_cible = relationship("User", foreign_keys=[user_cible_id])
     modifie_par = relationship("User", foreign_keys=[modifie_par_id])
+
+# ---------------------------------------------------------------------
+# EntreeCollectee - file de travail du crawl incremental
+# ---------------------------------------------------------------------
+
+class StatutDetailEntree(enum.Enum):
+    A_TRAITER = "a_traiter"      # vue en listing, detail pas encore recupere/analyse
+    TRAITEE = "traitee"          # analysee, quel que soit le resultat du matching
+    SANS_DETAIL = "sans_detail"  # source listing-only, ou pas de page de detail licite
+    ECHEC = "echec"              # abandonnee apres MAX_ECHECS_DETAIL
+
+
+class EntreeCollectee(Base):
+    """
+    File de travail TECHNIQUE du crawl incremental : elle memorise quelles
+    entrees d'une source ont deja ete analysees, pour ne pas re-telecharger
+    leur page de detail a chaque cycle (le cout serait non borne, et le
+    martelement contraire a la collecte passive CN-09/CN-10).
+
+    Ce n'est PAS un index de victimes. Conformite CN-03/CN-04 :
+
+    1. identifiant_entree reference la page de PUBLICATION (l'annonce) sur
+       la source surveillee - exactement la meme nature que
+       SourceReference.reference_source, deja autorise par CN-03 sous
+       "source". Ce n'est jamais un lien vers les donnees divulguees.
+    2. La decision de considerer un lien comme visitable est centralisee
+       dans BaseConnector.url_detail(). Quand le seul lien d'une entree
+       pointe vers les donnees (orion_leaks) ou vers un site tiers hors
+       perimetre (cmd_organization), l'identifiant est SYNTHETIQUE et non
+       navigable ("h:<sha256>") : aucune URL n'est reconstructible depuis
+       la base. Controle d'audit :
+           SELECT identifiant_entree FROM entrees_collectees
+            WHERE identifiant_entree LIKE 'http%';   -- doit etre vide
+    3. Aucun nom d'entite, aucun extrait de texte, aucune empreinte du
+       contenu n'est stocke : sinon la table constituerait de facto une
+       base de toutes les victimes de ransomware du monde, hors de la
+       finalite declaree (entites camerounaises).
+    4. Retention limitee : purger_registre() supprime les lignes qui n'ont
+       plus ete vues depuis 90 jours.
+    """
+    __tablename__ = "entrees_collectees"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    source_id = Column(String(36), ForeignKey("sources.id"), nullable=False)
+
+    identifiant_entree = Column(String(500), nullable=False)
+
+    statut_detail = Column(SAEnum(StatutDetailEntree), nullable=False,
+                            default=StatutDetailEntree.A_TRAITER)
+
+    date_premiere_vue = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    date_derniere_vue = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    date_detail_traite = Column(DateTime(timezone=True), nullable=True)
+
+    nb_echecs_detail = Column(Integer, nullable=False, default=0)
+    a_produit_exposition = Column(Boolean, nullable=False, default=False)
+
+    __table_args__ = (
+        UniqueConstraint("source_id", "identifiant_entree", name="uq_entree_par_source"),
+        Index("ix_entrees_source_statut", "source_id", "statut_detail"),
+    )
+
+    def __repr__(self):
+        return f"<EntreeCollectee {self.identifiant_entree} [{self.statut_detail.value}]>"

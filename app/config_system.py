@@ -17,6 +17,7 @@ VALEURS_PAR_DEFAUT = {
     "seuil_alerte_critique": ("0.85", "Score a partir duquel WhatsApp/SMS sont declenches en plus de l'email"),
     "seuil_alerte_eleve": ("0.6", "Score a partir duquel SMS est declenche en plus de l'email"),
     "seuil_hausse_confirmation": ("0.15", "Hausse de score minimale pour declencher une alerte de confirmation sur une exposition existante"),
+    "seuil_enregistrement_minimum": ("0.15", "Score en dessous duquel une entree collectee n'est meme pas enregistree en base"),
 }
 
 

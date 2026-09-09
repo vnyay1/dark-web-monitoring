@@ -27,7 +27,6 @@ de dupliquer la logique de proxy SOCKS localement.
 import logging
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +37,6 @@ class PayloadConnector(BaseConnector):
 
     TARGET_URL = "http://payloadrz5yw227brtbvdqpnlhq3rdcdekdnn3rgucbcdeawq2v6vuyd.onion/"
 
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text  # reste en memoire, jamais ecrit sur disque (CN-05)
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")

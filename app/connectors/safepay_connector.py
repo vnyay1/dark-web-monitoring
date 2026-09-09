@@ -8,7 +8,6 @@ MISE A JOUR : utilise desormais le module centralise app.tor.
 import logging
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +18,6 @@ class SafePayConnector(BaseConnector):
 
     TARGET_URL = "http://safepaypfxntwixwjrlcscft433ggemlhgkkdupi2ynhtcmvdgubmoyd.onion/"
 
-    def fetch(self):
-        response = get_via_tor(self.TARGET_URL)
-        return response.text
 
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
