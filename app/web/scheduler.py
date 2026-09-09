@@ -1,115 +1,221 @@
 """
-Supervision du Scheduler de Collecte (FR-07) - Interface Web & Endpoints API.
+FR-07 - Supervision du scheduler de collecte : interface web et API.
 
-Fournit :
-1. La route d'affichage de la console de supervision (/scheduler)
-2. Les endpoints API REST de contrôle (status, démarrer, arrêter, exécuter maintenant)
-3. Le flux d'événements temps réel SSE (Server-Sent Events) pour le streaming des logs
+Cette version PILOTE REELLEMENT le scheduler. La precedente maintenait un
+dictionnaire `_SCHEDULER_STATE` en memoire du processus Flask, sans aucun
+lien avec le processus de collecte : les boutons mutaient ce dictionnaire,
+le flux SSE emettait un battement fictif toutes les 10 secondes, et la page
+rejouait des logs ecrits en dur cote JavaScript. Rien de tout cela ne
+refletait l'etat du systeme.
+
+Tout l'etat transite desormais par la base (app.supervision), seul canal
+commun entre le serveur web et le processus de collecte.
+
+CHOIX DU SONDAGE PLUTOT QUE SSE - la console interroge
+/api/evenements?depuis=<id> toutes les deux secondes. Un flux SSE aurait
+immobilise un thread du serveur de developpement par onglet ouvert, et une
+reconnexion aurait perdu les evenements emis entre-temps. Le curseur par
+identifiant est repris exactement la ou il s'etait arrete, et se teste a la
+main avec curl.
 """
 
-import time
-import json
-from datetime import datetime, timezone
-from flask import Blueprint, render_template, jsonify, Response, request
+import subprocess
+import sys
+from pathlib import Path
+
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import login_required
+
+from app import supervision
+from app.models import RoleUtilisateur
+from app.web.permissions import role_requis
 
 scheduler_bp = Blueprint("scheduler", __name__, url_prefix="/scheduler")
 
-# État simulé en mémoire pour l'interface en l'absence de processus dédié
-_SCHEDULER_STATE = {
-    "actif": True,
-    "statut": "actif",  # "actif" | "inactif" | "en_cours"
-    "intervalle_heures": 6,
-    "sources_actives": 7,
-    "derniere_execution": "08:00 UTC",
-    "prochaine_execution": "14:00 UTC",
-}
+# Racine du depot : le sous-processus doit demarrer la ou "app" est
+# importable, quel que soit le repertoire courant du serveur web.
+RACINE_PROJET = Path(__file__).resolve().parents[2]
 
 
-@scheduler_bp.route("/")
-@scheduler_bp.route("/supervision")
+# endpoint explicite : base.html reference url_for("scheduler.supervision"),
+# le nom de la fonction ne peut pas servir (collision avec le module
+# app.supervision importe plus haut).
+@scheduler_bp.route("/", endpoint="supervision")
+@scheduler_bp.route("/supervision", endpoint="supervision")
 @login_required
-def supervision():
-    """Rendu de la page de supervision du scheduler."""
+def supervision_page():
+    """Console de supervision du scheduler."""
     return render_template("scheduler_supervision.html")
 
 
-@scheduler_bp.route("/api/status", methods=["GET"])
+@scheduler_bp.route("/api/etat", methods=["GET"])
 @login_required
-def get_status():
-    """Contrat d'API - Statut actuel du scheduler."""
-    return jsonify(_SCHEDULER_STATE)
+def etat():
+    """Etat courant du scheduler, tel que publie par le processus de collecte."""
+    return jsonify(supervision.etat_courant())
+
+
+@scheduler_bp.route("/api/evenements", methods=["GET"])
+@login_required
+def evenements():
+    """
+    Evenements posterieurs a `depuis`. Sans parametre, la console demande
+    le dernier identifiant connu pour suivre le direct sans rejouer
+    l'historique.
+    """
+    depuis = request.args.get("depuis", type=int)
+
+    if depuis is None:
+        return jsonify({
+            "evenements": [],
+            "dernier_id": supervision.dernier_evenement_id(),
+        })
+
+    lignes = supervision.evenements_depuis(depuis, limite=request.args.get("limite", 100, type=int))
+
+    return jsonify({
+        "evenements": lignes,
+        "dernier_id": lignes[-1]["id"] if lignes else depuis,
+    })
 
 
 @scheduler_bp.route("/api/demarrer", methods=["POST"])
 @login_required
+@role_requis(RoleUtilisateur.ADMIN)
 def demarrer():
-    """Contrat d'API - Démarrage du scheduler."""
-    _SCHEDULER_STATE["actif"] = True
-    _SCHEDULER_STATE["statut"] = "actif"
+    """
+    Lance le processus de collecte.
+
+    Le verrou en base fait foi : on le consulte d'abord pour repondre
+    proprement, mais c'est le processus lui-meme qui le reclame de facon
+    atomique au demarrage. Deux clics simultanes ne peuvent donc pas
+    aboutir a deux schedulers, meme si tous deux passent ce test.
+    """
+    etat_actuel = supervision.etat_courant()
+
+    if etat_actuel["actif"]:
+        return jsonify({
+            "succes": False,
+            "message": (
+                f"Un scheduler est deja actif (pid {etat_actuel['pid']} "
+                f"sur {etat_actuel['hostname']})."
+            ),
+        }), 409
+
+    try:
+        processus = subprocess.Popen(
+            [sys.executable, "-m", "app.scheduler"],
+            cwd=str(RACINE_PROJET),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as erreur:
+        return jsonify({
+            "succes": False,
+            "message": f"Impossible de lancer le scheduler : {erreur}",
+        }), 500
+
     return jsonify({
         "succes": True,
-        "message": "Processus scheduler démarré avec succès."
+        "message": "Scheduler demarre. Premiere collecte en cours.",
+        "pid": processus.pid,
     })
 
 
 @scheduler_bp.route("/api/arreter", methods=["POST"])
 @login_required
+@role_requis(RoleUtilisateur.ADMIN)
 def arreter():
-    """Contrat d'API - Arrêt du scheduler."""
-    _SCHEDULER_STATE["actif"] = False
-    _SCHEDULER_STATE["statut"] = "inactif"
-    return jsonify({
-        "succes": True,
-        "message": "Processus scheduler arrêté."
-    })
-
-
-@scheduler_bp.route("/api/executer-maintenant", methods=["POST"])
-@login_required
-def executer_maintenant():
-    """Contrat d'API - Déclenchement d'une collecte manuelle immédiate."""
-    _SCHEDULER_STATE["statut"] = "en_cours"
-    return jsonify({
-        "succes": True,
-        "message": "Collecte immédiate déclenchée en tâche de fond."
-    })
-
-
-@scheduler_bp.route("/api/logs/stream", methods=["GET"])
-@login_required
-def stream_logs():
     """
-    Contrat d'API - Flux Server-Sent Events (SSE) pour le streaming temps réel.
-    Format de message émis : data: {"timestamp": "...", "level": "INFO", "message": "..."}\n\n
+    Arrete le processus de collecte par signal, puis libere le verrou.
+
+    On n'attend pas la fin d'une collecte en cours : les connecteurs
+    passent l'essentiel de leur temps a respecter le delai de FR-06, et un
+    arret pendant cette attente ne laisse aucune ecriture a moitie faite
+    (chaque entree est commitee individuellement).
     """
-    def event_generator():
-        # Envoie un premier message d'état
-        init_data = json.dumps({
-            "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-            "level": "INFO",
-            "message": "[scheduler] Connexion au flux de logs de supervision établie.",
-            "statut": _SCHEDULER_STATE["statut"]
+    etat_actuel = supervision.etat_courant()
+
+    if not etat_actuel["actif"]:
+        return jsonify({
+            "succes": False,
+            "message": "Aucun scheduler actif.",
+        }), 409
+
+    pid = etat_actuel["pid"]
+    erreur_signal = None
+
+    if pid:
+        try:
+            _terminer_processus(pid)
+        except ProcessLookupError:
+            pass  # deja disparu : le verrou reste a liberer
+        except Exception as erreur:
+            erreur_signal = str(erreur)
+
+    # Le verrou est libere quoi qu'il arrive : un processus injoignable ne
+    # doit pas laisser le systeme bloque pendant la peremption.
+    supervision.liberer_verrou()
+
+    if erreur_signal:
+        return jsonify({
+            "succes": True,
+            "message": (
+                f"Verrou libere, mais le signal d'arret a echoue ({erreur_signal}). "
+                f"Verifiez le processus {pid} sur {etat_actuel['hostname']}."
+            ),
         })
-        yield f"data: {init_data}\n\n"
-        
-        while True:
-            time.sleep(10)
-            if _SCHEDULER_STATE["actif"]:
-                ping_data = json.dumps({
-                    "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                    "level": "INFO",
-                    "message": "[scheduler] Heartbeat - boucle de surveillance active (veille FR-07).",
-                    "statut": _SCHEDULER_STATE["statut"]
-                })
-                yield f"data: {ping_data}\n\n"
 
-    return Response(
-        event_generator(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive"
-        }
-    )
+    return jsonify({"succes": True, "message": "Scheduler arrete."})
+
+
+@scheduler_bp.route("/api/collecte-immediate", methods=["POST"])
+@login_required
+@role_requis(RoleUtilisateur.ADMIN)
+def collecte_immediate():
+    """Demande au scheduler actif de lancer un cycle sans attendre l'echeance."""
+    etat_actuel = supervision.etat_courant()
+
+    if not etat_actuel["actif"]:
+        return jsonify({
+            "succes": False,
+            "message": "Aucun scheduler actif : demarrez-le d'abord.",
+        }), 409
+
+    if etat_actuel["statut"] == "collecte_en_cours":
+        return jsonify({
+            "succes": False,
+            "message": "Une collecte est deja en cours.",
+        }), 409
+
+    if not supervision.demander_collecte_immediate():
+        return jsonify({
+            "succes": False,
+            "message": "Le scheduler ne repond plus.",
+        }), 409
+
+    return jsonify({
+        "succes": True,
+        "message": "Collecte immediate demandee, elle demarre dans quelques secondes.",
+    })
+
+
+def _terminer_processus(pid: int):
+    """
+    Envoie une demande d'arret propre au processus scheduler.
+
+    Windows ne connait pas SIGTERM pour un processus tiers : on passe par
+    taskkill, qui declenche la meme sortie propre.
+    """
+    import os
+
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            check=True, capture_output=True,
+        )
+    else:
+        import signal as signaux
+
+        os.kill(pid, signaux.SIGTERM)
