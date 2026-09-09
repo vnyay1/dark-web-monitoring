@@ -1,0 +1,102 @@
+/* ==========================================================================
+   SENTINEL - JETONS DE DESIGN
+
+   Repris a l'identique du systeme construit dans les gabarits Jinja
+   (app/web/templates/base.html) : l'identite visuelle ANTIC est conservee,
+   l'interface change de technologie, pas d'apparence.
+   ========================================================================== */
+
+:root {
+  /* Fonds et surfaces */
+  --bg-deep: #070b13;
+  --bg-base: #0b101d;
+  --bg-card: #10182a;
+  --bg-elevated: #162139;
+  --bg-hover: #1c2b49;
+
+  /* Lignes et bordures */
+  --border-subtle: #1e2d4a;
+  --border-default: #2a3c62;
+  --border-strong: #3b5284;
+  --border-glow: rgba(0, 229, 192, 0.4);
+
+  /* Texte */
+  --text-primary: #f1f5f9;
+  --text-secondary: #a0aec0;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+
+  /* Accent */
+  --accent: #00e5c0;
+  --accent-hover: #1aeac6;
+  --accent-dark: #00bfa0;
+  --accent-dim: rgba(0, 229, 192, 0.12);
+  --accent-glow: rgba(0, 229, 192, 0.25);
+
+  /* Severite et statuts */
+  --crit: #ef4444;
+  --crit-bg: rgba(239, 68, 68, 0.12);
+  --crit-border: rgba(239, 68, 68, 0.3);
+
+  --high: #f97316;
+  --high-bg: rgba(249, 115, 22, 0.12);
+  --high-border: rgba(249, 115, 22, 0.3);
+
+  --warn: #f59e0b;
+  --warn-bg: rgba(245, 158, 11, 0.12);
+  --warn-border: rgba(245, 158, 11, 0.3);
+
+  --ok: #10b981;
+  --ok-bg: rgba(16, 185, 129, 0.12);
+  --ok-border: rgba(16, 185, 129, 0.3);
+
+  --info: #3b82f6;
+  --info-bg: rgba(59, 130, 246, 0.12);
+  --info-border: rgba(59, 130, 246, 0.3);
+
+  /* Roles */
+  --role-super-admin: #ef4444;
+  --role-admin: #f59e0b;
+  --role-supervisor: #00e5c0;
+  --role-user: #94a3b8;
+
+  /* Rayons */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 9999px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 20px -4px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 12px 36px -8px rgba(0, 0, 0, 0.8);
+  --shadow-glow: 0 0 20px rgba(0, 229, 192, 0.15);
+
+  /* Polices */
+  --font-display: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+}
+
+/* Correspondance palier de criticite -> couleur, utilisee partout
+   (tableaux, graphiques, console). La definir une seule fois evite que le
+   rouge du dashboard et celui de la liste divergent. */
+:root {
+  --niveau-critique: var(--crit);
+  --niveau-critique-bg: var(--crit-bg);
+  --niveau-critique-border: var(--crit-border);
+
+  --niveau-elevee: var(--high);
+  --niveau-elevee-bg: var(--high-bg);
+  --niveau-elevee-border: var(--high-border);
+
+  --niveau-moyenne: var(--warn);
+  --niveau-moyenne-bg: var(--warn-bg);
+  --niveau-moyenne-border: var(--warn-border);
+
+  --niveau-faible: var(--text-secondary);
+  --niveau-faible-bg: rgba(148, 163, 184, 0.12);
+  --niveau-faible-border: var(--border-subtle);
+}

@@ -1,0 +1,584 @@
+/* ==========================================================================
+   SENTINEL - STYLES DE BASE ET COMPOSANTS PARTAGES
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--bg-deep);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 229, 192, 0.04), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(59, 130, 246, 0.03), transparent 60%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-base) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent-dim);
+}
+
+/* Anneau de focus visible au clavier uniquement : indispensable a la
+   navigation sans souris, invisible pour l'usage a la souris. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* --------------------------------------------------------------------
+   Mise en page
+   -------------------------------------------------------------------- */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  width: 100%;
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 26px 24px 64px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin-top: 3px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title .count {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* --------------------------------------------------------------------
+   Cartes
+   -------------------------------------------------------------------- */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-pad {
+  padding: 18px 20px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+/* auto-fit : les cartes se reorganisent selon la largeur disponible,
+   sans point de rupture code en dur. */
+.grid-stats {
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+
+/* --------------------------------------------------------------------
+   Tuiles de statistiques
+   -------------------------------------------------------------------- */
+
+.stat {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0.75;
+}
+
+.stat.tone-crit::before { background: var(--crit); }
+.stat.tone-high::before { background: var(--high); }
+.stat.tone-warn::before { background: var(--warn); }
+.stat.tone-ok::before { background: var(--ok); }
+.stat.tone-info::before { background: var(--info); }
+
+.stat-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-top: 6px;
+}
+
+.stat-hint {
+  color: var(--text-dim);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------
+   Boutons
+   -------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04231d;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-danger {
+  background: var(--crit-bg);
+  border-color: var(--crit-border);
+  color: var(--crit);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 11.5px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------------
+   Formulaires
+   -------------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.input,
+.select {
+  background: var(--bg-deep);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-dim);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+
+/* --------------------------------------------------------------------
+   Tableaux
+   -------------------------------------------------------------------- */
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  background: var(--bg-card);
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+table.data th {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+
+table.data td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+table.data tbody tr:last-child td {
+  border-bottom: none;
+}
+
+table.data tbody tr:hover {
+  background: rgba(28, 43, 73, 0.4);
+}
+
+.cell-entity {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cell-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.cell-muted {
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------
+   Pastilles
+   -------------------------------------------------------------------- */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.pill-crit { background: var(--crit-bg); color: var(--crit); border-color: var(--crit-border); }
+.pill-high { background: var(--high-bg); color: var(--high); border-color: var(--high-border); }
+.pill-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+.pill-ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-border); }
+.pill-info { background: var(--info-bg); color: var(--info); border-color: var(--info-border); }
+.pill-neutral {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(0, 229, 192, 0.22);
+  white-space: nowrap;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* --------------------------------------------------------------------
+   Etats
+   -------------------------------------------------------------------- */
+
+.empty {
+  text-align: center;
+  padding: 46px 22px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--r-lg);
+  background: rgba(16, 24, 42, 0.5);
+}
+
+.empty-title {
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 46px;
+  color: var(--text-muted);
+}
+
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.banner {
+  padding: 11px 15px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+}
+
+.banner-error {
+  background: var(--crit-bg);
+  border-color: var(--crit-border);
+  color: #fca5a5;
+}
+
+.banner-success {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: #6ee7b7;
+}
+
+.banner-info {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: #93c5fd;
+}
+
+.banner-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: #fcd34d;
+}
+
+/* Les messages transitoires sont annonces aux lecteurs d'ecran par
+   aria-live ; ce conteneur ne fait que les positionner. */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  z-index: 300;
+  max-width: min(400px, calc(100vw - 40px));
+}
+
+.toast {
+  padding: 11px 15px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+  font-size: 12.5px;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast-error { border-color: var(--crit-border); color: #fca5a5; }
+.toast-success { border-color: var(--ok-border); color: #6ee7b7; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Respecte le reglage systeme "reduire les animations". */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Reserve aux lecteurs d'ecran. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------------------
+   Listes de definitions (pages de detail)
+   -------------------------------------------------------------------- */
+
+.detail-liste {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) 1fr;
+  gap: 8px 22px;
+  font-size: 12.5px;
+}
+
+.detail-liste dt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.detail-liste dd {
+  color: var(--text-primary);
+}
+
+@media (max-width: 560px) {
+  .detail-liste {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+
+  .detail-liste dd {
+    margin-bottom: 10px;
+  }
+}
+
+/* Une reference de source peut etre une URL .onion tres longue : elle est
+   bornee pour ne pas etirer le tableau au-dela de l'ecran. */
+.reference-source {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
