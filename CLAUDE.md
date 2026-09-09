@@ -13,7 +13,7 @@ context on requirements numbering used throughout code comments and commit messa
 
 ### Non-negotiable constraints (override any feature request)
 
-- **CN-03**: only approved metadata is stored (entity, category, source, date, confidence score).
+- **CN-03**: only approved metadata is stored (entity, category, source, date, criticality).
 - **CN-04**: never persist personal names, emails, passwords, hashes, or excerpts of leaked data, in
   any model field.
 - **CN-05**: all content analysis happens in memory only — raw page content is never written to disk.
@@ -27,14 +27,20 @@ asked — they take priority over functional convenience.
 ## Commands
 
 ```bash
-# Run the web app (Flask, dev server on :5000)
+# Run the web app (Flask serves the compiled React SPA from frontend/dist)
 python3 run.py
 
-# Run the collection scheduler (separate long-running process, every 6h)
-python3 -m app.scheduler
+# Frontend development (dev machine only - never on the collection VM)
+cd frontend && npm install && npm run dev    # :5173, proxies /api to Flask
+cd frontend && npm run build                 # regenerates frontend/dist (commit it)
 
-# Run one manual collection pass across all connectors (debug/test)
+# Run the collection scheduler (separate process, once a day at a random hour)
+python3 -m app.scheduler
+python3 -m app.scheduler --sans-collecte-initiale   # start idle, no immediate run
+
+# Run one manual collection pass (debug/test)
 python3 -m app.pipeline
+python3 -m app.pipeline --source thehackernews
 
 # Database migrations (Alembic)
 alembic upgrade head
@@ -58,9 +64,10 @@ so missing vars raise at import time): `DATABASE_URL`, `FLASK_SECRET_KEY`, `TOR_
 
 ## Architecture
 
-Pipeline: **Scheduler (APScheduler, 6h) → Connectors → Tor module → Matching Engine → Scoring →
-False-positive filtering → Categorization → Deduplication → SQLAlchemy/SQLite → Alerting +
-Flask web UI**.
+Pipeline: **Scheduler (APScheduler, once daily at a random hour) → Connectors (incremental
+two-phase crawl) → Tor module → Date window → Matching Engine → False-positive filtering →
+Criticality → Categorization → Deduplication → SQLAlchemy/SQLite → Alerting + JSON API +
+React SPA**.
 
 ### Connectors (`app/connectors/`)
 
@@ -75,9 +82,21 @@ potential `Exposition`. `.onion` connectors fetch through `app/tor/__init__.py::
 centralizes the Tor SOCKS proxy and both reactive (on failure) and proactive (every 10–120s, random)
 circuit renewal — connectors should never talk to Tor directly.
 
-`executer_tous_les_connecteurs()` in `app/pipeline.py` hardcodes the list of active connectors — a new
-connector must be added there to actually run (the README's list of 7 will be stale once you add
-`everest_connector.py` or others; check `pipeline.py` for the ground truth).
+The active connector list lives in `app/connectors/__init__.py::connecteurs_actifs()` — a new
+connector must be added there to actually run. Its imports are deliberately inside the function
+(connectors import `app.connectors`, so a module-level import would cycle).
+
+`collect()` runs two phases: a bounded listing crawl, then detail pages for NEW entries only, within a
+per-run budget. Entries the budget didn't serve are left unmarked in `EntreeCollectee`
+(`app/crawl/registre.py`) and picked up next cycle — the crawl is resumable. `url_detail()` is the
+single place deciding a link is visitable; it returns `None` by default, so a source stays
+listing-only until explicitly opted in (CN-04).
+
+Publication dates arrive as site-specific strings under inconsistent keys (`date_publication`,
+`discovery_date`, `date`). `_normaliser_entry()` in `pipeline.py` funnels them through
+`app/connectors/dates.py::parser_date()` using each connector's `DATE_FORMATS`. An unparseable date
+yields `None` and the entry is analysed ANYWAY — three sources (payload, safepay, cmd_organization)
+publish no date at all, and dropping them would mean no longer watching them.
 
 ### Matching (`app/matching/`)
 
@@ -90,11 +109,20 @@ to avoid false positives like the English word "art" or legal "Art." references.
 full substring/case-insensitive/fuzzy matching. This distinction is load-bearing; don't "simplify" it
 away.
 
-Downstream of `engine.py`, the pipeline applies, in order: `exclusion.py` (false-positive filtering,
-FR-11), `scoring.py` (confidence score, FR-10 — results below `SEUIL_ENREGISTREMENT_MINIMUM = 0.15` in
-`pipeline.py` are dropped entirely), `categorisation.py` (leak category, FR-13), and
-`deduplication.py::enregistrer_exposition()` (multi-source dedup + persistence, FR-12) which decides
-whether a match creates a new `Exposition` or updates an existing one's score/detection date.
+Downstream of `engine.py`, the pipeline applies, in order: the date window (entries older than
+`periode_collecte_jours` are skipped), `exclusion.py` (false-positive filtering, FR-11),
+`criticite.py` (FR-10), `categorisation.py` (leak category, FR-13), and
+`deduplication.py::enregistrer_exposition()` (multi-source dedup + persistence, FR-12).
+
+**Criticality replaced the old confidence score.** It is simply the number of DISTINCT catalogue
+selectors found in one entry, mapped to four levels (`NiveauCriticite`) whose thresholds the admin
+sets in `ConfigurationSysteme`. The engine emits one `MatchResult` per OCCURRENCE, so
+`calculer_criticite()` deduplicates on `selecteur_valeur` — an entry repeating one name must not look
+as serious as one naming three different entities. The matched selector VALUES are logged and shown in
+the live console but never persisted: CN-03 lists what may be stored, and a selector list is not on it.
+
+Criticality only ever increases on an existing exposition (`deduplication.py`): a later sighting that
+sees fewer selectors must not downgrade an exposition already qualified as critical.
 
 ### Models (`app/models/__init__.py`)
 
@@ -104,15 +132,31 @@ Single file, SQLAlchemy declarative. Key entities: `Exposition` (the leak indica
 content), `Source` (a monitored source's health/config), `Selecteur` (the catalogue of entity
 names/keywords to match against, categorized), `JournalAudit` (append-only), `User` +
 `RoleUtilisateur` + `HistoriqueRole` (auth/RBAC), `Alerte` (multi-channel alert delivery state),
-`ConfigurationSysteme` (admin-editable runtime settings, key/value). All datetimes are stored as
+`ConfigurationSysteme` (admin-editable runtime settings, key/value — each key declares its TYPE, so
+`app/config_system.py::valider_valeur()` can accept both integers and named levels),
+`EntreeCollectee` (incremental-crawl work queue, never an index of victims), `EtatScheduler` (single
+row: the scheduler's single-instance lock and dashboard) and `EvenementCollecte` (the live activity
+feed). All datetimes are stored as
 naive UTC (`utc_now()`) deliberately — SQLite drops tzinfo on read, so mixing naive/aware comparisons
 breaks; don't introduce timezone-aware `datetime.now()` calls elsewhere in this codebase.
 
-### Web (`app/web/`)
+### Web (`app/web/`) and frontend (`frontend/`)
 
-Flask app factory in `app/web/__init__.py` registers one blueprint per feature area (auth, dashboard,
-expositions, alerts, reports, users, settings, audit, compliance, scheduler). RBAC is centralized in
-`app/web/permissions.py`: four roles (`user` < `supervisor` < `admin` < `super_admin`) form a strict
+The UI is a **React SPA** (`frontend/`, Vite). Flask no longer renders pages: it exposes a JSON API
+(`app/web/api/`, one module per area, all under `/api`) plus downloads (reports, exports), and serves
+the compiled SPA from `frontend/dist` — which is committed, so the collection VM needs no Node. The
+only surviving Jinja template is `rapport_mensuel.html`, a WeasyPrint print document.
+
+Two API-layer rules matter when adding endpoints:
+1. Every mutating request must carry `X-Requested-With: XMLHttpRequest` (`api/__init__.py`). This is
+   the CSRF defence — a cross-site form cannot set a custom header. The frontend's `api/client.js`
+   adds it to every call.
+2. Errors under `/api/*` must be JSON. Flask-Login's default is a 302 to a login page, which `fetch()`
+   follows silently and receives HTML from; `enregistrer_api()` installs a 401-JSON handler instead.
+
+`login_manager.login_view` is deliberately unset for that reason.
+
+RBAC is centralized in `app/web/permissions.py`: four roles (`user` < `supervisor` < `admin` < `super_admin`) form a strict
 hierarchy (`HIERARCHIE_ROLES`), and routes are protected with `@role_requis(RoleUtilisateur.X)` applied
 *after* `@login_required`. A user can never deactivate themselves or act on an equal-or-higher-ranked
 account (super_admin is unrestricted). When adding a new protected route, follow this same
@@ -120,9 +164,28 @@ account (super_admin is unrestricted). When adding a new protected route, follow
 
 ### Alerting (`app/alerting/`)
 
-`rules.py` selects a channel by threshold × priority, `dispatcher.py` orchestrates dispatch,
-`senders.py` implements the actual email/SMS/WhatsApp/interface sends. Triggered from
-`app/pipeline.py` via `declencher_alertes()` on new detections or significant score increases.
+`rules.py` selects channels by criticality level × sector priority, `dispatcher.py` orchestrates
+dispatch, `senders.py` implements the actual email/SMS/WhatsApp/interface sends. Triggered from
+`app/pipeline.py` via `declencher_alertes()` on new detections, or on an existing exposition whose
+criticality rose by at least `hausse_criticite_confirmation`. INTERFACE receives every alert; the
+intrusive channels are reserved for the high levels.
+
+### Scheduler and supervision (`app/scheduler.py`, `app/supervision.py`)
+
+The scheduler is a SEPARATE process from Flask — never import it into the web app. It runs one
+collection per day at a random hour inside the configured window, rescheduling itself at the end of
+each cycle.
+
+`app/supervision.py` is the only access point to `EtatScheduler` and `EvenementCollecte`, and carries
+the single-instance lock. The lock is taken with ONE conditional UPDATE, not a read-then-write: two
+processes starting together would both pass a read check. It expires after 90s without a heartbeat,
+otherwise a `kill -9` would block the system permanently. Living in the database, it blocks a second
+start from the web UI and from the command line alike.
+
+The pipeline publishes progress events (`DEBUT_SOURCE`, `NOUVELLE_EXPOSITION`, `FIN_SOURCE`) consumed
+by the supervision console. **Collection failures deliberately do not produce an event feed entry
+beyond a neutral closing line** — they are already in `JournalAudit` with the detail auditing needs,
+and repeating them would drown the progress feed.
 
 ### Reports (`app/reports/`)
 
