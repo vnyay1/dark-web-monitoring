@@ -226,7 +226,7 @@ class BaseConnector:
         navigable. JAMAIS une URL absolue : le registre doit rester
         auditable (aucune ligne ne doit commencer par "http").
         """
-        chemin = self._chemin_interne(entry.get("lien_detail") or entry.get("lien_article"))
+        chemin = self._chemin_interne(entry.get("lien_detail"))
         if chemin:
             return chemin
 

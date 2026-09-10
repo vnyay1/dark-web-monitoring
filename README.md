@@ -100,7 +100,6 @@ dark-web-monitoring/
 │   │   ├── blackwater_connector.py
 │   │   ├── safepay_connector.py
 │   │   ├── cmdorganization_connector.py
-│   │   └── thehackernews_connector.py
 │   │
 │   ├── matching/                # moteur de correspondance (FR-08 à FR-13)
 │   │   ├── engine.py             # matching exact / insensible / fuzzy
@@ -159,9 +158,18 @@ dark-web-monitoring/
 | 4 | BlackWater | Ransomware leak site | Tor |
 | 5 | SafePay | Ransomware leak site | Tor |
 | 6 | CMD Organization | Forum / annuaire de victimes | Tor |
-| 7 | TheHackerNews | Actualité cybersécurité | Clairnet |
+| 7 | Everest | Ransomware leak site | Tor |
 
 Chaque connecteur hérite de `BaseConnector` (`fetch()` + `parse()`), ce qui permet d'ajouter une nouvelle source sans modifier le reste de l'application (FR-02). Objectif à terme : extension progressive à 20 connecteurs.
+
+The Hacker News (clairnet) a été retiré de la surveillance. Pour retirer une source et les données qui
+n'existent que par elle (signalements, expositions sans autre source, file de crawl), après export
+JSON et en conservant le journal d'audit :
+```bash
+python3 -m app.maintenance.retirer_source --lister                   # inventaire, sources orphelines
+python3 -m app.maintenance.retirer_source <nom>                      # simulation
+python3 -m app.maintenance.retirer_source <nom> --confirmer          # exécution
+```
 
 ---
 
@@ -265,7 +273,7 @@ le verrou expire de lui-même si le processus disparaît sans arrêt propre.
 
 ```bash
 python3 -m app.pipeline                        # toutes les sources
-python3 -m app.pipeline --source thehackernews # une seule source
+python3 -m app.pipeline --source payload       # une seule source
 ```
 
 ---

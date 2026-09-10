@@ -40,7 +40,10 @@ python3 -m app.scheduler --sans-collecte-initiale   # start idle, no immediate r
 
 # Run one manual collection pass (debug/test)
 python3 -m app.pipeline
-python3 -m app.pipeline --source thehackernews
+python3 -m app.pipeline --source payload
+
+# Retire a source and the data that exists only through it (dry-run unless --confirmer)
+python3 -m app.maintenance.retirer_source --lister
 
 # Database migrations (Alembic)
 alembic upgrade head
