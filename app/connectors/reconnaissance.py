@@ -32,6 +32,7 @@ Usage :
     python -m app.connectors.reconnaissance --source payload --phase formes
     python -m app.connectors.reconnaissance --source blackwater --phase dates
     python -m app.connectors.reconnaissance --source safepay --phase detail --profondeur 14
+    python -m app.connectors.reconnaissance --source safepay --phase dates --detail 3
 
 La phase "dates" est la seule a imprimer du texte de la page : UNIQUEMENT la
 chaine de date de chaque entree, et ce qu'en tire parser_date(). Une date de
@@ -263,7 +264,7 @@ def phase_formes(connecteur):
           f"{connecteur.url_detail(entrees[0]) if entrees else '-'}")
 
 
-def phase_dates(connecteur, limite=15):
+def phase_dates(connecteur, limite=15, pages_detail=0):
     """
     Chaines de date brutes des entrees du listing, et leur interpretation.
 
@@ -295,9 +296,35 @@ def phase_dates(connecteur, limite=15):
 
     print("-" * 64)
     print(f"  {reconnues} date(s) reconnue(s) sur {min(limite, len(entrees))}.")
-    if connecteur.SUPPORTE_DETAIL:
-        print("  Ce connecteur lit aussi ses pages de detail : les dates qui n'y figurent")
-        print("  que la n'apparaissent pas ici.")
+
+    if not connecteur.SUPPORTE_DETAIL:
+        return
+    if not pages_detail:
+        print("  Ce connecteur lit aussi ses pages de detail : relancer avec --detail 3")
+        print("  pour y verifier les dates (une requete par page, delai FR-06 compris).")
+        return
+
+    # Pages de detail : meme regle que la collecte, url_detail() decide seule
+    # de ce qui est visitable, et seule la date est affichee.
+    print()
+    print(f"DATES DES PAGES DE DETAIL ({pages_detail} au plus)")
+    print("-" * 64)
+    visitees = 0
+    for index, entree in enumerate(entrees):
+        if visitees >= pages_detail:
+            break
+        url = connecteur.url_detail(entree)
+        if not url:
+            continue
+        visitees += 1
+        raw = _recuperer(connecteur, url).text
+        try:
+            brute = (connecteur.parse_detail(raw, entree) or {}).get("date_publication")
+        finally:
+            del raw  # CN-05
+        interpretee = parser_date(brute, connecteur.DATE_FORMATS, source=connecteur.SOURCE_NAME)
+        verdict = interpretee.isoformat(sep=" ") if interpretee else ("aucune" if brute is None else "NON RECONNUE")
+        print(f"  [{index:>2}] {str(brute)[:50]!r:54} -> {verdict}")
 
 
 def phase_detail(connecteur, index, profondeur=6):
@@ -351,6 +378,8 @@ def _analyser_arguments():
                          choices=("listing", "detail", "formes", "dates"))
     parseur.add_argument("--index", type=int, default=0,
                          help="Entree du listing dont on inspecte le detail")
+    parseur.add_argument("--detail", type=int, default=0,
+                         help="Phase dates : nombre de pages de detail a lire en plus du listing")
     parseur.add_argument("--profondeur", type=int, default=6,
                          help="Profondeur du squelette (augmenter si le contenu "
                               "est niche dans de nombreux conteneurs)")
@@ -374,6 +403,6 @@ if __name__ == "__main__":
     elif arguments.phase == "formes":
         phase_formes(connecteur)
     elif arguments.phase == "dates":
-        phase_dates(connecteur)
+        phase_dates(connecteur, pages_detail=arguments.detail)
     else:
         phase_detail(connecteur, arguments.index, arguments.profondeur)
