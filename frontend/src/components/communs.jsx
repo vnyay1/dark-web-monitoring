@@ -120,6 +120,26 @@ export function formaterHeure(valeur) {
     : "—";
 }
 
+/**
+ * Duree entre deux instants au format chronometre "HH:MM:SS". `fin` absent
+ * signifie "maintenant" : c'est ce qui fait avancer un compteur en cours.
+ */
+export function dureeEntre(debut, fin, maintenant = Date.now()) {
+  const depart = enDate(debut);
+  if (!depart) return "—";
+
+  const arrivee = fin ? enDate(fin) : null;
+  const finMs = arrivee ? arrivee.getTime() : maintenant;
+  const secondes = Math.max(0, Math.floor((finMs - depart.getTime()) / 1000));
+
+  const deuxChiffres = (n) => String(n).padStart(2, "0");
+  return [
+    Math.floor(secondes / 3600),
+    Math.floor((secondes % 3600) / 60),
+    secondes % 60,
+  ].map(deuxChiffres).join(":");
+}
+
 /** Duree lisible depuis un instant donne, ex. "2 h 14 min". */
 export function dureeDepuis(valeur, maintenant = Date.now()) {
   const date = enDate(valeur);

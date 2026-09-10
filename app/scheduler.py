@@ -36,9 +36,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config_system import get_config_int
 from app.db import init_db
-from app.models import StatutScheduler, TypeEvenementCollecte, utc_now
+from app.models import TypeEvenementCollecte, utc_now
 from app.pipeline import executer_tous_les_connecteurs
-from app import supervision
+from app import supervision, tor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,6 +58,10 @@ INTERVALLE_VERIFICATION_DEMANDE_SECONDES = 5
 _verrou_collecte = threading.Lock()
 
 _scheduler = None
+
+# Derniere constatation d'IP deja publiee par ce processus : evite de
+# reecrire la base toutes les 5 secondes quand rien n'a change.
+_derniere_ip_publiee = None
 
 
 def prochaine_execution_aleatoire(depuis: datetime = None) -> datetime:
@@ -107,13 +111,15 @@ def _executer_cycle(origine: str):
         logger.info(f"[scheduler] Debut de la collecte ({origine})")
         logger.info("=" * 60)
 
-        supervision.battre_coeur(
-            statut=StatutScheduler.COLLECTE_EN_COURS, source_en_cours=None
-        )
+        supervision.marquer_debut_collecte()
         supervision.emettre(
             TypeEvenementCollecte.DEBUT_CYCLE,
             f"Debut du cycle de collecte ({origine}).",
         )
+
+        # IP de reference en debut de cycle : chaque renouvellement de
+        # circuit pendant la collecte se lira ensuite par rapport a elle.
+        _publier_ip(tor.verifier_ip_sortie())
 
         resultats = executer_tous_les_connecteurs()
 
@@ -135,7 +141,7 @@ def _executer_cycle(origine: str):
         # Une erreur dans une collecte ne doit JAMAIS arreter le scheduler -
         # sinon toutes les collectes futures seraient perdues silencieusement.
         logger.exception(f"[scheduler] Erreur inattendue durant la collecte : {e}")
-        supervision.battre_coeur(statut=StatutScheduler.EN_ATTENTE, source_en_cours=None)
+        supervision.interrompre_collecte()
     finally:
         _verrou_collecte.release()
 
@@ -151,6 +157,44 @@ def job_verifier_demande():
     if supervision.consommer_demande_collecte():
         logger.info("[scheduler] Collecte immediate demandee depuis l'interface.")
         _executer_cycle("demande manuelle")
+
+
+def _publier_ip(ip):
+    """Publie une IP de sortie constatee ; une verification echouee n'efface rien."""
+    global _derniere_ip_publiee
+
+    if not ip:
+        return
+    constatation = (ip, tor.derniere_ip_sortie()[1] or utc_now())
+    supervision.publier_ip_sortie(*constatation)
+    _derniere_ip_publiee = constatation
+
+
+def job_synchroniser_tor():
+    """
+    Publie pour la console l'IP de sortie Tor constatee par ce processus,
+    et sert le bouton "Verifier maintenant".
+
+    Job DISTINCT de job_verifier_demande : ce dernier execute la collecte
+    immediate dans son propre fil et reste donc occupe pendant toute sa
+    duree. Greffee sur lui, la synchronisation ne tournerait jamais pendant
+    une collecte manuelle - precisement quand les circuits se renouvellent.
+    """
+    if supervision.consommer_demande_verification_ip():
+        logger.info("[scheduler] Verification de l'IP de sortie demandee depuis l'interface.")
+        ip = tor.verifier_ip_sortie()
+        if ip:
+            _publier_ip(ip)
+        else:
+            logger.warning("[scheduler] Verification de l'IP de sortie echouee.")
+        return
+
+    # Sinon, simple report de la derniere IP constatee par le module Tor,
+    # qui la releve a chaque renouvellement de circuit. Aucune requete Tor,
+    # et aucune ecriture en base si rien de neuf n'a ete constate.
+    ip, constatee_le = tor.derniere_ip_sortie()
+    if ip and (ip, constatee_le) != _derniere_ip_publiee:
+        _publier_ip(ip)
 
 
 def job_heartbeat():
@@ -217,6 +261,15 @@ def demarrer_scheduler(collecte_immediate_au_demarrage: bool = True):
         trigger=IntervalTrigger(seconds=INTERVALLE_VERIFICATION_DEMANDE_SECONDES),
         id="verification_demande",
         name="Prise en compte des collectes immediates",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    _scheduler.add_job(
+        job_synchroniser_tor,
+        trigger=IntervalTrigger(seconds=INTERVALLE_VERIFICATION_DEMANDE_SECONDES),
+        id="synchronisation_tor",
+        name="Publication de l'IP de sortie Tor",
         max_instances=1,
         coalesce=True,
     )

@@ -11,12 +11,16 @@ renouvellement reactif en cas d'echec.
 
 Chaque renouvellement journalise l'IP de sortie effective (via
 check.torproject.org), permettant de verifier que le circuit change
-reellement.
+reellement. La derniere IP constatee est aussi MEMORISEE en memoire du
+processus : le scheduler la lit periodiquement et la publie pour la console
+de supervision (app.supervision). Ce module reste volontairement sans acces
+a la base.
 """
 
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 import requests
 import random
 from stem import Signal
@@ -47,6 +51,13 @@ INTERVALLE_MINIMUM_ENTRE_RENOUVELLEMENTS = 10
 _dernier_renouvellement = None
 _verrou_renouvellement = threading.Lock()
 
+# Derniere IP de sortie reellement constatee, et quand. Une verification
+# echouee ne l'ecrase pas : on garde la derniere valeur SURE, dont l'age
+# croissant signale lui-meme que les verifications n'aboutissent plus.
+_derniere_ip_sortie = None
+_derniere_ip_constatee_le = None
+_verrou_ip = threading.Lock()
+
 
 def _obtenir_ip_sortie_actuelle() -> str:
     """
@@ -62,10 +73,40 @@ def _obtenir_ip_sortie_actuelle() -> str:
             timeout=15,
         )
         data = response.json()
-        return data.get("IP", "inconnue")
+        ip = data.get("IP")
+        if ip:
+            _memoriser_ip(ip)
+        return ip or "inconnue"
     except Exception as e:
         logger.warning(f"[tor] Impossible de recuperer l'IP de sortie actuelle : {e}")
         return "inconnue"
+
+
+def _memoriser_ip(ip: str):
+    global _derniere_ip_sortie, _derniere_ip_constatee_le
+
+    with _verrou_ip:
+        _derniere_ip_sortie = ip
+        # UTC naif, comme partout dans le projet (cf. app.models.utc_now).
+        _derniere_ip_constatee_le = datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def verifier_ip_sortie() -> str:
+    """
+    Verifie a la demande l'IP de sortie du circuit courant.
+
+    La requete part vers check.torproject.org, jamais vers une source
+    surveillee : elle ne compte pas dans la collecte (CN-09/CN-10).
+    Retourne l'IP, ou None si la verification a echoue.
+    """
+    ip = _obtenir_ip_sortie_actuelle()
+    return None if ip == "inconnue" else ip
+
+
+def derniere_ip_sortie() -> tuple:
+    """(ip, constatee_le) de la derniere verification reussie, ou (None, None)."""
+    with _verrou_ip:
+        return _derniere_ip_sortie, _derniere_ip_constatee_le
 
 
 def renew_tor_circuit():

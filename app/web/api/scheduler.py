@@ -52,10 +52,21 @@ def enregistrer(api_bp):
     @api_bp.route("/scheduler/evenements", methods=["GET"])
     @login_required
     def evenements_scheduler():
+        # Au (re)chargement de la page : evenements du cycle en cours ou du
+        # dernier cycle, et le curseur a partir duquel suivre le direct. Les
+        # evenements etant stockes en base, quitter la page ne perd rien.
+        if request.args.get("historique") == "cycle":
+            historique = supervision.evenements_du_dernier_cycle()
+            lignes = historique["evenements"]
+            return jsonify({
+                "evenements": lignes,
+                "tronque": historique["tronque"],
+                "dernier_id": lignes[-1]["id"] if lignes else supervision.dernier_evenement_id(),
+            })
+
         depuis = request.args.get("depuis", type=int)
 
-        # Sans curseur, la console demande seulement ou en est le fil, pour
-        # suivre le direct sans rejouer tout l'historique.
+        # Sans curseur, seulement la position courante du fil.
         if depuis is None:
             return jsonify({
                 "evenements": [],
@@ -147,6 +158,26 @@ def enregistrer(api_bp):
             })
 
         return jsonify({"succes": True, "message": "Scheduler arrete."})
+
+    @api_bp.route("/scheduler/verifier-ip", methods=["POST"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def verifier_ip():
+        """
+        Demande au scheduler de verifier l'IP de sortie Tor. Le serveur web
+        ne parle jamais a Tor lui-meme : sans scheduler actif, il n'y a pas
+        de circuit a verifier.
+        """
+        if not supervision.demander_verification_ip():
+            return jsonify({
+                "succes": False,
+                "message": "Aucun scheduler actif : pas de circuit Tor a verifier.",
+            }), 409
+
+        return jsonify({
+            "succes": True,
+            "message": "Verification demandee, resultat dans quelques secondes.",
+        })
 
     @api_bp.route("/scheduler/collecte-immediate", methods=["POST"])
     @login_required

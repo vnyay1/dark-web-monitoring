@@ -180,3 +180,40 @@
     grid-column: 2;
   }
 }
+
+/* Noeud de sortie Tor. */
+.carte-tor {
+  margin-bottom: 20px;
+}
+
+.carte-tor.inactive .carte-tor-ip {
+  color: var(--text-muted);
+}
+
+.carte-tor-corps {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.carte-tor-ip {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 5px 0 2px;
+  overflow-wrap: anywhere;
+}
+
+.carte-tor-note {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 11px;
+}
+
+.ev-tor .console-type,
+.ev-tor .console-message {
+  color: var(--accent-dark);
+}
