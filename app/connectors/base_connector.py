@@ -179,10 +179,15 @@ class BaseConnector:
         """
         derniere_erreur = None
 
+        cible = url or self.TARGET_URL
         for tentative in range(1, max(1, tentatives) + 1):
             self._respect_rate_limit()
+            # Journalise APRES l'attente : l'horodatage est celui de l'envoi
+            # reel, ce qui permet de verifier le respect de FR-06 dans les
+            # logs. Seul le chemin est ecrit (page d'annonce, cf. CN-03).
+            logger.info(f"[{self.SOURCE_NAME}] Requete : {urlparse(cible).path or '/'}")
             try:
-                return get_via_tor(url or self.TARGET_URL, max_retries=1, **kwargs)
+                return get_via_tor(cible, max_retries=1, **kwargs)
             except Exception as erreur:
                 derniere_erreur = erreur
                 logger.warning(

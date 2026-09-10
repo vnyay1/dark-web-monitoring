@@ -139,7 +139,13 @@ def renew_tor_circuit():
                 logger.info("[tor] Nouveau circuit Tor demande.")
 
             ip_sortie = _obtenir_ip_sortie_actuelle()
-            logger.info(f"[tor] Nouvelle IP de sortie confirmee : {ip_sortie}")
+            if ip_sortie == "inconnue":
+                # Le circuit a bien ete renouvele ; c'est seulement sa
+                # verification qui n'a pas abouti (check.torproject.org lent
+                # ou injoignable sur ce circuit). Rien n'est "confirme".
+                logger.warning("[tor] Circuit renouvele, IP de sortie non verifiee.")
+            else:
+                logger.info(f"[tor] Nouvelle IP de sortie confirmee : {ip_sortie}")
         except Exception as e:
             logger.error(f"[tor] Impossible de renouveler le circuit Tor : {e}")
         finally:
