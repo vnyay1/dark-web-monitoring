@@ -1,19 +1,72 @@
 """
 Point d'entree pour la connexion a la base de donnees.
+
+LE SCHEMA APPARTIENT A ALEMBIC. init_db() creait autrefois les tables
+manquantes par Base.metadata.create_all(). C'etait incompatible avec les
+migrations : lance apres un git pull et AVANT "alembic upgrade head",
+n'importe quel point d'entree (serveur web, scheduler, scripts) creait les
+nouvelles tables a partir des modeles, et la migration echouait ensuite sur
+"table ... already exists". C'est exactement ce qui s'est produit sur la VM
+avec etat_scheduler.
+
+init_db() se contente donc de VERIFIER que la base est a la revision head,
+et refuse de continuer sinon, avec la commande a lancer. Mieux vaut un arret
+net au demarrage qu'un plantage plus tard sur une colonne absente.
 """
+
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.config import Config
-from app.models import Base
 
 engine = create_engine(Config.DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)
 
+RACINE_PROJET = Path(__file__).resolve().parents[1]
+
+
+class BaseNonAJour(RuntimeError):
+    """La base n'est pas a la derniere revision Alembic."""
+
+
+def _revisions_attendues() -> set:
+    from alembic.config import Config as ConfigAlembic
+    from alembic.script import ScriptDirectory
+
+    configuration = ConfigAlembic(str(RACINE_PROJET / "alembic.ini"))
+    # Chemin absolu : le processus peut etre lance depuis un autre dossier
+    # (le scheduler, par exemple, quand il est demarre depuis l'interface).
+    configuration.set_main_option("script_location", str(RACINE_PROJET / "migrations"))
+    return set(ScriptDirectory.from_config(configuration).get_heads())
+
+
+def _revisions_en_base() -> set:
+    from alembic.runtime.migration import MigrationContext
+
+    with engine.connect() as connexion:
+        return set(MigrationContext.configure(connexion).get_current_heads())
+
 
 def init_db():
-    """Cree toutes les tables si elles n'existent pas deja."""
-    Base.metadata.create_all(engine)
+    """
+    Verifie que le schema de la base est a jour. Ne cree ni ne modifie rien.
+
+    Leve BaseNonAJour si la base est vide ou en retard sur les migrations.
+    """
+    attendues = _revisions_attendues()
+    en_base = _revisions_en_base()
+
+    if en_base == attendues:
+        return
+
+    etat = ", ".join(sorted(en_base)) or "aucune (base vide ou non geree par Alembic)"
+    raise BaseNonAJour(
+        f"La base de donnees n'est pas a jour : revision {etat}, "
+        f"attendue {', '.join(sorted(attendues))}.\n"
+        f"Lancez depuis la racine du projet :  alembic upgrade head"
+    )
 
 
 def get_session():

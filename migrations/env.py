@@ -22,6 +22,19 @@ if config.config_file_name is not None:
 from app.models import Base
 target_metadata = Base.metadata
 
+# La base migree doit etre CELLE DE L'APPLICATION. alembic.ini fige une URL
+# relative (sqlite:///dark_web_monitoring.db) alors que l'application lit
+# DATABASE_URL dans .env : si les deux divergent, "alembic upgrade head"
+# migre une autre base que celle qu'utilise l'application, sans le moindre
+# message. L'URL de l'application prime donc ; celle de l'ini ne sert que de
+# repli.
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+if os.getenv("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
