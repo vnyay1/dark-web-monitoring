@@ -176,7 +176,9 @@ def _recuperer(connecteur, url, max_retries=1, **kwargs):
     par BaseConnector.requete() : memes delais et memes reessais que la
     collecte, la reconnaissance n'a pas de regime de faveur.
     """
-    logger.info(f"[recon] GET {url}")
+    # L'envoi est journalise par requete() elle-meme, APRES le delai FR-06 :
+    # un log pose ici, avant l'attente, laissait croire a une requete
+    # immediate.
     return connecteur.requete(url, tentatives=max_retries, **kwargs)
 
 
