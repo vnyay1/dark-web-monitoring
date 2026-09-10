@@ -674,3 +674,44 @@ table.data tbody tr:hover {
   flex-wrap: wrap;
   margin-top: 18px;
 }
+
+/* Etiquette de categorie d'exposition (FR-13). Distincte de .tag, reservee
+   aux noms de sources en police a chasse fixe : une categorie est un mot
+   du metier, pas un identifiant technique. */
+.etiquette-categorie {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: var(--info-bg);
+  color: #93c5fd;
+  border: 1px solid var(--info-border);
+  white-space: nowrap;
+}
+
+/* Case a cocher avec libelle et aide sur deux lignes (formulaires). */
+.case-a-cocher {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.case-a-cocher input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.case-aide {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+table.data th.num-col,
+table.data td.num-col {
+  text-align: right;
+}

@@ -23,6 +23,7 @@ from sqlalchemy import (
     Enum as SAEnum,
     ForeignKey,
     Index,
+    Table,
     Text,
     UniqueConstraint,
 )
@@ -55,16 +56,6 @@ def utc_now():
 class TypeEntite(enum.Enum):
     PUBLIQUE = "publique"
     PRIVEE = "privee"
-
-
-class CategorieFuite(enum.Enum):
-    CREDENTIALS = "credentials"
-    DONNEES_PERSONNELLES = "donnees_personnelles"
-    DONNEES_FINANCIERES = "donnees_financieres"
-    DONNEES_SANTE = "donnees_sante"
-    DOCUMENTS_INTERNES = "documents_internes"
-    CODE_SOURCE = "code_source"
-    NON_PRECISEE = "non_precisee"
 
 
 class StatutExposition(enum.Enum):
@@ -100,19 +91,6 @@ class TypeSource(enum.Enum):
     TEST_CLAIRNET = "test_clairnet"
 
 
-class CategorieSelecteur(enum.Enum):
-    DOMAINE = "domaine"
-    TELEPHONE = "telephone"
-    MINISTERE = "ministere"
-    AGENCE_GOUVERNEMENTALE = "agence_gouvernementale"
-    BANQUE = "banque"
-    MICROFINANCE = "microfinance"
-    TELECOM = "telecom"
-    UNIVERSITE = "universite"
-    ENTREPRISE = "entreprise"
-    VILLE_REGION = "ville_region"
-
-
 class ResultatAudit(enum.Enum):
     SUCCES = "succes"
     ECHEC = "echec"
@@ -128,6 +106,51 @@ class RoleUtilisateur(enum.Enum):
 # Exposition (indicateur d'exposition - FR-16)
 # ---------------------------------------------------------------------
 
+# ---------------------------------------------------------------------
+# Categorie (FR-13) - geree par l'administrateur
+# ---------------------------------------------------------------------
+
+class Categorie(Base):
+    """
+    Categorie d'un selecteur du catalogue (Ministere, Banque...). Une
+    exposition porte les categories des selecteurs qui l'ont declenchee.
+
+    Ces categories remplacent l'ancienne "nature de la fuite", deduite du
+    texte par mots-cles et jugee trop peu fiable. Elles ne sont plus une
+    enumeration figee dans le code : l'administrateur les cree, les renomme
+    et les supprime depuis l'interface.
+
+    lieu_generique : le selecteur est un nom de lieu (ville, region, pays)
+    susceptible d'apparaitre dans une simple liste de pays sans viser
+    d'entite camerounaise. La regle de faux positif correspondante
+    (app.matching.exclusion) suit cet indicateur, et non un nom de
+    categorie qu'un renommage casserait.
+    """
+    __tablename__ = "categories"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    nom = Column(String(100), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    lieu_generique = Column(Boolean, nullable=False, default=False)
+    date_creation = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    selecteurs = relationship("Selecteur", back_populates="categorie")
+
+    def __repr__(self):
+        return f"<Categorie {self.nom}>"
+
+
+# Une exposition peut relever de plusieurs categories (une annonce citant
+# un ministere et une banque), et une categorie concerne de nombreuses
+# expositions.
+exposition_categories = Table(
+    "exposition_categories",
+    Base.metadata,
+    Column("exposition_id", String(36), ForeignKey("expositions.id"), primary_key=True),
+    Column("categorie_id", String(36), ForeignKey("categories.id"), primary_key=True),
+)
+
+
 class Exposition(Base):
     __tablename__ = "expositions"
 
@@ -136,9 +159,6 @@ class Exposition(Base):
     nom_entite = Column(String(255), nullable=False)
     secteur_activite = Column(String(255), nullable=True)
     type_entite = Column(SAEnum(TypeEntite), nullable=True)
-
-    categorie_fuite = Column(SAEnum(CategorieFuite), nullable=False,
-                              default=CategorieFuite.NON_PRECISEE)
 
     date_premiere_detection = Column(DateTime(timezone=True), nullable=False,
                                       default=utc_now)
@@ -167,6 +187,11 @@ class Exposition(Base):
         "SourceReference", back_populates="exposition",
         cascade="all, delete-orphan"
     )
+    # Categories des selecteurs qui ont declenche l'exposition (FR-13).
+    categories = relationship(
+        "Categorie", secondary=exposition_categories, order_by=Categorie.nom,
+    )
+
     alertes = relationship("Alerte", back_populates="exposition",
                             cascade="all, delete-orphan")
 
@@ -254,15 +279,17 @@ class Selecteur(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     valeur = Column(String(255), nullable=False)
-    categorie = Column(SAEnum(CategorieSelecteur), nullable=False)
+    categorie_id = Column(String(36), ForeignKey("categories.id"), nullable=False)
     actif = Column(Boolean, nullable=False, default=True)
 
     # FR-14 : sélecteurs proposés par NER, en attente de validation par un analyste
     propose_par_ner = Column(Boolean, nullable=False, default=False)
     valide_par_analyste = Column(Boolean, nullable=False, default=True)
 
+    categorie = relationship("Categorie", back_populates="selecteurs")
+
     def __repr__(self):
-        return f"<Selecteur {self.valeur} ({self.categorie.value})>"
+        return f"<Selecteur {self.valeur}>"
 
 
 # ---------------------------------------------------------------------

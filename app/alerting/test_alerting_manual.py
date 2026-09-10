@@ -13,7 +13,7 @@ Usage : python -m app.alerting.test_alerting_manual
 import logging
 
 from app.db import get_session
-from app.models import CategorieFuite, TypeSource
+from app.models import TypeSource
 from app.matching.criticite import niveau_pour
 from app.matching.deduplication import enregistrer_exposition
 from app.alerting.dispatcher import declencher_alertes
@@ -21,12 +21,12 @@ from app.alerting.dispatcher import declencher_alertes
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-def _enregistrer(session, nom, categorie, type_source, reference, criticite, secteur=None):
+def _enregistrer(session, nom, type_source, reference, criticite, secteur=None):
     """Raccourci : la criticite pilote le niveau, comme dans le pipeline."""
     return enregistrer_exposition(
         session=session,
         nom_entite=nom,
-        categorie_fuite=categorie,
+        categorie_ids=[],
         type_source=type_source,
         reference_source=reference,
         criticite=criticite,
@@ -40,7 +40,7 @@ def run_test():
 
     print("\n=== Cas 1 : nouvelle exposition, gov.cm, 4 selecteurs (CRITIQUE) ===")
     exp1, nouvelle1, ancienne1 = _enregistrer(
-        session, "portal.gov.cm", CategorieFuite.CREDENTIALS,
+        session, "portal.gov.cm",
         TypeSource.RANSOMWARE_SITE, "http://siteA.onion/leak1", 4,
         secteur="Administration publique",
     )
@@ -51,7 +51,7 @@ def run_test():
 
     print("\n=== Cas 2 : meme entite, nouvelle source, criticite IDENTIQUE ===")
     exp2, nouvelle2, ancienne2 = _enregistrer(
-        session, "portal.gov.cm", CategorieFuite.CREDENTIALS,
+        session, "portal.gov.cm",
         TypeSource.FORUM, "http://forumB.com/thread/1", 4,
     )
     alertes2 = declencher_alertes(session, exp2, est_nouvelle=nouvelle2,
@@ -62,7 +62,7 @@ def run_test():
 
     print("\n=== Cas 3 : criticite sous le niveau minimum, puis hausse ===")
     exp3, nouvelle3, ancienne3 = _enregistrer(
-        session, "Universite Test", CategorieFuite.DONNEES_PERSONNELLES,
+        session, "Universite Test",
         TypeSource.PASTE, "http://pasteC.com/1", 1,
         secteur="Education",
     )
@@ -72,7 +72,7 @@ def run_test():
     print("  attendu : aucun (sous niveau_alerte_minimum = moyenne)")
 
     exp3b, nouvelle3b, ancienne3b = _enregistrer(
-        session, "Universite Test", CategorieFuite.DONNEES_PERSONNELLES,
+        session, "Universite Test",
         TypeSource.FORUM, "http://forumD.com/2", 3,
     )
     alertes3b = declencher_alertes(session, exp3b, est_nouvelle=nouvelle3b,

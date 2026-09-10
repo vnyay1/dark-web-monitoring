@@ -118,8 +118,24 @@ export const api = {
   modifierConfiguration: (cle, valeur) =>
     requete(`/configuration/${cle}`, corpsJson({ valeur })),
   selecteurs: () => requete("/selecteurs"),
-  ajouterSelecteur: (valeur, categorie) =>
-    requete("/selecteurs", corpsJson({ valeur, categorie })),
+  ajouterSelecteur: (valeur, categorie_id) =>
+    requete("/selecteurs", corpsJson({ valeur, categorie_id })),
+  modifierSelecteur: (id, valeur, categorie_id) =>
+    requete(`/selecteurs/${id}`, {
+      ...corpsJson({ valeur, categorie_id }),
+      method: "PUT",
+    }),
+
+  // --- Categories (FR-13) ---
+  categories: () => requete("/categories"),
+  creerCategorie: (donnees) => requete("/categories", corpsJson(donnees)),
+  modifierCategorie: (id, donnees) =>
+    requete(`/categories/${id}`, { ...corpsJson(donnees), method: "PUT" }),
+  supprimerCategorie: (id, remplacement_id) =>
+    requete(`/categories/${id}`, {
+      ...corpsJson(remplacement_id ? { remplacement_id } : {}),
+      method: "DELETE",
+    }),
   basculerSelecteur: (id) => requete(`/selecteurs/${id}/basculer`, corpsJson()),
   supprimerSelecteur: (id) => requete(`/selecteurs/${id}`, { method: "DELETE" }),
 

@@ -41,6 +41,9 @@ class CriticiteDetail:
     # Valeurs des selecteurs distincts trouves. Sert au log et a la console
     # de supervision ; n'est JAMAIS persistee (CN-03).
     selecteurs: list = field(default_factory=list)
+    # Identifiants des categories de ces selecteurs : elles deviennent les
+    # categories de l'exposition (FR-13).
+    categories: list = field(default_factory=list)
 
     def resume(self) -> str:
         """Libelle court destine aux logs et aux messages d'alerte."""
@@ -97,4 +100,7 @@ def calculer_criticite(matches: list) -> CriticiteDetail:
         nb_selecteurs=len(distincts),
         niveau=niveau_pour(len(distincts)),
         selecteurs=distincts,
+        categories=list(dict.fromkeys(
+            m.selecteur_categorie for m in matches if m.selecteur_categorie
+        )),
     )

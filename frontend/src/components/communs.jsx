@@ -27,16 +27,6 @@ export const LIBELLE_STATUT = {
   closed: "Clôturée",
 };
 
-export const LIBELLE_CATEGORIE = {
-  credentials: "Identifiants",
-  donnees_personnelles: "Données personnelles",
-  donnees_financieres: "Données financières",
-  donnees_sante: "Données de santé",
-  documents_internes: "Documents internes",
-  code_source: "Code source",
-  non_precisee: "Non précisée",
-};
-
 export const LIBELLE_ROLE = {
   user: "Analyste",
   supervisor: "Superviseur",
@@ -187,6 +177,29 @@ export function PastilleStatut({ statut }) {
   return (
     <span className={`pill ${TON_STATUT[statut] || "pill-neutral"}`}>
       {LIBELLE_STATUT[statut] || statut}
+    </span>
+  );
+}
+
+/**
+ * Categories d'une exposition (FR-13) : celles des selecteurs qui l'ont
+ * declenchee. Accepte des noms ou des objets {id, nom}. Ce sont des
+ * enregistrements deja libelles, geres par l'administrateur.
+ */
+export function ListeCategories({ categories }) {
+  if (!categories || categories.length === 0) {
+    return <span className="cell-muted">—</span>;
+  }
+  return (
+    <span className="tag-row">
+      {categories.map((c) => {
+        const nom = typeof c === "string" ? c : c.nom;
+        return (
+          <span className="etiquette-categorie" key={nom}>
+            {nom}
+          </span>
+        );
+      })}
     </span>
   );
 }

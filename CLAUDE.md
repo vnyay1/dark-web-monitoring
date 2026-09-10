@@ -114,8 +114,17 @@ away.
 
 Downstream of `engine.py`, the pipeline applies, in order: the date window (entries older than
 `periode_collecte_jours` are skipped), `exclusion.py` (false-positive filtering, FR-11),
-`criticite.py` (FR-10), `categorisation.py` (leak category, FR-13), and
+`criticite.py` (FR-10, which also collects the matched selectors' categories), and
 `deduplication.py::enregistrer_exposition()` (multi-source dedup + persistence, FR-12).
+
+**Categories (FR-13) are the matched selectors' categories.** Keyword-based "leak nature"
+categorisation was removed. `Categorie` is an admin-managed table (create/rename/delete from the UI);
+an exposition carries the categories of every selector that triggered it (many-to-many
+`exposition_categories`), unioned on redetection like criticality. Deleting a used category REQUIRES
+a replacement: its selectors and expositions are transferred. The "place name inside a country list"
+false-positive rule in `exclusion.py` follows the `Categorie.lieu_generique` flag, never a category
+name (names are editable). `app/maintenance/recategoriser.py` back-fills categories for older
+expositions from their entity name.
 
 **Criticality replaced the old confidence score.** It is simply the number of DISTINCT catalogue
 selectors found in one entry, mapped to four levels (`NiveauCriticite`) whose thresholds the admin
@@ -143,7 +152,7 @@ Single file, SQLAlchemy declarative. Key entities: `Exposition` (the leak indica
 `statut` lifecycle: new → under_review → confirmed/false_positive → notified → closed),
 `SourceReference` (link from an Exposition to the source it was seen on — stores only a URL/id, never
 content), `Source` (a monitored source's health/config), `Selecteur` (the catalogue of entity
-names/keywords to match against, categorized), `JournalAudit` (append-only), `User` +
+names/keywords to match against, each linked to a `Categorie`), `JournalAudit` (append-only), `User` +
 `RoleUtilisateur` + `HistoriqueRole` (auth/RBAC), `Alerte` (multi-channel alert delivery state),
 `ConfigurationSysteme` (admin-editable runtime settings, key/value — each key declares its TYPE, so
 `app/config_system.py::valider_valeur()` can accept both integers and named levels),

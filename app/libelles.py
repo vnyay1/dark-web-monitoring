@@ -3,21 +3,15 @@ Libelles francais des valeurs metier, pour tout ce qui est produit cote
 serveur a destination d'un lecteur humain (rapport mensuel, export CSV).
 
 Les modeles stockent des identifiants techniques ("under_review",
-"donnees_personnelles") qui ne doivent jamais apparaitre tels quels dans un
+"ransomware_site") qui ne doivent jamais apparaitre tels quels dans un
 document remis a l'encadrement. L'interface React tient la meme table de
 son cote (frontend/src/components/communs.jsx) : toute valeur ajoutee ici
 doit l'etre la-bas aussi.
 """
 
-CATEGORIE = {
-    "credentials": "Identifiants",
-    "donnees_personnelles": "Données personnelles",
-    "donnees_financieres": "Données financières",
-    "donnees_sante": "Données de santé",
-    "documents_internes": "Documents internes",
-    "code_source": "Code source",
-    "non_precisee": "Non précisée",
-}
+# Les CATEGORIES d'exposition n'ont pas de table ici : ce sont des
+# enregistrements en base (modele Categorie), deja libelles en francais et
+# modifiables par l'administrateur.
 
 STATUT = {
     "new": "Nouvelle",

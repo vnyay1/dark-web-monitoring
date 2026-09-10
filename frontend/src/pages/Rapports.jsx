@@ -6,7 +6,7 @@ import {
   Chargement,
   EnTetePage,
   Erreur,
-  LIBELLE_CATEGORIE,
+  ListeCategories,
   LIBELLE_NIVEAU,
   LIBELLE_STATUT,
   ListeSources,
@@ -135,7 +135,7 @@ export default function Rapports() {
             <Tuile
               label="Catégories"
               valeur={Object.keys(donnees.repartition_categorie).length}
-              hint="natures de fuite"
+              hint="catégories représentées"
               ton="warn"
             />
           </div>
@@ -164,7 +164,7 @@ export default function Rapports() {
                   <tr>
                     <th>Entité</th>
                     <th>Secteur</th>
-                    <th>Catégorie</th>
+                    <th>Catégories</th>
                     <th>Sources</th>
                     <th>Criticité</th>
                     <th>Statut</th>
@@ -175,8 +175,8 @@ export default function Rapports() {
                     <tr key={`${e.nom}-${index}`}>
                       <td className="cell-entity">{e.nom}</td>
                       <td className="cell-muted">{e.secteur}</td>
-                      <td className="cell-muted">
-                        {LIBELLE_CATEGORIE[e.categorie] || e.categorie}
+                      <td>
+                        <ListeCategories categories={e.categories} />
                       </td>
                       <td>
                         <ListeSources sources={e.sources} />

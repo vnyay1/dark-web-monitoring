@@ -18,7 +18,7 @@ from datetime import timedelta
 from rapidfuzz import fuzz
 
 from app.models import (
-    Exposition, SourceReference, CategorieFuite, NiveauCriticite, TypeSource, utc_now,
+    Categorie, Exposition, SourceReference, NiveauCriticite, TypeSource, utc_now,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,20 +28,15 @@ SEUIL_SIMILARITE_NOM_ENTITE = 90  # score RapidFuzz (0-100)
 FENETRE_JOURS = 30
 
 
-def _trouver_exposition_existante(session, nom_entite: str, categorie_fuite: CategorieFuite = None):
+def _trouver_exposition_existante(session, nom_entite: str):
     """
     Cherche parmi les expositions existantes (recentes) celle qui
     correspond probablement au meme incident.
 
-    CORRECTIF : la categorie de fuite n'est PLUS un critere de
-    correspondance. Deux posts sur la meme victime peuvent legitimement
-    porter sur des categories differentes (ex: un post sur des
-    identifiants, un autre sur des documents internes) sans etre des
-    incidents distincts - c'est le NOM DE L'ENTITE (avec tolerance
-    fuzzy) et la fenetre temporelle qui definissent l'identite de
-    l'incident, pas la nature de la donnee exposee dans chaque source.
-    Le parametre categorie_fuite est conserve pour compatibilite d'appel
-    mais n'est plus utilise dans le filtrage.
+    Les categories ne sont PAS un critere de correspondance : deux annonces
+    sur la meme victime peuvent citer des selecteurs differents. C'est le
+    NOM DE L'ENTITE (avec tolerance fuzzy) et la fenetre temporelle qui
+    definissent l'identite de l'incident.
     """
     seuil_date = utc_now() - timedelta(days=FENETRE_JOURS)
 
@@ -93,10 +88,20 @@ def _ajouter_reference(session, exposition, type_source, reference_source,
     return True
 
 
+def _charger_categories(session, categorie_ids) -> list:
+    """Categories correspondant aux identifiants, dans l'ordre fourni."""
+    if not categorie_ids:
+        return []
+    trouvees = {
+        c.id: c for c in session.query(Categorie).filter(Categorie.id.in_(categorie_ids))
+    }
+    return [trouvees[i] for i in dict.fromkeys(categorie_ids) if i in trouvees]
+
+
 def enregistrer_exposition(
     session,
     nom_entite: str,
-    categorie_fuite: CategorieFuite,
+    categorie_ids: list,
     type_source: TypeSource,
     reference_source: str,
     criticite: int,
@@ -118,6 +123,7 @@ def enregistrer_exposition(
       nouvelle exposition) - utile pour detecter une hausse significative
       (cf FR-25/FR-26, alerte de confirmation)
     """
+    categories = _charger_categories(session, categorie_ids)
     exposition_existante = _trouver_exposition_existante(session, nom_entite)
 
     if exposition_existante:
@@ -140,6 +146,13 @@ def enregistrer_exposition(
             exposition_existante.criticite = criticite
             exposition_existante.niveau_criticite = niveau_criticite
 
+        # Categories : UNION, jamais de retrait - meme logique monotone.
+        # Une source peut ne citer que la banque la ou une autre citait
+        # aussi le ministere : l'exposition releve des deux.
+        for categorie in categories:
+            if categorie not in exposition_existante.categories:
+                exposition_existante.categories.append(categorie)
+
         # On garde la date de publication la plus RECENTE connue : elle
         # traduit la derniere activite constatee autour de l'incident.
         if date_publication is not None and (
@@ -156,7 +169,7 @@ def enregistrer_exposition(
         nom_entite=nom_entite,
         secteur_activite=secteur_activite,
         type_entite=type_entite,
-        categorie_fuite=categorie_fuite,
+        categories=categories,
         nombre_enregistrements_revendique=nombre_enregistrements,
         criticite=criticite,
         niveau_criticite=niveau_criticite,
@@ -169,5 +182,8 @@ def enregistrer_exposition(
                        reference_source, source_id, date_publication)
     session.commit()
 
-    logger.info(f"[FR-12] Nouvelle exposition creee : '{nom_entite}' ({categorie_fuite.value}).")
+    logger.info(
+        f"[FR-12] Nouvelle exposition creee : '{nom_entite}' "
+        f"({', '.join(c.nom for c in categories) or 'sans categorie'})."
+    )
     return nouvelle_exposition, True, None

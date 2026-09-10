@@ -25,7 +25,10 @@ def enregistrer(api_bp):
             secteurs = Counter(
                 (e.secteur_activite or "Non renseigne") for e in expositions
             )
-            categories = Counter(e.categorie_fuite.value for e in expositions)
+            # Une exposition compte dans CHACUNE de ses categories : le
+            # total de cette repartition peut depasser le nombre
+            # d'expositions (precise a l'ecran).
+            categories = Counter(c.nom for e in expositions for c in e.categories)
             criticites = Counter(e.niveau_criticite.value for e in expositions)
             statuts = Counter(e.statut.value for e in expositions)
 
@@ -82,7 +85,7 @@ def enregistrer(api_bp):
                         "nom_entite": e.nom_entite,
                         "niveau_criticite": e.niveau_criticite.value,
                         "criticite": e.criticite,
-                        "categorie_fuite": e.categorie_fuite.value,
+                        "categories": [c.nom for c in e.categories],
                         "statut": e.statut.value,
                         "date_premiere_detection": e.date_premiere_detection.isoformat(),
                         "sources": sorted({

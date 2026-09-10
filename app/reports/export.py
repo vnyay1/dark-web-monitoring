@@ -21,7 +21,9 @@ def _exposition_vers_dict(exposition) -> dict:
         "nom_entite": exposition.nom_entite,
         "secteur_activite": exposition.secteur_activite,
         "type_entite": exposition.type_entite.value if exposition.type_entite else None,
-        "categorie_fuite": exposition.categorie_fuite.value,
+        # Plusieurs categories possibles (FR-13) : jointes par " ; " pour
+        # rester une seule colonne lisible dans un tableur.
+        "categories": " ; ".join(c.nom for c in exposition.categories),
         "date_premiere_detection": exposition.date_premiere_detection.date().isoformat(),
         "date_derniere_detection": exposition.date_derniere_detection.date().isoformat(),
         "nombre_enregistrements_revendique": exposition.nombre_enregistrements_revendique,
@@ -70,7 +72,6 @@ def exporter_csv() -> str:
     # identifiants techniques, stables et sans ambiguite.
     for e in expositions:
         ligne = _exposition_vers_dict(e)
-        ligne["categorie_fuite"] = libelles.libelle(libelles.CATEGORIE, ligne["categorie_fuite"])
         ligne["statut"] = libelles.libelle(libelles.STATUT, ligne["statut"])
         ligne["niveau_criticite"] = libelles.libelle(libelles.NIVEAU, ligne["niveau_criticite"])
         writer.writerow(ligne)

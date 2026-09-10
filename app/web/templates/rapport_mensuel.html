@@ -298,7 +298,7 @@
         {% for e in priorites %}
         <li>
             <span class="niveau"><span class="marque c-{{ e.niveau_criticite }}"></span>{{ e.niveau_libelle }}<span class="n">{{ e.criticite }}</span></span>
-            <span class="quoi"><span class="entite">{{ e.nom }}</span> — {{ e.categorie_libelle | lower }}</span>
+            <span class="quoi"><span class="entite">{{ e.nom }}</span>{% if e.categories %} — {{ e.categories | join(', ') }}{% endif %}</span>
             <span class="statut {{ e.statut }}">{{ e.statut_libelle }}</span>
         </li>
         {% endfor %}
@@ -324,7 +324,7 @@
             </table>
         </div>
         <div>
-            <h2>Nature des données</h2>
+            <h2>Catégories <span class="precision">une exposition peut en porter plusieurs</span></h2>
             {% set max_categorie = categories[0][1] if categories else 1 %}
             <table>
                 <thead><tr><th>Catégorie</th><th style="width: 42%">Expositions</th></tr></thead>
@@ -373,13 +373,13 @@
     <h2>Détail des expositions <span class="precision">par criticité décroissante</span></h2>
     <table>
         <thead>
-            <tr><th>Entité</th><th>Nature</th><th>Criticité</th><th>Sources</th><th>Publication</th><th>Statut</th></tr>
+            <tr><th>Entité</th><th>Catégories</th><th>Criticité</th><th>Sources</th><th>Publication</th><th>Statut</th></tr>
         </thead>
         <tbody>
         {% for e in entites %}
         <tr>
             <td class="entite">{{ e.nom }}<span class="secteur">{{ e.secteur }}</span></td>
-            <td>{{ e.categorie_libelle }}</td>
+            <td>{{ e.categories | join(', ') or '—' }}</td>
             <td><span class="niveau"><span class="marque c-{{ e.niveau_criticite }}"></span>{{ e.niveau_libelle }}<span class="n">{{ e.criticite }}</span></span></td>
             <td>{% for s in e.sources %}<span class="source">{{ s }}</span>{% if not loop.last %}<br>{% endif %}{% else %}<span class="discret">—</span>{% endfor %}</td>
             <td class="mono{{ ' discret' if not e.date_publication }}">{{ e.date_publication or 'non datée' }}</td>

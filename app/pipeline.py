@@ -25,6 +25,8 @@ import argparse
 import logging
 from datetime import timedelta
 
+from sqlalchemy.orm import joinedload
+
 from app.config_system import get_config_int
 from app.connectors import connecteurs_actifs, connecteur_par_nom
 from app.connectors.dates import CLES_DATE, parser_date
@@ -43,7 +45,6 @@ from app import supervision
 from app.matching.engine import match_text_against_catalogue
 from app.matching.exclusion import filtrer_faux_positifs
 from app.matching.criticite import calculer_criticite
-from app.matching.categorisation import categoriser_texte
 from app.matching.deduplication import enregistrer_exposition
 from app.alerting.dispatcher import declencher_alertes
 
@@ -171,16 +172,15 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         stats["nb_rejetees_criticite_faible"] += 1
         return False
 
-    # FR-13 : categorisation
-    categorie_fuite, _ = categoriser_texte(texte)
-
     nom_entite = entry["nom_entite"] or matches_filtres[0].selecteur_valeur or "Entite inconnue"
 
     # FR-12 : deduplication + persistance
     exposition, est_nouvelle, ancienne_criticite = enregistrer_exposition(
         session=session,
         nom_entite=nom_entite,
-        categorie_fuite=categorie_fuite,
+        # FR-13 : les categories de l'exposition sont celles des selecteurs
+        # qui l'ont declenchee.
+        categorie_ids=detail.categories,
         type_source=source.type_source,
         reference_source=entry["reference_source"],
         criticite=detail.nb_selecteurs,
@@ -199,6 +199,7 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     )
 
     stats["nb_expositions_creees_ou_maj"] += 1
+    categories = ", ".join(c.nom for c in exposition.categories) or "sans categorie"
 
     # Seules les NOUVELLES expositions remontent dans la console : une
     # redetection sans gain de criticite n'apprend rien a l'operateur qui
@@ -206,7 +207,7 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     if est_nouvelle:
         supervision.emettre(
             TypeEvenementCollecte.NOUVELLE_EXPOSITION,
-            f"{nom_entite} - criticite {detail.resume()} - {categorie_fuite.value}",
+            f"{nom_entite} - criticite {detail.resume()} - {categories}",
             source=source.nom,
             exposition_id=exposition.id,
             session=session,
@@ -214,7 +215,7 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
 
     logger.info(
         f"[pipeline] Exposition traitee : '{nom_entite}' "
-        f"(criticite={detail.resume()}, categorie={categorie_fuite.value}, "
+        f"(criticite={detail.resume()}, categories={categories}, "
         f"selecteurs={detail.selecteurs})"
     )
     return True
@@ -341,7 +342,15 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
     enregistrer_entrees_vues(session, source.id, entrees)
 
     # Selecteurs actifs charges une seule fois pour toutes les entrees
-    selecteurs = session.query(Selecteur).filter_by(actif=True).all()
+    # Categorie chargee avec le selecteur : le moteur lit son identifiant
+    # et son indicateur lieu_generique pour chaque selecteur, une requete
+    # par selecteur sinon.
+    selecteurs = (
+        session.query(Selecteur)
+        .options(joinedload(Selecteur.categorie))
+        .filter_by(actif=True)
+        .all()
+    )
     seuils = _seuils_du_run()
     logger.info(
         f"[pipeline] Fenetre d'analyse : {seuils['periode_jours']} jours "

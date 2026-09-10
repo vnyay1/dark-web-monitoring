@@ -39,7 +39,7 @@ def _construire_message(exposition, est_confirmation: bool = False) -> tuple:
     message = (
         f"{intro}\n\n"
         f"Entite : {exposition.nom_entite}\n"
-        f"Categorie : {exposition.categorie_fuite.value}\n"
+        f"Categories : {', '.join(c.nom for c in exposition.categories) or 'non precisee'}\n"
         f"Criticite : {exposition.niveau_criticite.value.upper()} "
         f"({exposition.criticite} selecteur(s) camerounais distinct(s))\n"
         f"Detection : {exposition.date_premiere_detection.strftime('%d/%m/%Y %H:%M')}\n"
