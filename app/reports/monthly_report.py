@@ -16,8 +16,12 @@ from collections import Counter
 
 from flask import render_template
 
+from app import libelles
+from app.config_system import get_config_int
 from app.db import get_session
-from app.models import Exposition, NiveauCriticite, utc_now
+from app.models import (
+    Exposition, NiveauCriticite, Source, SourceReference, StatutExposition, utc_now,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,9 @@ _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # font partie du pattern), donc aucun risque de toucher a autre chose
 # qu'une reference a une ressource static Flask.
 _STATIC_SRC_PATTERN = re.compile(r'src="/static/')
+# Meme probleme pour les polices embarquees, referencees en CSS par
+# url('/static/fonts/...').
+_STATIC_URL_PATTERN = re.compile(r"url\((['\"]?)/static/")
 
 
 def _rendre_chemins_static_relatifs(html_content: str) -> str:
@@ -51,7 +58,8 @@ def _rendre_chemins_static_relatifs(html_content: str) -> str:
     ce qui n'est pas le cas de WeasyPrint utilise hors contexte de
     requete (HTML(string=...)).
     """
-    return _STATIC_SRC_PATTERN.sub('src="static/', html_content)
+    html_content = _STATIC_SRC_PATTERN.sub('src="static/', html_content)
+    return _STATIC_URL_PATTERN.sub(r"url(\1static/", html_content)
 
 
 def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
@@ -78,7 +86,7 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
     total_periode = len(expositions_du_mois)
 
     repartition_secteur = Counter(
-        (e.secteur_activite or "Non renseigne") for e in expositions_du_mois
+        (e.secteur_activite or "Non renseigné") for e in expositions_du_mois
     )
     repartition_categorie = Counter(
         e.categorie_fuite.value for e in expositions_du_mois
@@ -95,42 +103,151 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
     repartition_criticite = Counter(
         e.niveau_criticite.value for e in expositions_du_mois
     )
-    nb_niveaux_hauts = sum(
-        1 for e in expositions_du_mois
-        if e.niveau_criticite in (NiveauCriticite.ELEVEE, NiveauCriticite.CRITIQUE)
+    niveaux_hauts = (NiveauCriticite.ELEVEE, NiveauCriticite.CRITIQUE)
+    nb_niveaux_hauts = sum(1 for e in expositions_du_mois if e.niveau_criticite in niveaux_hauts)
+
+    tries = sorted(
+        expositions_du_mois,
+        key=lambda e: (e.criticite, e.date_premiere_detection),
+        reverse=True,
     )
 
     # Liste des entites concernees - nom d'entite/organisation uniquement,
-    # jamais de donnee personnelle associee (conforme au modele CN-03/CN-04)
+    # jamais de donnee personnelle associee (conforme au modele CN-03/CN-04).
+    # Les identifiants bruts (categorie, statut) restent pour l'interface
+    # React, qui les traduit elle-meme ; les *_libelle servent au document.
     entites = [
         {
             "nom": e.nom_entite,
-            "secteur": e.secteur_activite or "Non renseigne",
+            "secteur": e.secteur_activite or "Non renseigné",
             "categorie": e.categorie_fuite.value,
+            "categorie_libelle": libelles.libelle(libelles.CATEGORIE, e.categorie_fuite),
             "criticite": e.criticite,
             "niveau_criticite": e.niveau_criticite.value,
-            "sources": sorted({
-                sr.source.nom for sr in e.sources if sr.source is not None
-            }),
+            "niveau_libelle": libelles.libelle(libelles.NIVEAU, e.niveau_criticite),
+            "sources": sorted({sr.source.nom for sr in e.sources if sr.source is not None}),
+            "date_publication": (
+                e.date_publication_source.strftime("%d/%m/%Y")
+                if e.date_publication_source else None
+            ),
             "statut": e.statut.value,
+            "statut_libelle": libelles.libelle(libelles.STATUT, e.statut),
         }
-        for e in sorted(expositions_du_mois, key=lambda x: x.criticite, reverse=True)
+        for e in tries
     ]
+
+    # A traiter en priorite : niveau haut, pas encore qualifiee par un analyste.
+    a_qualifier = (StatutExposition.NEW, StatutExposition.UNDER_REVIEW)
+    priorites = [
+        entite for entite, e in zip(entites, tries)
+        if e.niveau_criticite in niveaux_hauts and e.statut in a_qualifier
+    ][:8]
+
+    secteurs = repartition_secteur.most_common()
+    secteurs_principaux = secteurs[:2]
+
+    sources = _statistiques_sources(session, [e.id for e in expositions_du_mois])
 
     session.close()
 
     return {
         "mois": mois,
         "annee": annee,
+        "periode_libelle": libelles.periode(mois, annee),
+        "reference": f"SEN-RM-{annee}-{mois:02d}",
         "total_periode": total_periode,
         "repartition_criticite": dict(repartition_criticite),
         "nb_niveaux_hauts": nb_niveaux_hauts,
+        "nb_a_qualifier": repartition_statut.get(StatutExposition.NEW.value, 0),
         "repartition_secteur": dict(repartition_secteur),
         "repartition_categorie": dict(repartition_categorie),
         "repartition_statut": dict(repartition_statut),
+        "criticite": _paliers(repartition_criticite),
+        "secteurs": secteurs,
+        "secteurs_principaux": secteurs_principaux,
+        "part_secteurs_principaux": sum(n for _, n in secteurs_principaux),
+        "categories": [
+            (libelles.libelle(libelles.CATEGORIE, c), n)
+            for c, n in repartition_categorie.most_common()
+        ],
+        "statuts": [
+            (libelles.STATUT[s.value], repartition_statut[s.value])
+            for s in StatutExposition if repartition_statut.get(s.value)
+        ],
+        "sources": sources,
+        "nb_sources_actives": sum(1 for s in sources if s["active"]),
+        "nb_sources_signalantes": sum(1 for s in sources if s["signalements"]),
+        "priorites": priorites,
         "entites": entites,
         "date_generation": utc_now(),
     }
+
+
+def _paliers(repartition_criticite: Counter) -> list:
+    """
+    Les quatre paliers, du plus grave au plus faible, avec le nombre
+    d'expositions et le seuil EN VIGUEUR - regle par l'administrateur, donc
+    lu dans la configuration plutot qu'ecrit en dur dans le document.
+    """
+    moyenne = get_config_int("seuil_criticite_moyenne")
+    elevee = get_config_int("seuil_criticite_elevee")
+    critique = get_config_int("seuil_criticite_critique")
+
+    def plage(bas, haut):
+        pluriel = lambda n: "sélecteur" if n <= 1 else "sélecteurs"
+        if haut is None:
+            return f"{bas} {pluriel(bas)} et plus"
+        if bas >= haut:
+            return f"{bas} {pluriel(bas)}"
+        return f"{bas} à {haut} sélecteurs"
+
+    bornes = (
+        (NiveauCriticite.CRITIQUE, critique, None),
+        (NiveauCriticite.ELEVEE, elevee, critique - 1),
+        (NiveauCriticite.MOYENNE, moyenne, elevee - 1),
+        (NiveauCriticite.FAIBLE, 1, moyenne - 1),
+    )
+    return [
+        {
+            "niveau": niveau.value,
+            "libelle": libelles.NIVEAU[niveau.value],
+            "nombre": repartition_criticite.get(niveau.value, 0),
+            "seuil": plage(bas, haut),
+        }
+        for niveau, bas, haut in bornes
+    ]
+
+
+def _statistiques_sources(session, ids_expositions: list) -> list:
+    """
+    Signalements de la periode par source, et combien la source a dates.
+    Toutes les sources actives figurent, meme sans signalement : une source
+    muette est une information pour le lecteur.
+    """
+    compte = Counter()
+    dates = Counter()
+    if ids_expositions:
+        for sr in (
+            session.query(SourceReference)
+            .filter(SourceReference.exposition_id.in_(ids_expositions))
+            .all()
+        ):
+            if sr.source_id:
+                compte[sr.source_id] += 1
+                dates[sr.source_id] += sr.date_publication is not None
+
+    lignes = [
+        {
+            "nom": source.nom,
+            "type": libelles.libelle(libelles.TYPE_SOURCE, source.type_source),
+            "active": bool(source.actif),
+            "signalements": compte.get(source.id, 0),
+            "dates": dates.get(source.id, 0),
+        }
+        for source in session.query(Source).all()
+        if source.actif or compte.get(source.id)
+    ]
+    return sorted(lignes, key=lambda l: (-l["signalements"], l["nom"]))
 
 
 def generer_rapport_html(mois: int, annee: int) -> str:
