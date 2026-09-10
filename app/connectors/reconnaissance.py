@@ -33,6 +33,7 @@ Usage :
     python -m app.connectors.reconnaissance --source blackwater --phase dates
     python -m app.connectors.reconnaissance --source safepay --phase detail --profondeur 14
     python -m app.connectors.reconnaissance --source safepay --phase dates --detail 3
+    python -m app.connectors.reconnaissance --source blackwater --phase pages --max 3
 
 La phase "dates" est la seule a imprimer du texte de la page : UNIQUEMENT la
 chaine de date de chaque entree, et ce qu'en tire parser_date(). Une date de
@@ -43,7 +44,7 @@ affiche. Elle sert a ecrire les DATE_FORMATS des connecteurs.
 import argparse
 import logging
 import re
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -90,7 +91,7 @@ def _forme_url(valeur, netloc_source):
         return "inerte"
 
     analyse = urlparse(valeur)
-    chemin = MASQUE_NOMBRES.sub("<num>", analyse.path or "/")
+    chemin = MASQUE_NOMBRES.sub("<num>", analyse.path or "/") + _forme_requete(analyse.query)
 
     if not analyse.netloc:
         return f"relatif:{chemin}"
@@ -102,6 +103,26 @@ def _forme_url(valeur, netloc_source):
         return "absolu:AUTRE-DOMAINE (HEBERGEUR DE DONNEES)"
 
     return "absolu:AUTRE-DOMAINE"
+
+
+def _forme_requete(requete):
+    """
+    Chaine de requete reduite a sa FORME : noms de parametres conserves
+    (c'est eux qui revelent une pagination, "?page=2"), valeurs masquees.
+    Une valeur numerique devient <num>, toute autre valeur sa seule
+    longueur : un parametre de recherche peut contenir un nom d'entite.
+    """
+    if not requete:
+        return ""
+    parties = []
+    for nom, valeur in parse_qsl(requete, keep_blank_values=True):
+        if valeur.isdigit():
+            parties.append(f"{nom}=<num>")
+        elif valeur:
+            parties.append(f"{nom}=<texte:{len(valeur)}>")
+        else:
+            parties.append(nom)
+    return "?" + "&".join(parties)
 
 
 def _longueur_texte_propre(noeud):
@@ -329,6 +350,51 @@ def phase_dates(connecteur, limite=15, pages_detail=0):
         print(f"  [{index:>2}] {str(brute)[:50]!r:54} -> {verdict}")
 
 
+def phase_pages(connecteur, maximum=3):
+    """
+    Suit la pagination telle que l'implemente le connecteur
+    (url_page_suivante) et resume chaque page : forme de l'URL, nombre
+    d'annonces, plage de dates. Aucun autre contenu n'est imprime.
+    Sert a valider un connecteur pagine avant de l'activer en collecte.
+    """
+    from app.connectors.dates import CLES_DATE, parser_date
+
+    if not connecteur.SUPPORTE_PAGINATION:
+        print("\nCe connecteur ne declare pas de pagination (SUPPORTE_PAGINATION = False) :")
+        print("seule la page 1 est lue en collecte. Voir --phase listing, CANDIDATS PAGINATION.")
+        return
+
+    netloc_source = urlparse(connecteur.TARGET_URL or "").netloc
+    url = connecteur.TARGET_URL
+    print()
+    for page in range(1, maximum + 1):
+        raw = _recuperer(connecteur, url).text
+        try:
+            entrees = connecteur.parse(raw).get("entries", [])
+            suivante = connecteur.url_page_suivante(raw, page)
+        finally:
+            del raw  # CN-05
+
+        dates = [
+            d for d in (
+                parser_date(next((e.get(c) for c in CLES_DATE if e.get(c)), None),
+                            connecteur.DATE_FORMATS, source=connecteur.SOURCE_NAME)
+                for e in entrees
+            ) if d is not None
+        ]
+        plage = (
+            f"{min(dates):%d/%m/%Y} -> {max(dates):%d/%m/%Y}" if dates else "aucune date lisible"
+        )
+        print(f"  page {page} : {_forme_url(url, netloc_source)}")
+        print(f"           {len(entrees)} annonce(s), {len(dates)} datee(s), {plage}")
+
+        if not suivante:
+            print("  -> fin de la pagination (url_page_suivante renvoie None)")
+            return
+        url = suivante
+    print(f"  -> arret apres {maximum} page(s) (--max)")
+
+
 def phase_detail(connecteur, index, profondeur=6):
     """Squelette de la page de detail d'UNE entree, avec verdict de liceite."""
     if connecteur.SOURCE_NAME in SOURCES_LIENS_INTERDITS:
@@ -377,7 +443,9 @@ def _analyser_arguments():
     )
     parseur.add_argument("--source", required=True, help="SOURCE_NAME du connecteur")
     parseur.add_argument("--phase", default="listing",
-                         choices=("listing", "detail", "formes", "dates"))
+                         choices=("listing", "detail", "formes", "dates", "pages"))
+    parseur.add_argument("--max", type=int, default=3,
+                         help="Phase pages : nombre maximum de pages a suivre")
     parseur.add_argument("--index", type=int, default=0,
                          help="Entree du listing dont on inspecte le detail")
     parseur.add_argument("--detail", type=int, default=0,
@@ -404,6 +472,8 @@ if __name__ == "__main__":
         phase_listing(connecteur, arguments.profondeur)
     elif arguments.phase == "formes":
         phase_formes(connecteur)
+    elif arguments.phase == "pages":
+        phase_pages(connecteur, arguments.max)
     elif arguments.phase == "dates":
         phase_dates(connecteur, pages_detail=arguments.detail)
     else:
