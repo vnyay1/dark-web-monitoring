@@ -90,7 +90,13 @@ connector must be added there to actually run. Its imports are deliberately insi
 (connectors import `app.connectors`, so a module-level import would cycle).
 
 `collect()` runs two phases: a bounded listing crawl, then detail pages for NEW entries only, within a
-per-run budget. Entries the budget didn't serve are left unmarked in `EntreeCollectee`
+per-run budget. Paginated sources (`SUPPORTE_PAGINATION` + `url_page_suivante()`) stop at the first of:
+all dated entries of a page older than the admin period (`hors_periode` — the pipeline passes
+`date_limite` to `collect()`), a page with no readable date (`dates_illisibles`, a safety stop if a site
+changes its date format), pages holding only already-known entries (`page_connue`), or the page cap
+(min of the connector's `MAX_PAGES_LISTING` and the admin setting `pages_listing_max`). Sources without
+dates (payload, cmd_organization) are never paginated. Validate a connector's pagination with
+`python3 -m app.connectors.reconnaissance --source <X> --phase pages --max 3`. Entries the budget didn't serve are left unmarked in `EntreeCollectee`
 (`app/crawl/registre.py`) and picked up next cycle — the crawl is resumable. `url_detail()` is the
 single place deciding a link is visitable; it returns `None` by default, so a source stays
 listing-only until explicitly opted in (CN-04).
