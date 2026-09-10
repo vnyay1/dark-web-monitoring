@@ -25,6 +25,10 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
+# Cles sous lesquelles les connecteurs exposent la date d'une entree, par
+# ordre de preference : chaque site la nomme a sa facon.
+CLES_DATE = ("date_publication", "discovery_date", "date")
+
 # Formats essayes pour toute source, apres ses formats specifiques.
 # Ordonnes du plus explicite au plus ambigu.
 FORMATS_COMMUNS = (

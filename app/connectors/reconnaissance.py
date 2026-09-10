@@ -30,6 +30,12 @@ Usage :
     python -m app.connectors.reconnaissance --source payload --phase listing
     python -m app.connectors.reconnaissance --source payload --phase detail --index 0
     python -m app.connectors.reconnaissance --source payload --phase formes
+    python -m app.connectors.reconnaissance --source blackwater --phase dates
+
+La phase "dates" est la seule a imprimer du texte de la page : UNIQUEMENT la
+chaine de date de chaque entree, et ce qu'en tire parser_date(). Une date de
+publication est une metadonnee autorisee (CN-03) ; aucun autre champ n'est
+affiche. Elle sert a ecrire les DATE_FORMATS des connecteurs.
 """
 
 import argparse
@@ -254,6 +260,43 @@ def phase_formes(connecteur):
           f"{connecteur.url_detail(entrees[0]) if entrees else '-'}")
 
 
+def phase_dates(connecteur, limite=15):
+    """
+    Chaines de date brutes des entrees du listing, et leur interpretation.
+
+    N'imprime RIEN d'autre que la date : ni nom d'entite, ni description.
+    """
+    from app.connectors.dates import CLES_DATE, parser_date
+
+    reponse = _recuperer(connecteur, connecteur.TARGET_URL)
+    entrees = connecteur.parse(reponse.text).get("entries", [])
+
+    print()
+    print(f"{len(entrees)} entree(s) dans le listing ; {min(limite, len(entrees))} affichee(s).")
+    print(f"DATE_FORMATS actuels : {connecteur.DATE_FORMATS or '(aucun, formats communs seulement)'}")
+    print("-" * 64)
+
+    reconnues = 0
+    for index, entree in enumerate(entrees[:limite]):
+        cle, brute = next(
+            ((c, entree.get(c)) for c in CLES_DATE if entree.get(c)), (None, None)
+        )
+        if brute is None:
+            print(f"  [{index:>2}] aucune date dans le listing")
+            continue
+
+        interpretee = parser_date(brute, connecteur.DATE_FORMATS, source=connecteur.SOURCE_NAME)
+        reconnues += interpretee is not None
+        verdict = interpretee.isoformat(sep=" ") if interpretee else "NON RECONNUE"
+        print(f"  [{index:>2}] {cle:17} {str(brute)[:50]!r:54} -> {verdict}")
+
+    print("-" * 64)
+    print(f"  {reconnues} date(s) reconnue(s) sur {min(limite, len(entrees))}.")
+    if connecteur.SUPPORTE_DETAIL:
+        print("  Ce connecteur lit aussi ses pages de detail : les dates qui n'y figurent")
+        print("  que la n'apparaissent pas ici.")
+
+
 def phase_detail(connecteur, index):
     """Squelette de la page de detail d'UNE entree, avec verdict de liceite."""
     if connecteur.SOURCE_NAME in SOURCES_LIENS_INTERDITS:
@@ -302,7 +345,7 @@ def _analyser_arguments():
     )
     parseur.add_argument("--source", required=True, help="SOURCE_NAME du connecteur")
     parseur.add_argument("--phase", default="listing",
-                         choices=("listing", "detail", "formes"))
+                         choices=("listing", "detail", "formes", "dates"))
     parseur.add_argument("--index", type=int, default=0,
                          help="Entree du listing dont on inspecte le detail")
     return parseur.parse_args()
@@ -324,5 +367,7 @@ if __name__ == "__main__":
         phase_listing(connecteur)
     elif arguments.phase == "formes":
         phase_formes(connecteur)
+    elif arguments.phase == "dates":
+        phase_dates(connecteur)
     else:
         phase_detail(connecteur, arguments.index)

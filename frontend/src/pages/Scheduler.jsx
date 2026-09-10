@@ -446,6 +446,9 @@ function ResumeCycle({ stats }) {
               <th>Source</th>
               <th>Collecte</th>
               <th>Entrées</th>
+              <th title="Entrées dont la source ne publie pas de date, ou dans un format non reconnu">
+                Sans date
+              </th>
               <th>Hors période</th>
               <th>Faux positifs</th>
               <th>Expositions</th>
@@ -465,6 +468,7 @@ function ResumeCycle({ stats }) {
                   </span>
                 </td>
                 <td className="cell-mono">{s.nb_entries_brutes ?? 0}</td>
+                <td className="cell-mono">{s.nb_sans_date ?? 0}</td>
                 <td className="cell-mono">{s.nb_hors_periode ?? 0}</td>
                 <td className="cell-mono">{s.nb_rejetees_faux_positif ?? 0}</td>
                 <td className="cell-mono">
