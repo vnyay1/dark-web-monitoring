@@ -37,7 +37,7 @@ def enregistrer(api_bp):
                         "exposition": {
                             "id": a.exposition.id,
                             "nom_entite": a.exposition.nom_entite,
-                            "categorie_fuite": a.exposition.categorie_fuite.value,
+                            "categories": [c.nom for c in a.exposition.categories],
                             "criticite": a.exposition.criticite,
                             "niveau_criticite": a.exposition.niveau_criticite.value,
                         } if a.exposition else None,

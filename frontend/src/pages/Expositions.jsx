@@ -9,9 +9,9 @@ import {
   Erreur,
   formaterDate,
   formaterDateHeure,
-  LIBELLE_CATEGORIE,
   LIBELLE_NIVEAU,
   LIBELLE_STATUT,
+  ListeCategories,
   ListeSources,
   Messages,
   PastilleCriticite,
@@ -129,8 +129,8 @@ export default function Expositions() {
           >
             <option value="">Toutes</option>
             {(referentiels?.categories || []).map((c) => (
-              <option key={c} value={c}>
-                {LIBELLE_CATEGORIE[c] || c}
+              <option key={c.id} value={c.id}>
+                {c.nom}
               </option>
             ))}
           </select>
@@ -229,7 +229,7 @@ export default function Expositions() {
                 <tr>
                   <th>Entité concernée</th>
                   <th>Criticité</th>
-                  <th>Catégorie</th>
+                  <th>Catégories</th>
                   <th>Sources</th>
                   <th>Publication</th>
                   <th>1re détection</th>
@@ -253,8 +253,8 @@ export default function Expositions() {
                         criticite={e.criticite}
                       />
                     </td>
-                    <td className="cell-muted">
-                      {LIBELLE_CATEGORIE[e.categorie_fuite] || e.categorie_fuite}
+                    <td>
+                      <ListeCategories categories={e.categories} />
                     </td>
                     <td>
                       <ListeSources sources={e.sources} />

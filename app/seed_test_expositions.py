@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from app.db import get_session, init_db
 from app.models import (
-    Exposition, Source, SourceReference, TypeEntite, CategorieFuite,
+    Categorie, Exposition, Source, SourceReference, TypeEntite,
     StatutExposition, TypeSource, utc_now
 )
 from app.matching.criticite import niveau_pour
@@ -48,7 +48,7 @@ TEST_DATA = [
         "nom_entite": "MINFI (Ministere des Finances)",
         "secteur_activite": "Administration publique",
         "type_entite": TypeEntite.PUBLIQUE,
-        "categorie_fuite": CategorieFuite.CREDENTIALS,
+        "categories": ["Ministère", "Domaine internet"],
         "criticite": 4,
         "statut": StatutExposition.NEW,
         "jours_ecoules": 2,
@@ -60,7 +60,7 @@ TEST_DATA = [
         "nom_entite": "Afriland First Bank",
         "secteur_activite": "Finance",
         "type_entite": TypeEntite.PRIVEE,
-        "categorie_fuite": CategorieFuite.DONNEES_FINANCIERES,
+        "categories": ["Banque"],
         "criticite": 3,
         "statut": StatutExposition.UNDER_REVIEW,
         "jours_ecoules": 5,
@@ -72,7 +72,7 @@ TEST_DATA = [
         "nom_entite": "Universite de Yaounde I",
         "secteur_activite": "Education",
         "type_entite": TypeEntite.PUBLIQUE,
-        "categorie_fuite": CategorieFuite.DONNEES_PERSONNELLES,
+        "categories": ["Université", "Ville / région"],
         "criticite": 2,
         "statut": StatutExposition.NEW,
         "jours_ecoules": 12,
@@ -84,7 +84,7 @@ TEST_DATA = [
         "nom_entite": "MTN Cameroon",
         "secteur_activite": "Telecommunications",
         "type_entite": TypeEntite.PRIVEE,
-        "categorie_fuite": CategorieFuite.DOCUMENTS_INTERNES,
+        "categories": ["Télécommunications"],
         "criticite": 5,
         "statut": StatutExposition.CONFIRMED,
         "jours_ecoules": 1,
@@ -96,7 +96,7 @@ TEST_DATA = [
         "nom_entite": "CAMTEL",
         "secteur_activite": "Telecommunications",
         "type_entite": TypeEntite.PUBLIQUE,
-        "categorie_fuite": CategorieFuite.CODE_SOURCE,
+        "categories": ["Télécommunications", "Entreprise"],
         "criticite": 1,
         "statut": StatutExposition.FALSE_POSITIVE,
         "jours_ecoules": 20,
@@ -108,7 +108,7 @@ TEST_DATA = [
         "nom_entite": "SONARA",
         "secteur_activite": "Energie",
         "type_entite": TypeEntite.PUBLIQUE,
-        "categorie_fuite": CategorieFuite.DOCUMENTS_INTERNES,
+        "categories": ["Entreprise"],
         "criticite": 3,
         "statut": StatutExposition.NOTIFIED,
         "jours_ecoules": 40,
@@ -120,7 +120,7 @@ TEST_DATA = [
         "nom_entite": "Ecobank Cameroun",
         "secteur_activite": "Finance",
         "type_entite": TypeEntite.PRIVEE,
-        "categorie_fuite": CategorieFuite.DONNEES_FINANCIERES,
+        "categories": ["Banque"],
         "criticite": 4,
         "statut": StatutExposition.CLOSED,
         "jours_ecoules": 55,
@@ -142,7 +142,9 @@ def seed_test_data():
             nom_entite=data["nom_entite"],
             secteur_activite=data["secteur_activite"],
             type_entite=data["type_entite"],
-            categorie_fuite=data["categorie_fuite"],
+            categories=[
+                c for c in session.query(Categorie).filter(Categorie.nom.in_(data["categories"]))
+            ],
             date_premiere_detection=date_detection,
             date_derniere_detection=date_detection,
             nombre_enregistrements_revendique=data["nb_enregistrements"],

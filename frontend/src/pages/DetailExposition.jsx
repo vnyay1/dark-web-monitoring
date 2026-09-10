@@ -16,7 +16,7 @@ import {
   Erreur,
   formaterDate,
   formaterDateHeure,
-  LIBELLE_CATEGORIE,
+  ListeCategories,
   LIBELLE_STATUT,
   LIBELLE_TYPE_SOURCE,
   Messages,
@@ -97,10 +97,12 @@ export default function DetailExposition() {
         </div>
 
         <div className="stat">
-          <div className="stat-label">Catégorie de fuite</div>
-          <div className="stat-value" style={{ fontSize: 16 }}>
-            {LIBELLE_CATEGORIE[donnees.categorie_fuite] ||
-              donnees.categorie_fuite}
+          <div className="stat-label">Catégories</div>
+          <div style={{ marginTop: 9 }}>
+            <ListeCategories categories={donnees.categories} />
+          </div>
+          <div className="stat-hint" style={{ marginTop: 7 }}>
+            celles des sélecteurs trouvés dans l'annonce
           </div>
         </div>
 

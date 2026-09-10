@@ -24,7 +24,46 @@ Important :
 import logging
 
 from app.db import get_session, init_db
-from app.models import Selecteur, CategorieSelecteur
+from app.models import Categorie, Selecteur
+
+
+class CategorieSelecteur:
+    """
+    Noms des categories par defaut. Les categories vivent desormais en base
+    et sont gerees par l'administrateur ; ces constantes gardent le
+    catalogue ci-dessous lisible et inchange, et sont resolues en
+    categories reelles (creees si absentes) au moment du seed.
+
+    Les libelles doivent rester identiques a ceux de la migration
+    e3a9f6c1d072, qui a cree ces categories sur les bases existantes.
+    """
+    DOMAINE = "Domaine internet"
+    TELEPHONE = "Téléphone"
+    MINISTERE = "Ministère"
+    AGENCE_GOUVERNEMENTALE = "Agence gouvernementale"
+    BANQUE = "Banque"
+    MICROFINANCE = "Microfinance"
+    TELECOM = "Télécommunications"
+    UNIVERSITE = "Université"
+    ENTREPRISE = "Entreprise"
+    VILLE_REGION = "Ville / région"
+
+    # Noms de lieux generiques : la regle "liste de pays" s'y applique.
+    LIEUX_GENERIQUES = {VILLE_REGION}
+
+
+def _categorie(session, cache, nom):
+    """Categorie par son nom, creee au besoin (base neuve)."""
+    if nom not in cache:
+        categorie = session.query(Categorie).filter_by(nom=nom).first()
+        if categorie is None:
+            categorie = Categorie(
+                nom=nom, lieu_generique=nom in CategorieSelecteur.LIEUX_GENERIQUES,
+            )
+            session.add(categorie)
+            session.flush()
+        cache[nom] = categorie
+    return cache[nom]
 
 
 logging.basicConfig(
@@ -653,18 +692,22 @@ def seed():
     tous = list(SEED_ORIGINAL) + list(SEED_SELECTEURS_ENRICHIS)
     uniques = list(dict.fromkeys(tous))
 
+    cache_categories = {}
+
     try:
-        for valeur, categorie in uniques:
+        for valeur, nom_categorie in uniques:
             valeur = valeur.strip()
 
             if not valeur:
                 continue
 
+            categorie = _categorie(session, cache_categories, nom_categorie)
+
             existing = (
                 session.query(Selecteur)
                 .filter_by(
                     valeur=valeur,
-                    categorie=categorie,
+                    categorie_id=categorie.id,
                 )
                 .first()
             )

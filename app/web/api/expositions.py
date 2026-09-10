@@ -8,7 +8,7 @@ from flask_login import login_required
 from app.config_system import get_config_int
 from app.db import get_session
 from app.models import (
-    CategorieFuite, Exposition, NiveauCriticite, RoleUtilisateur,
+    Categorie, Exposition, NiveauCriticite, RoleUtilisateur,
     StatutExposition, utc_now,
 )
 from app.web.permissions import role_requis
@@ -61,7 +61,8 @@ def serialiser(exposition, detaille: bool = False) -> dict:
         "nom_entite": exposition.nom_entite,
         "secteur_activite": exposition.secteur_activite,
         "type_entite": exposition.type_entite.value if exposition.type_entite else None,
-        "categorie_fuite": exposition.categorie_fuite.value,
+        # FR-13 : categories des selecteurs qui ont declenche l'exposition.
+        "categories": [{"id": c.id, "nom": c.nom} for c in exposition.categories],
         "criticite": exposition.criticite,
         "niveau_criticite": exposition.niveau_criticite.value,
         "statut": exposition.statut.value,
@@ -102,12 +103,7 @@ def enregistrer(api_bp):
             # d'URL bricole a la main.
             categorie = request.args.get("categorie", "").strip()
             if categorie:
-                try:
-                    query = query.filter(
-                        Exposition.categorie_fuite == CategorieFuite(categorie)
-                    )
-                except ValueError:
-                    pass
+                query = query.filter(Exposition.categories.any(Categorie.id == categorie))
 
             statut = request.args.get("statut", "").strip()
             if statut:
@@ -154,7 +150,10 @@ def enregistrer(api_bp):
                 "tronque": total > len(lignes),
                 "referentiels": {
                     "secteurs": secteurs,
-                    "categories": [c.value for c in CategorieFuite],
+                    "categories": [
+                        {"id": c.id, "nom": c.nom}
+                        for c in session.query(Categorie).order_by(Categorie.nom)
+                    ],
                     "statuts": [s.value for s in StatutExposition],
                     "niveaux": [n.value for n in NiveauCriticite],
                 },

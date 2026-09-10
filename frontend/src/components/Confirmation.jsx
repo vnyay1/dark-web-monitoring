@@ -1,9 +1,11 @@
 /**
- * Fenetre de confirmation d'une action irreversible.
+ * Fenetre modale : confirmation d'une action irreversible, ou petit
+ * formulaire (modification d'une categorie, d'un selecteur).
  *
- * Le focus part sur "Annuler" et non sur l'action : un Entree reflexe ne
- * doit jamais declencher une suppression. Echap et un clic hors de la
- * fenetre annulent.
+ * En confirmation, le focus part sur "Annuler" et non sur l'action : un
+ * Entree reflexe ne doit jamais declencher une suppression. En formulaire
+ * (focusAnnuler=false), le focus est laisse au premier champ. Echap et un
+ * clic hors de la fenetre annulent.
  */
 
 import { useEffect, useRef } from "react";
@@ -12,7 +14,11 @@ export default function Confirmation({
   titre,
   children,
   libelleConfirmer,
+  libelleEnCours = "Suppression…",
+  variante = "danger",
   enCours = false,
+  desactiverConfirmer = false,
+  focusAnnuler = true,
   onConfirmer,
   onAnnuler,
   actionSecondaire = null,
@@ -22,7 +28,8 @@ export default function Confirmation({
   // A l'ouverture seulement : refocaliser a chaque rendu du parent volerait
   // le focus a l'utilisateur en pleine navigation au clavier.
   useEffect(() => {
-    boutonAnnuler.current?.focus();
+    if (focusAnnuler) boutonAnnuler.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -42,7 +49,7 @@ export default function Confirmation({
     >
       <div
         className="fenetre"
-        role="alertdialog"
+        role={variante === "danger" ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby="fenetre-titre"
       >
@@ -69,11 +76,11 @@ export default function Confirmation({
             </button>
           )}
           <button
-            className="btn btn-danger"
+            className={`btn ${variante === "danger" ? "btn-danger" : "btn-primary"}`}
             onClick={onConfirmer}
-            disabled={enCours}
+            disabled={enCours || desactiverConfirmer}
           >
-            {enCours ? "Suppression…" : libelleConfirmer}
+            {enCours ? libelleEnCours : libelleConfirmer}
           </button>
         </div>
       </div>

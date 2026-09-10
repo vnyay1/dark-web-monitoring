@@ -9,8 +9,12 @@ from app.config_system import (
     VALEURS_PAR_DEFAUT, init_config_defaults, set_config, valider_valeur,
 )
 from app.db import get_session
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
+
 from app.models import (
-    CategorieSelecteur, ConfigurationSysteme, RoleUtilisateur, Selecteur,
+    Categorie, ConfigurationSysteme, Exposition, RoleUtilisateur, Selecteur,
+    exposition_categories,
 )
 from app.web.permissions import role_requis
 
@@ -69,6 +73,162 @@ def enregistrer(api_bp):
         set_config(cle, valeur)
         return jsonify({"succes": True, "cle": cle, "valeur": valeur})
 
+    # ------------------------------------------------------------------
+    # Categories (FR-13) - gerees par l'administrateur
+    # ------------------------------------------------------------------
+
+    @api_bp.route("/categories", methods=["GET"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def lire_categories():
+        session = get_session()
+        try:
+            return jsonify({"categories": _categories_avec_compteurs(session)})
+        finally:
+            session.close()
+
+    @api_bp.route("/categories", methods=["POST"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def creer_categorie():
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            erreur = _valider_categorie(session, donnees)
+            if erreur:
+                return erreur
+
+            categorie = Categorie(
+                nom=donnees["nom"].strip(),
+                description=(donnees.get("description") or "").strip() or None,
+                lieu_generique=bool(donnees.get("lieu_generique")),
+            )
+            session.add(categorie)
+            session.commit()
+            logger.info(f"[catalogue] Categorie creee par '{current_user.nom_utilisateur}' : {categorie.nom!r}")
+            return jsonify({"succes": True, "categorie": _serialiser_categorie(categorie)})
+        finally:
+            session.close()
+
+    @api_bp.route("/categories/<categorie_id>", methods=["PUT"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def modifier_categorie(categorie_id):
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            categorie = session.get(Categorie, categorie_id)
+            if categorie is None:
+                return _introuvable("Categorie inexistante.")
+
+            erreur = _valider_categorie(session, donnees, exclure_id=categorie.id)
+            if erreur:
+                return erreur
+
+            ancien_nom = categorie.nom
+            categorie.nom = donnees["nom"].strip()
+            categorie.description = (donnees.get("description") or "").strip() or None
+            categorie.lieu_generique = bool(donnees.get("lieu_generique"))
+            session.commit()
+
+            logger.info(
+                f"[catalogue] Categorie modifiee par '{current_user.nom_utilisateur}' : "
+                f"{ancien_nom!r} -> {categorie.nom!r}"
+            )
+            return jsonify({"succes": True, "categorie": _serialiser_categorie(categorie)})
+        finally:
+            session.close()
+
+    @api_bp.route("/categories/<categorie_id>", methods=["DELETE"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def supprimer_categorie(categorie_id):
+        """
+        Suppression d'une categorie. Si elle est utilisee, une categorie de
+        REMPLACEMENT est obligatoire : ses selecteurs et les expositions qui
+        la portaient y sont transferes. Rien n'est perdu - ni un selecteur
+        du catalogue, ni la categorisation d'une exposition deja detectee.
+        """
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            categorie = session.get(Categorie, categorie_id)
+            if categorie is None:
+                return _introuvable("Categorie inexistante.")
+
+            nb_selecteurs = session.query(Selecteur).filter_by(categorie_id=categorie.id).count()
+            ids_expositions = [
+                ligne[0] for ligne in session.execute(
+                    exposition_categories.select()
+                    .with_only_columns(exposition_categories.c.exposition_id)
+                    .where(exposition_categories.c.categorie_id == categorie.id)
+                )
+            ]
+
+            remplacement = None
+            if nb_selecteurs or ids_expositions:
+                remplacement_id = donnees.get("remplacement_id")
+                if not remplacement_id:
+                    return jsonify({
+                        "succes": False,
+                        "message": (
+                            f"Cette categorie est utilisee par {nb_selecteurs} selecteur(s) "
+                            f"et {len(ids_expositions)} exposition(s) : choisissez une "
+                            f"categorie vers laquelle les transferer."
+                        ),
+                    }), 409
+                remplacement = session.get(Categorie, remplacement_id)
+                if remplacement is None or remplacement.id == categorie.id:
+                    return jsonify({
+                        "succes": False,
+                        "message": "Categorie de remplacement invalide.",
+                    }), 400
+
+                # Selecteurs : simple changement de rattachement.
+                (session.query(Selecteur)
+                 .filter_by(categorie_id=categorie.id)
+                 .update({"categorie_id": remplacement.id}, synchronize_session=False))
+
+                # Expositions : transfert sans doublon - une exposition qui
+                # portait deja la categorie de remplacement la garde une fois.
+                deja = {
+                    ligne[0] for ligne in session.execute(
+                        exposition_categories.select()
+                        .with_only_columns(exposition_categories.c.exposition_id)
+                        .where(exposition_categories.c.categorie_id == remplacement.id)
+                    )
+                }
+                a_ajouter = [i for i in ids_expositions if i not in deja]
+                if a_ajouter:
+                    session.execute(exposition_categories.insert(), [
+                        {"exposition_id": i, "categorie_id": remplacement.id} for i in a_ajouter
+                    ])
+
+            session.execute(
+                exposition_categories.delete()
+                .where(exposition_categories.c.categorie_id == categorie.id)
+            )
+            nom = categorie.nom
+            session.delete(categorie)
+            session.commit()
+
+            logger.warning(
+                f"[catalogue] Categorie supprimee par '{current_user.nom_utilisateur}' : {nom!r}"
+                + (f" ({nb_selecteurs} selecteur(s) et {len(ids_expositions)} exposition(s) "
+                   f"transferes vers {remplacement.nom!r})" if remplacement else "")
+            )
+            return jsonify({
+                "succes": True,
+                "selecteurs_transferes": nb_selecteurs,
+                "expositions_transferees": len(ids_expositions),
+            })
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Selecteurs (FR-08)
+    # ------------------------------------------------------------------
+
     @api_bp.route("/selecteurs", methods=["GET"])
     @login_required
     @role_requis(RoleUtilisateur.ADMIN)
@@ -77,22 +237,14 @@ def enregistrer(api_bp):
         try:
             lignes = (
                 session.query(Selecteur)
-                .order_by(Selecteur.categorie, Selecteur.valeur)
+                .options(joinedload(Selecteur.categorie))
+                .join(Categorie)
+                .order_by(Categorie.nom, Selecteur.valeur)
                 .all()
             )
             return jsonify({
-                "selecteurs": [
-                    {
-                        "id": s.id,
-                        "valeur": s.valeur,
-                        "categorie": s.categorie.value,
-                        "actif": s.actif,
-                        "propose_par_ner": s.propose_par_ner,
-                        "valide_par_analyste": s.valide_par_analyste,
-                    }
-                    for s in lignes
-                ],
-                "categories": [c.value for c in CategorieSelecteur],
+                "selecteurs": [_serialiser_selecteur(s) for s in lignes],
+                "categories": _categories_avec_compteurs(session),
             })
         finally:
             session.close()
@@ -102,44 +254,50 @@ def enregistrer(api_bp):
     @role_requis(RoleUtilisateur.ADMIN)
     def ajouter_selecteur():
         donnees = request.get_json(silent=True) or {}
-        valeur = (donnees.get("valeur") or "").strip()
-
-        if not valeur:
-            return jsonify({"succes": False, "message": "Valeur requise."}), 400
-
-        try:
-            categorie = CategorieSelecteur(donnees.get("categorie"))
-        except ValueError:
-            return jsonify({"succes": False, "message": "Categorie inconnue."}), 400
-
         session = get_session()
         try:
-            existant = (
-                session.query(Selecteur)
-                .filter_by(valeur=valeur, categorie=categorie)
-                .first()
-            )
-            if existant:
-                return jsonify({
-                    "succes": False,
-                    "message": f"Le selecteur '{valeur}' existe deja dans cette categorie.",
-                }), 409
+            valeur, categorie, erreur = _valider_selecteur(session, donnees)
+            if erreur:
+                return erreur
 
             selecteur = Selecteur(valeur=valeur, categorie=categorie, actif=True)
             session.add(selecteur)
             session.commit()
 
-            return jsonify({
-                "succes": True,
-                "selecteur": {
-                    "id": selecteur.id,
-                    "valeur": selecteur.valeur,
-                    "categorie": selecteur.categorie.value,
-                    "actif": selecteur.actif,
-                    "propose_par_ner": selecteur.propose_par_ner,
-                    "valide_par_analyste": selecteur.valide_par_analyste,
-                },
-            })
+            return jsonify({"succes": True, "selecteur": _serialiser_selecteur(selecteur)})
+        finally:
+            session.close()
+
+    @api_bp.route("/selecteurs/<selecteur_id>", methods=["PUT"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def modifier_selecteur(selecteur_id):
+        """
+        Modification de la valeur et/ou de la categorie d'un selecteur. Les
+        expositions deja detectees gardent leurs categories : la
+        modification vaut pour les collectes a venir.
+        """
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            selecteur = session.get(Selecteur, selecteur_id)
+            if selecteur is None:
+                return _introuvable("Selecteur inexistant.")
+
+            valeur, categorie, erreur = _valider_selecteur(session, donnees, exclure_id=selecteur.id)
+            if erreur:
+                return erreur
+
+            ancien = selecteur.valeur
+            selecteur.valeur = valeur
+            selecteur.categorie = categorie
+            session.commit()
+
+            logger.info(
+                f"[catalogue] Selecteur modifie par '{current_user.nom_utilisateur}' : "
+                f"{ancien!r} -> {valeur!r} ({categorie.nom})"
+            )
+            return jsonify({"succes": True, "selecteur": _serialiser_selecteur(selecteur)})
         finally:
             session.close()
 
@@ -151,10 +309,7 @@ def enregistrer(api_bp):
         try:
             selecteur = session.get(Selecteur, selecteur_id)
             if selecteur is None:
-                return jsonify({
-                    "erreur": "introuvable",
-                    "message": "Selecteur inexistant.",
-                }), 404
+                return _introuvable("Selecteur inexistant.")
 
             selecteur.actif = not selecteur.actif
             session.commit()
@@ -170,21 +325,19 @@ def enregistrer(api_bp):
         Suppression DEFINITIVE d'un selecteur du catalogue.
 
         Aucune table ne reference les selecteurs : la criticite n'enregistre
-        pas les selecteurs trouves (CN-03). Les expositions deja detectees ne
-        sont donc pas affectees ; seules les collectes futures ne
-        rechercheront plus ce terme. La desactivation reste l'alternative
+        pas les selecteurs trouves (CN-03), et les categories d'une
+        exposition lui sont attachees directement. Les expositions deja
+        detectees ne sont donc pas affectees ; seules les collectes futures
+        ne rechercheront plus ce terme. La desactivation reste l'alternative
         reversible.
         """
         session = get_session()
         try:
             selecteur = session.get(Selecteur, selecteur_id)
             if selecteur is None:
-                return jsonify({
-                    "erreur": "introuvable",
-                    "message": "Selecteur inexistant.",
-                }), 404
+                return _introuvable("Selecteur inexistant.")
 
-            valeur, categorie = selecteur.valeur, selecteur.categorie.value
+            valeur, categorie = selecteur.valeur, selecteur.categorie.nom
             session.delete(selecteur)
             session.commit()
 
@@ -195,3 +348,94 @@ def enregistrer(api_bp):
             return jsonify({"succes": True, "valeur": valeur})
         finally:
             session.close()
+
+
+# ----------------------------------------------------------------------
+# Aides
+# ----------------------------------------------------------------------
+
+def _introuvable(message):
+    return jsonify({"erreur": "introuvable", "message": message}), 404
+
+
+def _serialiser_categorie(categorie, nb_selecteurs=None, nb_expositions=None) -> dict:
+    donnees = {
+        "id": categorie.id,
+        "nom": categorie.nom,
+        "description": categorie.description,
+        "lieu_generique": categorie.lieu_generique,
+    }
+    if nb_selecteurs is not None:
+        donnees["nb_selecteurs"] = nb_selecteurs
+        donnees["nb_expositions"] = nb_expositions
+    return donnees
+
+
+def _serialiser_selecteur(selecteur) -> dict:
+    return {
+        "id": selecteur.id,
+        "valeur": selecteur.valeur,
+        "categorie": {"id": selecteur.categorie.id, "nom": selecteur.categorie.nom},
+        "actif": selecteur.actif,
+        "propose_par_ner": selecteur.propose_par_ner,
+        "valide_par_analyste": selecteur.valide_par_analyste,
+    }
+
+
+def _categories_avec_compteurs(session) -> list:
+    """
+    Categories, avec leur nombre de selecteurs et d'expositions : l'interface
+    annonce ainsi l'effet d'une suppression AVANT de la demander.
+    """
+    selecteurs = dict(
+        session.query(Selecteur.categorie_id, func.count()).group_by(Selecteur.categorie_id).all()
+    )
+    expositions = dict(session.execute(
+        exposition_categories.select()
+        .with_only_columns(exposition_categories.c.categorie_id, func.count())
+        .group_by(exposition_categories.c.categorie_id)
+    ).all())
+    return [
+        _serialiser_categorie(c, selecteurs.get(c.id, 0), expositions.get(c.id, 0))
+        for c in session.query(Categorie).order_by(Categorie.nom).all()
+    ]
+
+
+def _valider_categorie(session, donnees, exclure_id=None):
+    """Retourne une reponse d'erreur, ou None si les donnees sont valides."""
+    nom = (donnees.get("nom") or "").strip()
+    if not nom:
+        return jsonify({"succes": False, "message": "Nom de categorie requis."}), 400
+    if len(nom) > 100:
+        return jsonify({"succes": False, "message": "Nom limite a 100 caracteres."}), 400
+
+    # Unicite insensible a la casse : "banque" et "Banque" seraient deux
+    # categories distinctes en base mais indiscernables a l'ecran.
+    query = session.query(Categorie).filter(func.lower(Categorie.nom) == nom.lower())
+    if exclure_id:
+        query = query.filter(Categorie.id != exclure_id)
+    if query.first():
+        return jsonify({"succes": False, "message": f"La categorie {nom!r} existe deja."}), 409
+    return None
+
+
+def _valider_selecteur(session, donnees, exclure_id=None):
+    """Retourne (valeur, categorie, erreur) ; erreur est None si tout va bien."""
+    valeur = (donnees.get("valeur") or "").strip()
+    if not valeur:
+        return None, None, (jsonify({"succes": False, "message": "Valeur requise."}), 400)
+
+    categorie = session.get(Categorie, donnees.get("categorie_id") or "")
+    if categorie is None:
+        return None, None, (jsonify({"succes": False, "message": "Categorie inconnue."}), 400)
+
+    query = session.query(Selecteur).filter_by(valeur=valeur, categorie_id=categorie.id)
+    if exclure_id:
+        query = query.filter(Selecteur.id != exclure_id)
+    if query.first():
+        return None, None, (jsonify({
+            "succes": False,
+            "message": f"Le selecteur {valeur!r} existe deja dans la categorie {categorie.nom!r}.",
+        }), 409)
+
+    return valeur, categorie, None

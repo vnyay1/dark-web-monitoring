@@ -88,8 +88,10 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
     repartition_secteur = Counter(
         (e.secteur_activite or "Non renseigné") for e in expositions_du_mois
     )
+    # Une exposition compte dans CHACUNE de ses categories (FR-13) : le
+    # total peut depasser le nombre d'expositions, ce que le document dit.
     repartition_categorie = Counter(
-        e.categorie_fuite.value for e in expositions_du_mois
+        c.nom for e in expositions_du_mois for c in e.categories
     )
     repartition_statut = Counter(
         e.statut.value for e in expositions_du_mois
@@ -120,8 +122,7 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
         {
             "nom": e.nom_entite,
             "secteur": e.secteur_activite or "Non renseigné",
-            "categorie": e.categorie_fuite.value,
-            "categorie_libelle": libelles.libelle(libelles.CATEGORIE, e.categorie_fuite),
+            "categories": [c.nom for c in e.categories],
             "criticite": e.criticite,
             "niveau_criticite": e.niveau_criticite.value,
             "niveau_libelle": libelles.libelle(libelles.NIVEAU, e.niveau_criticite),
@@ -166,10 +167,7 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
         "secteurs": secteurs,
         "secteurs_principaux": secteurs_principaux,
         "part_secteurs_principaux": sum(n for _, n in secteurs_principaux),
-        "categories": [
-            (libelles.libelle(libelles.CATEGORIE, c), n)
-            for c, n in repartition_categorie.most_common()
-        ],
+        "categories": repartition_categorie.most_common(),
         "statuts": [
             (libelles.STATUT[s.value], repartition_statut[s.value])
             for s in StatutExposition if repartition_statut.get(s.value)

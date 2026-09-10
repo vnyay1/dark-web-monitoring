@@ -105,9 +105,10 @@ def appliquer_regles_structurelles(texte: str, matches: list) -> list:
             logger.info(f"[FR-11] Rejet '{m.segment_trouve}' : 'cm' isole dans un mot plus long")
             continue
 
-        # La regle "liste de pays" ne s'applique qu'aux selecteurs de
-        # categorie generique (ville_region inclut les noms de pays)
-        if m.selecteur_categorie == "ville_region" and _est_dans_liste_de_pays(texte, m.position, m.segment_trouve):
+        # La regle "liste de pays" ne s'applique qu'aux noms de lieux
+        # generiques. Elle suit l'indicateur de la categorie, et non plus son
+        # nom : les categories sont renommables par l'administrateur.
+        if m.categorie_lieu_generique and _est_dans_liste_de_pays(texte, m.position, m.segment_trouve):
             logger.info(f"[FR-11] Rejet '{m.segment_trouve}' : contexte de liste de pays/victimes detecte")
             continue
 

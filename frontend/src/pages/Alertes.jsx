@@ -7,7 +7,7 @@ import {
   EnTetePage,
   Erreur,
   formaterDateHeure,
-  LIBELLE_CATEGORIE,
+  ListeCategories,
   Messages,
   PastilleCriticite,
   Vide,
@@ -92,10 +92,7 @@ export default function Alertes() {
                         niveau={a.exposition.niveau_criticite}
                         criticite={a.exposition.criticite}
                       />
-                      <span className="cell-muted">
-                        {LIBELLE_CATEGORIE[a.exposition.categorie_fuite] ||
-                          a.exposition.categorie_fuite}
-                      </span>
+                      <ListeCategories categories={a.exposition.categories} />
                     </>
                   )}
                   <span className="cell-mono">

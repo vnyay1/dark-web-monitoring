@@ -8,8 +8,8 @@ import {
   Erreur,
   formaterDate,
   formaterDateHeure,
-  LIBELLE_CATEGORIE,
   LIBELLE_NIVEAU,
+  ListeCategories,
   ListeSources,
   PastilleCriticite,
   PastilleStatut,
@@ -35,7 +35,7 @@ export default function Dashboard() {
   }));
 
   const parCategorie = Object.entries(donnees.repartition_categorie).map(
-    ([cle, valeur]) => ({ libelle: LIBELLE_CATEGORIE[cle] || cle, valeur }),
+    ([libelle, valeur]) => ({ libelle, valeur }),
   );
 
   const parSecteur = Object.entries(donnees.repartition_secteur)
@@ -98,7 +98,10 @@ export default function Dashboard() {
         </section>
 
         <section className="card card-pad">
-          <h2 className="section-title">Répartition par catégorie de fuite</h2>
+          <h2 className="section-title">
+            Répartition par catégorie
+            <span className="count">une exposition peut en porter plusieurs</span>
+          </h2>
           <BarresHorizontales donnees={parCategorie} suffixe="exposition(s)" />
         </section>
       </div>
@@ -181,7 +184,7 @@ export default function Dashboard() {
                 <tr>
                   <th>Entité</th>
                   <th>Criticité</th>
-                  <th>Catégorie</th>
+                  <th>Catégories</th>
                   <th>Sources</th>
                   <th>Détection</th>
                   <th>Statut</th>
@@ -199,8 +202,8 @@ export default function Dashboard() {
                         criticite={e.criticite}
                       />
                     </td>
-                    <td className="cell-muted">
-                      {LIBELLE_CATEGORIE[e.categorie_fuite] || e.categorie_fuite}
+                    <td>
+                      <ListeCategories categories={e.categories} />
                     </td>
                     <td>
                       <ListeSources sources={e.sources} />
