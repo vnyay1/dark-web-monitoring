@@ -8,9 +8,9 @@ Chaque connecteur retourne un dict {"entries": [...], "texte_global": ...,
 (une entree = une victime potentielle = une Exposition potentielle),
 plutot que la page entiere d'un coup, pour rester precis sur FR-16.
 
-Les entrees ont des schemas heterogenes selon les sources (thehackernews
-expose "titre"/"lien_article" la ou les autres exposent
-"nom_entite_detecte"/"lien_detail") : _normaliser_entry() les ramene a un
+Les entrees ont des schemas heterogenes selon les sources (cles de date
+"date_publication", "discovery_date" ou "date" ; nom porte par
+"nom_entite_detecte" ou "titre") : _normaliser_entry() les ramene a un
 schema unique avant traitement.
 
 ROBUSTESSE - une exception sur UNE entree ne doit jamais interrompre les
@@ -61,7 +61,7 @@ BUDGET_DETAILS_GLOBAL_PAR_RUN = 250
 
 # Cles possibles pour un meme concept, par ordre de preference.
 CLES_NOM = ("nom_entite_detecte", "titre", "nom_entite")
-CLES_REFERENCE = ("reference_source", "lien_detail", "lien_article")
+CLES_REFERENCE = ("reference_source", "lien_detail")
 # Les sources ne nomment pas la date de la meme facon : dataexposurelogs
 # expose "discovery_date", everest "date", les autres "date_publication".
 CLES_DATE = ("date_publication", "discovery_date", "date")

@@ -245,7 +245,7 @@ def phase_formes(connecteur):
     print(f"\nFORME DES LIENS PAR ENTREE ({len(entrees)} entree(s))")
     print("-" * 64)
     for entree in entrees[:10]:
-        lien = entree.get("lien_detail") or entree.get("lien_article")
+        lien = entree.get("lien_detail")
         print(f"  {_forme_url(lien, netloc_source) or 'aucun lien'}")
 
     print()
@@ -270,7 +270,7 @@ def phase_detail(connecteur, index):
         raise SystemExit(f"Index {index} hors limites : {len(entrees)} entree(s).")
 
     entree = entrees[index]
-    lien = entree.get("lien_detail") or entree.get("lien_article")
+    lien = entree.get("lien_detail")
     if not lien:
         raise SystemExit("Cette entree n'expose aucun lien de detail.")
 

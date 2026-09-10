@@ -18,27 +18,29 @@ from app.matching.criticite import niveau_pour
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+# Jeu de test -> connecteur reel. Les sources de demonstration doivent etre
+# EXACTEMENT celles que cree le pipeline : deriver leur nom de l'URL
+# produisait des doublons ("orionleaks" a cote de "orion_leaks") qui
+# apparaissaient comme des sources injoignables dans l'interface.
+CONNECTEUR_PAR_HOTE = {
+    "payload": "payload",
+    "cmd-org": "cmd_organization",
+    "safepay": "safepay",
+    "blackwater": "blackwater",
+    "orionleaks": "orion_leaks",
+    "dataexposurelogs": "data_exposure_logs",
+}
+
+
 def _source_de_test(session, data):
-    """
-    Retrouve (ou cree) la Source correspondant a l'URL du jeu de test, pour
-    que les expositions de demonstration affichent une origine nommee comme
-    celles produites par le pipeline.
-    """
+    """Source du connecteur reel correspondant au jeu de test."""
     from urllib.parse import urlparse
 
-    nom = urlparse(data["source_ref"]).hostname or "source_de_test"
-    nom = nom.split(".")[0]
+    from app.connectors import connecteur_par_nom
+    from app.pipeline import _get_or_create_source
 
-    source = session.query(Source).filter_by(nom=nom).first()
-    if source is None:
-        source = Source(
-            nom=nom,
-            type_source=data["source_type"],
-            url_ou_identifiant=data["source_ref"],
-        )
-        session.add(source)
-        session.flush()
-    return source
+    hote = (urlparse(data["source_ref"]).hostname or "").split(".")[0]
+    return _get_or_create_source(session, connecteur_par_nom(CONNECTEUR_PAR_HOTE[hote]))
 
 
 TEST_DATA = [

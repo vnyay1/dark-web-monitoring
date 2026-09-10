@@ -37,7 +37,10 @@ def enregistrer(api_bp):
                 for niveau in NiveauCriticite
             }
 
-            sources = session.query(Source).all()
+            # Une source retiree reste en base (son journal d'audit en
+            # depend) mais n'est plus surveillee : elle ne doit pas
+            # apparaitre comme "injoignable".
+            sources = session.query(Source).filter(Source.actif.is_(True)).all()
 
             return jsonify({
                 "total": len(expositions),
