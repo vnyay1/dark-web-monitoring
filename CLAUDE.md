@@ -69,7 +69,7 @@ so missing vars raise at import time): `DATABASE_URL`, `FLASK_SECRET_KEY`, `TOR_
 
 Pipeline: **Scheduler (APScheduler, once daily at a random hour) → Connectors (incremental
 two-phase crawl) → Tor module → Date window → Matching Engine → False-positive filtering →
-Criticality → Categorization → Deduplication → SQLAlchemy/SQLite → Alerting + JSON API +
+Criticality → Categories (from the matched selectors) → Deduplication → SQLAlchemy/SQLite → Alerting + JSON API +
 React SPA**.
 
 ### Connectors (`app/connectors/`)
