@@ -31,6 +31,7 @@ Usage :
     python -m app.connectors.reconnaissance --source payload --phase detail --index 0
     python -m app.connectors.reconnaissance --source payload --phase formes
     python -m app.connectors.reconnaissance --source blackwater --phase dates
+    python -m app.connectors.reconnaissance --source safepay --phase detail --profondeur 14
 
 La phase "dates" est la seule a imprimer du texte de la page : UNIQUEMENT la
 chaine de date de chaque entree, et ce qu'en tire parser_date(). Une date de
@@ -216,7 +217,7 @@ def _verdict_liceite(connecteur, reponse, url_detail, libelle_lien):
         print("\n  => NE PAS activer SUPPORTE_DETAIL : la source reste en listing-only.")
 
 
-def phase_listing(connecteur):
+def phase_listing(connecteur, profondeur=6):
     """Squelette de la page de listing + detection heuristique d'une pagination."""
     netloc_source = urlparse(connecteur.TARGET_URL or "").netloc
     reponse = _recuperer(connecteur, connecteur.TARGET_URL)
@@ -229,7 +230,7 @@ def phase_listing(connecteur):
 
     print("\nSQUELETTE STRUCTUREL")
     print("-" * 64)
-    print(resumer_structure(reponse.text, netloc_source=netloc_source))
+    print(resumer_structure(reponse.text, profondeur_max=profondeur, netloc_source=netloc_source))
 
     print("\nCANDIDATS PAGINATION")
     print("-" * 64)
@@ -299,7 +300,7 @@ def phase_dates(connecteur, limite=15):
         print("  que la n'apparaissent pas ici.")
 
 
-def phase_detail(connecteur, index):
+def phase_detail(connecteur, index, profondeur=6):
     """Squelette de la page de detail d'UNE entree, avec verdict de liceite."""
     if connecteur.SOURCE_NAME in SOURCES_LIENS_INTERDITS:
         raise SystemExit(
@@ -336,7 +337,7 @@ def phase_detail(connecteur, index):
 
     print("\nSQUELETTE STRUCTUREL DE LA PAGE DE DETAIL")
     print("-" * 64)
-    print(resumer_structure(reponse.text, netloc_source=netloc_source))
+    print(resumer_structure(reponse.text, profondeur_max=profondeur, netloc_source=netloc_source))
 
     _verdict_liceite(connecteur, reponse, url, entree.get("nom_entite_detecte"))
 
@@ -350,6 +351,9 @@ def _analyser_arguments():
                          choices=("listing", "detail", "formes", "dates"))
     parseur.add_argument("--index", type=int, default=0,
                          help="Entree du listing dont on inspecte le detail")
+    parseur.add_argument("--profondeur", type=int, default=6,
+                         help="Profondeur du squelette (augmenter si le contenu "
+                              "est niche dans de nombreux conteneurs)")
     return parseur.parse_args()
 
 
@@ -366,10 +370,10 @@ if __name__ == "__main__":
     print("=" * 64)
 
     if arguments.phase == "listing":
-        phase_listing(connecteur)
+        phase_listing(connecteur, arguments.profondeur)
     elif arguments.phase == "formes":
         phase_formes(connecteur)
     elif arguments.phase == "dates":
         phase_dates(connecteur)
     else:
-        phase_detail(connecteur, arguments.index)
+        phase_detail(connecteur, arguments.index, arguments.profondeur)
