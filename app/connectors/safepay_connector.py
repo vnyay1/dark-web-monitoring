@@ -3,9 +3,26 @@ FR-03 - Connecteur reel #5 : SafePay (ransomware leak site).
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
 MISE A JOUR : utilise desormais le module centralise app.tor.
+
+PAGE DE DETAIL - le listing ne date pas ses annonces ; la page de detail,
+si. Structure confirmee par reconnaissance (VM, 10/09/2026, verdict de
+liceite favorable : HTML, meme domaine, page d'annonce) :
+
+    div.card.bg-dark.text-light
+      div.card-header                 nom de l'entite (h2)
+      div#countdown-header-bar        compte a rebours
+      div.card-body.scrollable-content
+        p.text-muted.mb-2             i.bi-calendar <DATE>  i.bi-eye <VUES>
+        div.mb-3 > p  (x2)            description de l'annonce
+        div#countdown-block
+          div#countdown-link-block    NON LU : lien vers les donnees, affiche
+                                      une fois le compte a rebours ecoule (CN-04)
+      div.card-footer                 retour au blog
 """
 
 import logging
+from urllib.parse import urlparse
+
 from bs4 import BeautifulSoup
 from app.connectors.base_connector import BaseConnector
 
@@ -17,6 +34,16 @@ class SafePayConnector(BaseConnector):
     SOURCE_TYPE = "ransomware_site"
 
     TARGET_URL = "http://safepaypfxntwixwjrlcscft433ggemlhgkkdupi2ynhtcmvdgubmoyd.onion/"
+
+    # Page de detail : seule source de la date de publication. Le listing
+    # ne compte qu'une dizaine d'annonces et seules les NOUVELLES sont
+    # visitees : ce budget suffit, a raison d'une requete toutes les 30 a
+    # 45 s (FR-06).
+    SUPPORTE_DETAIL = True
+    MAX_DETAILS_PAR_RUN = 10
+
+    # Seule forme de lien verifiee comme page d'annonce (reconnaissance).
+    PREFIXE_ANNONCE = "/blog/post/"
 
 
     def parse(self, raw_content):
@@ -65,6 +92,64 @@ class SafePayConnector(BaseConnector):
             "texte_global": texte_global,
             "nb_entries": len(entries),
         }
+
+
+    def url_detail(self, entry):
+        """
+        Page d'annonce sur le domaine surveille, et SEULEMENT sous la forme
+        verifiee /blog/post/<slug>/. Tout autre lien (domaine tiers, autre
+        chemin) est refuse : CN-04, on ne visite que ce qui a ete qualifie.
+        """
+        chemin = self._chemin_interne(entry.get("lien_detail"))
+        if not chemin or not chemin.startswith(self.PREFIXE_ANNONCE):
+            return None
+        racine = urlparse(self.TARGET_URL)
+        return f"{racine.scheme}://{racine.netloc}{chemin}"
+
+    def parse_detail(self, raw_content, entry):
+        """
+        Extrait la date de publication et la description de l'annonce.
+        Le bloc #countdown-link-block n'est pas lu : il porte, une fois le
+        compte a rebours ecoule, le lien vers les donnees divulguees.
+        """
+        soup = BeautifulSoup(raw_content, "html.parser")
+        corps = soup.select_one("div.card-body")
+        if corps is None:
+            return {}
+
+        # Le lien vers les donnees est retire AVANT toute lecture de texte.
+        for bloc in corps.select("#countdown-block, #countdown-link-block"):
+            bloc.decompose()
+
+        description = " ".join(
+            p.get_text(" ", strip=True) for p in corps.select("div.mb-3 p")
+        )
+
+        return {
+            "date_publication": self._date_meta(corps),
+            "texte_brut": self.nettoyer_urls(description),
+        }
+
+    @staticmethod
+    def _date_meta(corps):
+        """
+        Texte situe entre l'icone calendrier et l'icone vues, dans la ligne
+        de metadonnees : "<i class="bi-calendar"></i> DATE <i class="bi-eye"></i> VUES".
+        """
+        meta = corps.select_one("p.text-muted")
+        icone = meta.select_one("i.bi-calendar") if meta else None
+        if icone is None:
+            return None
+
+        morceaux = []
+        for voisin in icone.next_siblings:
+            if getattr(voisin, "name", None) == "i":
+                break          # icone suivante (vues) : fin de la date
+            texte = voisin.get_text(" ", strip=True) if hasattr(voisin, "get_text") else str(voisin)
+            morceaux.append(texte)
+
+        date = " ".join(" ".join(morceaux).split()).strip(" |·-,")
+        return date or None
 
 
 if __name__ == "__main__":
