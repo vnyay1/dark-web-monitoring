@@ -24,12 +24,10 @@
   margin-bottom: 4px;
 }
 
-.connexion-entete .brand-mark {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-md);
-  background: linear-gradient(135deg, var(--accent), var(--info));
-  box-shadow: var(--shadow-glow);
+.connexion-logo {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
   margin: 0 auto 12px;
   display: block;
 }

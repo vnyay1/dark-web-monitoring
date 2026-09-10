@@ -25,12 +25,11 @@
   gap: 11px;
 }
 
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-sm);
-  background: linear-gradient(135deg, var(--accent), var(--info));
-  box-shadow: var(--shadow-glow);
+/* Medaillon officiel ANTIC (PNG rond, coins transparents). */
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
   flex-shrink: 0;
 }
 

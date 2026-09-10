@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { useSession } from "../api/session";
+import logoAntic from "../assets/logo-antic.png";
 import { Chargement } from "../components/communs";
 import "./connexion.css";
 
@@ -37,7 +38,7 @@ export default function Connexion() {
     <div className="ecran-connexion">
       <form className="carte-connexion" onSubmit={soumettre}>
         <div className="connexion-entete">
-          <span className="brand-mark" aria-hidden="true" />
+          <img className="connexion-logo" src={logoAntic} alt="ANTIC" />
           <h1>SENTINEL</h1>
           <p>Surveillance de sources clandestines — ANTIC</p>
         </div>

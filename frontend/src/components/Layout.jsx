@@ -11,6 +11,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { api } from "../api/client";
 import { useSession } from "../api/session";
+import logoAntic from "../assets/logo-antic.png";
 import { LIBELLE_ROLE } from "./communs";
 import "./layout.css";
 
@@ -67,7 +68,7 @@ export default function Layout() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand">
-            <span className="brand-mark" aria-hidden="true" />
+            <img className="brand-logo" src={logoAntic} alt="ANTIC" />
             <div>
               <div className="brand-name">SENTINEL</div>
               <div className="brand-sub">ANTIC · Surveillance dark web</div>
