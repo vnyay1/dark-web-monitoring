@@ -27,7 +27,7 @@ from datetime import timedelta
 
 from app.config_system import get_config_int
 from app.connectors import connecteurs_actifs, connecteur_par_nom
-from app.connectors.dates import parser_date
+from app.connectors.dates import CLES_DATE, parser_date
 from app.crawl.registre import (
     enregistrer_entrees_vues,
     identifiants_traites,
@@ -62,9 +62,6 @@ BUDGET_DETAILS_GLOBAL_PAR_RUN = 250
 # Cles possibles pour un meme concept, par ordre de preference.
 CLES_NOM = ("nom_entite_detecte", "titre", "nom_entite")
 CLES_REFERENCE = ("reference_source", "lien_detail")
-# Les sources ne nomment pas la date de la meme facon : dataexposurelogs
-# expose "discovery_date", everest "date", les autres "date_publication".
-CLES_DATE = ("date_publication", "discovery_date", "date")
 
 # SourceReference.reference_source est une String(500).
 LONGUEUR_MAX_REFERENCE = 500
@@ -284,6 +281,7 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         "nb_rejetees_faux_positif": 0,
         "nb_rejetees_criticite_faible": 0,
         "nb_hors_periode": 0,
+        "nb_sans_date": 0,
         "nb_entrees_en_erreur": 0,
     }
     stats.update(result.get("statistiques_crawl", {}))
@@ -335,6 +333,11 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
 
     # Le registre voit TOUTES les entrees du listing, y compris celles que
     # le budget ne servira pas ce cycle-ci : un seul commit pour l'ensemble.
+    # Compte des entrees sans date exploitable : soit la source n'en publie
+    # pas, soit son format n'est pas reconnu (cf. reconnaissance --phase
+    # dates). Visible dans la page Collecte, sans avoir a lire les logs.
+    stats["nb_sans_date"] = sum(1 for e in entrees if e["date_publication"] is None)
+
     enregistrer_entrees_vues(session, source.id, entrees)
 
     # Selecteurs actifs charges une seule fois pour toutes les entrees
@@ -514,6 +517,7 @@ if __name__ == "__main__":
               f" (echecs : {r.get('details_echec', 0)},"
               f" hors budget : {r.get('details_ignores', 0)})")
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
+        print(f"  Entrees sans date exploitable : {r.get('nb_sans_date', 0)}")
         print(f"  Rejetees (hors periode) : {r.get('nb_hors_periode', 0)}")
         print(f"  Rejetees (faux positif) : {r.get('nb_rejetees_faux_positif', 0)}")
         print(f"  Rejetees (criticite trop faible) : {r.get('nb_rejetees_criticite_faible', 0)}")

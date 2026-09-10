@@ -419,9 +419,13 @@ class BaseConnector:
                 stats["details_echec"] += 1
                 continue
 
+            # Le listing garde la priorite, SAUF la ou il n'avait rien : un
+            # listing qui pose "date_publication": None ne doit pas masquer la
+            # date trouvee sur la page de detail (setdefault() l'ignorait,
+            # la cle existant deja).
             for cle, valeur in enrichi.items():
-                if cle != "texte_brut":
-                    entry.setdefault(cle, valeur)
+                if cle != "texte_brut" and entry.get(cle) in (None, ""):
+                    entry[cle] = valeur
 
             entry["texte_brut"] = " ".join(filter(None, [
                 entry.get("texte_brut"), enrichi.get("texte_brut"),
