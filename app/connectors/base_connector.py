@@ -42,17 +42,23 @@ restent donc en listing-only.
 
 FR-06 : le delai minimum entre deux requetes est applique PAR SOURCE
 (et non par instance de connecteur), et ne peut jamais descendre sous
-DELAI_MINIMUM_ABSOLU.
+DELAI_MINIMUM_ABSOLU. Il se compte depuis la FIN de la reponse precedente,
+et non depuis son debut : via Tor, une page peut mettre 25 s a arriver, et
+un delai compte de debut a debut ne laissait alors que quelques secondes de
+silence entre deux requetes. Une part aleatoire s'y ajoute, pour que la
+cadence ne soit pas un metronome reconnaissable cote source. Enfin, chaque
+REESSAI est une requete a part entiere, soumise au meme delai.
 """
 
 import hashlib
 import json
 import logging
+import random
 import re
 import time
 from urllib.parse import urlparse
 
-from app.tor import get_via_tor
+from app.tor import get_via_tor, renew_tor_circuit
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +71,14 @@ URL_PATTERN = re.compile(r"https?://\S+")
 # FR-06 / CN-09 / CN-10 - plancher non negociable, quel que soit le reglage
 # d'un connecteur concret.
 DELAI_MINIMUM_ABSOLU = 30
+
+# Part aleatoire ajoutee au delai minimum, tiree a chaque requete : l'ecart
+# reel entre deux requetes sur une source varie entre 30 et 45 s.
+DELAI_ALEATOIRE_MAX = 15
+
+# Tentatives par page de listing. Chacune attend le delai complet : une
+# source en panne coute donc quelques minutes, jamais une rafale.
+TENTATIVES_PAR_DEFAUT = 3
 
 # Le fuzzy matching de app.matching.engine est en O(len(texte) x nb_selecteurs).
 # Un post integral peut faire plusieurs centaines de Ko et faire exploser la
@@ -106,11 +120,12 @@ class BaseConnector:
     MAX_DETAILS_PAR_RUN = 0
     MAX_ECHECS_DETAIL = 3    # au-dela, l'entree est abandonnee (cf. registre)
 
-    # Etat de rate limiting PAR SOURCE. Volontairement porte par BaseConnector
-    # et non par self/type(self) : sinon chaque sous-classe creerait son propre
+    # Etat de rate limiting PAR SOURCE : instant de FIN de la derniere
+    # requete. Volontairement porte par BaseConnector et non par
+    # self/type(self) : sinon chaque sous-classe creerait son propre
     # dictionnaire et deux instances du meme connecteur (relance manuelle
     # pendant un run planifie) violeraient FR-06 silencieusement.
-    _derniere_requete_par_source = {}
+    _fin_derniere_requete_par_source = {}
 
     def __init__(self, db_session=None, source_id=None):
         """
@@ -133,25 +148,64 @@ class BaseConnector:
     # ------------------------------------------------------------------
 
     def _respect_rate_limit(self):
-        """Applique le delai minimum entre deux requetes sur une meme source (FR-06)."""
-        delai = max(self.MIN_DELAY_SECONDS, DELAI_MINIMUM_ABSOLU)
-        precedent = BaseConnector._derniere_requete_par_source.get(self.SOURCE_NAME)
+        """
+        Attend que le delai minimum, plus sa part aleatoire, se soit ecoule
+        depuis la FIN de la derniere requete sur cette source (FR-06).
+        """
+        delai = (
+            max(self.MIN_DELAY_SECONDS, DELAI_MINIMUM_ABSOLU)
+            + random.uniform(0, DELAI_ALEATOIRE_MAX)
+        )
+        fin_precedente = BaseConnector._fin_derniere_requete_par_source.get(self.SOURCE_NAME)
 
-        if precedent is not None:
-            attente = delai - (time.time() - precedent)
+        if fin_precedente is not None:
+            attente = delai - (time.time() - fin_precedente)
             if attente > 0:
                 logger.info(f"[{self.SOURCE_NAME}] Rate limiting : attente de {attente:.1f}s")
                 time.sleep(attente)
 
-        BaseConnector._derniere_requete_par_source[self.SOURCE_NAME] = time.time()
+    def _marquer_fin_requete(self):
+        BaseConnector._fin_derniere_requete_par_source[self.SOURCE_NAME] = time.time()
 
-    def fetch(self, url=None, **kwargs):
+    def requete(self, url=None, tentatives=TENTATIVES_PAR_DEFAUT, **kwargs):
+        """
+        Seul point de sortie reseau d'un connecteur (collecte comme
+        reconnaissance). Renvoie la reponse HTTP complete.
+
+        Les reessais sont faits ICI, et non par get_via_tor (appele avec
+        max_retries=1) : ses propres reessais partaient a 5 s d'intervalle,
+        hors de tout rate limiting. Ici, chaque tentative attend le delai
+        complet et part sur un circuit Tor renouvele.
+        """
+        derniere_erreur = None
+
+        for tentative in range(1, max(1, tentatives) + 1):
+            self._respect_rate_limit()
+            try:
+                return get_via_tor(url or self.TARGET_URL, max_retries=1, **kwargs)
+            except Exception as erreur:
+                derniere_erreur = erreur
+                logger.warning(
+                    f"[{self.SOURCE_NAME}] Tentative {tentative}/{tentatives} echouee : "
+                    f"{self._libelle_erreur(erreur)}"
+                )
+                if tentative < tentatives:
+                    renew_tor_circuit()
+            finally:
+                # Echec compris : une requete qui echoue a bien touche la source.
+                self._marquer_fin_requete()
+
+        raise derniere_erreur
+
+    def fetch(self, url=None, max_retries=TENTATIVES_PAR_DEFAUT, **kwargs):
         """
         Recupere le contenu brut d'une page, en respectant le rate limiting.
         Le contenu reste en memoire (CN-05), jamais ecrit sur disque.
+
+        max_retries garde son nom historique (appelants existants) : c'est le
+        nombre de tentatives, chacune soumise au delai.
         """
-        self._respect_rate_limit()
-        return get_via_tor(url or self.TARGET_URL, **kwargs).text
+        return self.requete(url, tentatives=max_retries, **kwargs).text
 
     def nettoyer_urls(self, texte):
         """
@@ -400,10 +454,9 @@ class BaseConnector:
 
         for entry in candidats[:budget]:
             try:
-                # max_retries=1 : get_via_tor reessaye sinon 3 fois a 5s
-                # d'intervalle, ce qui produirait une rafale de requetes sous
-                # le seuil des 30s (CN-09/CN-10). Le reessai est delegue au
-                # registre, donc au run suivant.
+                # Une seule tentative : une page de detail en echec est
+                # reessayee au run suivant via le registre, plutot que de
+                # consommer ici plusieurs delais complets sur une entree.
                 raw = self.fetch(self.url_detail(entry), max_retries=1)
                 try:
                     enrichi = self.parse_detail(raw, entry) or {}
