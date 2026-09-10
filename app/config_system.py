@@ -45,6 +45,10 @@ VALEURS_PAR_DEFAUT = {
         "30", "Anciennete maximale (en jours) des entrees analysees : au-dela, l'entree est ignoree", "int",
     ),
 
+    "pages_listing_max": (
+        "10", "Nombre maximum de pages parcourues par source et par cycle (sources paginees)", "int",
+    ),
+
     # --- FR-07 : planification ---
     "collecte_heure_min": (
         "0", "Heure la plus tot a laquelle la collecte quotidienne peut se declencher (0-23, UTC)", "int",

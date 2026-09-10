@@ -154,13 +154,16 @@ def _en_naif_utc(moment: datetime) -> datetime:
     return moment.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def parser_date(valeur, formats=(), source: str = "?") -> datetime:
+def parser_date(valeur, formats=(), source: str = "?", journaliser: bool = True) -> datetime:
     """
     Convertit la date brute d'une entree en datetime naif UTC.
 
     valeur  : chaine issue du site (ou deja un datetime, laisse tel quel).
     formats : formats strptime propres a la source, essayes en premier.
     source  : nom du connecteur, pour un log exploitable.
+    journaliser : False pour une lecture de controle (arret de pagination),
+                  afin que la meme date illisible ne soit pas signalee deux
+                  fois - le pipeline la signale deja en l'analysant.
 
     Retourne None si la valeur est vide ou non interpretable.
     """
@@ -202,10 +205,11 @@ def parser_date(valeur, formats=(), source: str = "?") -> datetime:
         if moment is not None:
             return moment
 
-    logger.warning(
-        f"[dates:{source}] Date non reconnue : {str(valeur)[:80]!r} "
-        f"(nettoyee : {texte[:80]!r}). Entree traitee sans date."
-    )
+    if journaliser:
+        logger.warning(
+            f"[dates:{source}] Date non reconnue : {str(valeur)[:80]!r} "
+            f"(nettoyee : {texte[:80]!r}). Entree traitee sans date."
+        )
     return None
 
 

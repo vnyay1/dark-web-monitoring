@@ -30,6 +30,18 @@ const SONDAGE_REPOS_MS = 8000;
 /** Au-dela, les lignes les plus anciennes sont oubliees (memoire du navigateur). */
 const MAX_LIGNES = 400;
 
+/** Motif d'arret du parcours des pages d'une source (cf. BaseConnector). */
+const LIBELLE_ARRET = {
+  page_unique: "page unique",
+  page_vide: "page vide",
+  page_connue: "pages déjà connues",
+  fin_pagination: "dernière page",
+  profondeur_max: "plafond atteint",
+  hors_periode: "hors période",
+  dates_illisibles: "dates illisibles",
+  erreur_page: "erreur de page",
+};
+
 const LIBELLE_STATUT = {
   arrete: "Arrêté",
   en_attente: "En veille",
@@ -445,6 +457,7 @@ function ResumeCycle({ stats }) {
             <tr>
               <th>Source</th>
               <th>Collecte</th>
+              <th title="Pages de listing parcourues, et motif de l'arrêt">Pages</th>
               <th>Entrées</th>
               <th title="Entrées dont la source ne publie pas de date, ou dans un format non reconnu">
                 Sans date
@@ -466,6 +479,12 @@ function ResumeCycle({ stats }) {
                   >
                     {s.collecte_reussie ? "Réussie" : "Échec"}
                   </span>
+                </td>
+                <td className="cell-mono" title={LIBELLE_ARRET[s.arret] || s.arret || ""}>
+                  {s.pages_listing ?? 0}
+                  {s.arret && s.arret !== "page_unique" && (
+                    <span className="cell-muted"> · {LIBELLE_ARRET[s.arret] || s.arret}</span>
+                  )}
                 </td>
                 <td className="cell-mono">{s.nb_entries_brutes ?? 0}</td>
                 <td className="cell-mono">{s.nb_sans_date ?? 0}</td>

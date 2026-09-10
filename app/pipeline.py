@@ -265,13 +265,18 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         session=session,
     )
 
-    # Le connecteur ne lit pas la base : on lui passe ce qu'il doit ignorer.
+    # Le connecteur ne lit pas la base : on lui passe ce qu'il doit ignorer,
+    # et jusqu'ou remonter (periode et plafond de pages reglables).
     connues = identifiants_traites(session, source.id)
+    seuils = _seuils_du_run()
+    if profondeur_max is None:
+        profondeur_max = get_config_int("pages_listing_max")
 
     result = connector.collect(
         entrees_connues=connues,
         budget_details=budget_details,
         profondeur_max=profondeur_max,
+        date_limite=seuils["date_limite"],
     )
 
     stats = {
@@ -351,7 +356,6 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         .filter_by(actif=True)
         .all()
     )
-    seuils = _seuils_du_run()
     logger.info(
         f"[pipeline] Fenetre d'analyse : {seuils['periode_jours']} jours "
         f"(entrees publiees avant le {seuils['date_limite'].date()} ignorees)."
@@ -494,7 +498,8 @@ def _analyser_arguments():
     )
     parseur.add_argument(
         "--profondeur-max", type=int, default=None,
-        help="Nombre maximum de pages de listing par source (rattrapage ponctuel).",
+        help="Plafond de pages de listing par source pour ce run "
+             "(par defaut : reglage pages_listing_max).",
     )
     return parseur.parse_args()
 

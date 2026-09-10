@@ -9,10 +9,18 @@ CONTRAT DE COLLECTE - collect() orchestre N requetes rate-limitees, en
 deux phases :
 
   1. LISTING : parcours des pages de liste (pagination bornee par
-     MAX_PAGES_LISTING). Arret anticipe des qu'une page n'apporte plus
-     aucune entree nouvelle - avec PAGES_GRACE pages de tolerance, car
-     une entree epinglee ou un reordonnancement peut faire apparaitre
-     une page "deja connue" avant les vraies nouveautes.
+     MAX_PAGES_LISTING et par le plafond reglable pages_listing_max).
+     Trois arrets anticipes, le premier atteint l'emporte :
+       - "page_connue" : une page n'apporte plus aucune entree nouvelle,
+         avec PAGES_GRACE pages de tolerance (une entree epinglee ou un
+         reordonnancement peut faire apparaitre une page "deja connue"
+         avant les vraies nouveautes) ;
+       - "hors_periode" : toutes les dates lisibles de la page sont
+         anterieures a la periode reglee par l'administrateur - les pages
+         suivantes, plus anciennes encore, n'ont pas a etre demandees ;
+       - "dates_illisibles" : aucune date lisible sur la page. Garde-fou :
+         sans lui, un site qui changerait son format de date serait
+         parcouru jusqu'au plafond a chaque cycle.
 
   2. DETAIL : pour les entrees NOUVELLES uniquement, et dans la limite
      du budget alloue, recuperation de la page de detail dont le texte
@@ -58,6 +66,7 @@ import re
 import time
 from urllib.parse import urlparse
 
+from app.connectors.dates import CLES_DATE, parser_date
 from app.tor import get_via_tor, renew_tor_circuit
 
 logger = logging.getLogger(__name__)
@@ -306,14 +315,20 @@ class BaseConnector:
     # Orchestration
     # ------------------------------------------------------------------
 
-    def collect(self, entrees_connues=None, budget_details=None, profondeur_max=None):
+    def collect(self, entrees_connues=None, budget_details=None, profondeur_max=None,
+                date_limite=None):
         """
         Point d'entree principal (cf. contrat en tete de module).
 
         entrees_connues : set d'identifiants deja traites, fourni par le
         pipeline. Les entrees qui s'y trouvent ne consomment pas de budget.
         budget_details  : nombre maximum de pages de detail pour ce run.
-        profondeur_max  : nombre maximum de pages de listing pour ce run.
+        profondeur_max  : plafond de pages de listing pour ce run ; ne peut
+                          pas depasser MAX_PAGES_LISTING, plafond propre au
+                          connecteur.
+        date_limite     : debut de la periode reglee par l'administrateur,
+                          fournie par le pipeline (le connecteur ne lit pas
+                          la base). Sert a arreter la pagination.
 
         Appele sans argument sur un connecteur qui ne surcharge rien, il
         fait exactement une requete et retourne exactement la meme
@@ -322,7 +337,10 @@ class BaseConnector:
         debut = time.time()
         entrees_connues = entrees_connues or set()
         budget = self.MAX_DETAILS_PAR_RUN if budget_details is None else budget_details
-        profondeur = self.MAX_PAGES_LISTING if profondeur_max is None else profondeur_max
+        profondeur = (
+            self.MAX_PAGES_LISTING if profondeur_max is None
+            else min(self.MAX_PAGES_LISTING, profondeur_max)
+        )
 
         stats = {
             "pages_listing": 0, "entrees": 0, "nouvelles": 0,
@@ -332,7 +350,7 @@ class BaseConnector:
         erreurs = {}
 
         entries, erreur_bloquante = self._phase_listing(
-            profondeur, entrees_connues, stats, erreurs
+            profondeur, entrees_connues, stats, erreurs, date_limite
         )
 
         if erreur_bloquante is not None:
@@ -358,7 +376,7 @@ class BaseConnector:
             "statistiques_crawl": stats,
         }
 
-    def _phase_listing(self, profondeur, entrees_connues, stats, erreurs):
+    def _phase_listing(self, profondeur, entrees_connues, stats, erreurs, date_limite=None):
         """
         Parcourt les pages de listing. Retourne (entries, erreur_bloquante) ;
         erreur_bloquante n'est non-None que si la PAGE 1 a echoue.
@@ -425,6 +443,12 @@ class BaseConnector:
             if not self.SUPPORTE_PAGINATION:
                 stats["arret"] = "page_unique"
                 break
+
+            if date_limite is not None:
+                arret = self._arret_par_date(page_entries, date_limite)
+                if arret:
+                    stats["arret"] = arret
+                    break
             if url_suivante is None:
                 stats["arret"] = "fin_pagination"
                 break
@@ -440,6 +464,35 @@ class BaseConnector:
             1 for e in entries if e["identifiant_entree"] not in entrees_connues
         )
         return entries, None
+
+    def _arret_par_date(self, page_entries, date_limite):
+        """
+        Motif d'arret si la page ne justifie pas de demander la suivante,
+        None sinon. Les entrees de la page elle-meme sont conservees : c'est
+        le pipeline qui ecarte celles hors periode.
+        """
+        dates = [
+            parser_date(
+                next((e.get(cle) for cle in CLES_DATE if e.get(cle)), None),
+                self.DATE_FORMATS, source=self.SOURCE_NAME, journaliser=False,
+            )
+            for e in page_entries
+        ]
+        lisibles = [d for d in dates if d is not None]
+
+        if not lisibles:
+            logger.warning(
+                f"[{self.SOURCE_NAME}] Aucune date lisible sur la page : pagination "
+                f"arretee par prudence (format de date modifie par le site ?)."
+            )
+            return "dates_illisibles"
+        if all(d < date_limite for d in lisibles):
+            logger.info(
+                f"[{self.SOURCE_NAME}] Page entierement anterieure au "
+                f"{date_limite:%d/%m/%Y} : fin de la pagination."
+            )
+            return "hors_periode"
+        return None
 
     def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs):
         """
