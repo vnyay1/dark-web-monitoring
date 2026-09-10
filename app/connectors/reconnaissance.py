@@ -46,7 +46,6 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
 from app.connectors import connecteur_par_nom
-from app.tor import get_via_tor
 
 logger = logging.getLogger(__name__)
 
@@ -169,11 +168,14 @@ def resumer_structure(html, profondeur_max=6, max_groupes=10, netloc_source=""):
     return "\n".join(lignes)
 
 
-def _recuperer(connecteur, url, **kwargs):
-    """Requete rate-limitee (FR-06), en renvoyant la reponse complete."""
-    connecteur._respect_rate_limit()
+def _recuperer(connecteur, url, max_retries=1, **kwargs):
+    """
+    Requete rate-limitee (FR-06), en renvoyant la reponse complete. Passe
+    par BaseConnector.requete() : memes delais et memes reessais que la
+    collecte, la reconnaissance n'a pas de regime de faveur.
+    """
     logger.info(f"[recon] GET {url}")
-    return get_via_tor(url, **kwargs)
+    return connecteur.requete(url, tentatives=max_retries, **kwargs)
 
 
 def _verdict_liceite(connecteur, reponse, url_detail, libelle_lien):

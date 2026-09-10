@@ -52,11 +52,11 @@ logger = logging.getLogger(__name__)
 
 # Budget global de pages de detail par cycle de collecte.
 #
-# Il n'est pas choisi arbitrairement : le scheduler tourne toutes les 6h avec
-# max_instances=1, donc un run doit tenir dans 21600s. A 30s minimum par
-# requete (FR-06), le plafond theorique absolu est 720 requetes. En tenant
-# compte de la latence Tor (5-20s en plus du delai) et des reessais, on vise
-# ~250 requetes, soit environ 3h - la moitie de la fenetre.
+# Chaque requete sur une source attend 30 a 45 s apres la FIN de la
+# precedente (FR-06, cf. BaseConnector), plus la latence Tor (5 a 25 s) :
+# compter environ 50 s par page de detail. 250 pages representent donc
+# environ 3 h 30 de collecte, dans un cycle desormais QUOTIDIEN - la marge
+# est large, et les pages non servies sont reprises au cycle suivant.
 BUDGET_DETAILS_GLOBAL_PAR_RUN = 250
 
 # Cles possibles pour un meme concept, par ordre de preference.
