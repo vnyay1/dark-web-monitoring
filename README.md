@@ -31,7 +31,7 @@ Cette contrainte est non négociable et prévaut sur toute exigence fonctionnell
 │         │  crawl incrémental : listing puis pages de détail  │
 │         ▼  texte en mémoire uniquement (CN-05)              │
 │  Fenêtre temporelle ─► Matching ─► Filtrage faux positifs    │
-│         │            ─► Criticité ─► Catégorisation           │
+│         │            ─► Criticité ─► Catégories               │
 │         │            ─► Déduplication multi-source            │
 │         ▼                                                   │
 │  SQLAlchemy / SQLite                                        │
