@@ -7,6 +7,7 @@ import json
 import io
 import logging
 
+from app import libelles
 from app.db import get_session
 from app.models import Exposition
 
@@ -64,8 +65,15 @@ def exporter_csv() -> str:
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
 
+    # Le CSV s'ouvre dans un tableur, devant un lecteur humain : libelles
+    # francais. Le JSON, format d'echange entre outils, garde les
+    # identifiants techniques, stables et sans ambiguite.
     for e in expositions:
-        writer.writerow(_exposition_vers_dict(e))
+        ligne = _exposition_vers_dict(e)
+        ligne["categorie_fuite"] = libelles.libelle(libelles.CATEGORIE, ligne["categorie_fuite"])
+        ligne["statut"] = libelles.libelle(libelles.STATUT, ligne["statut"])
+        ligne["niveau_criticite"] = libelles.libelle(libelles.NIVEAU, ligne["niveau_criticite"])
+        writer.writerow(ligne)
 
     session.close()
     return output.getvalue()

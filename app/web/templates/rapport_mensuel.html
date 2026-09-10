@@ -1,459 +1,403 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Rapport mensuel — Sentinel</title>
-    <style>
-        @page {
-            size: A4;
-            margin: 1.8cm 1.8cm 2.2cm 1.8cm;
-            @bottom-left {
-                content: "SENTINEL — ANTIC / CIRT";
-                font-size: 8px;
-                color: #8A93A6;
-                letter-spacing: 0.06em;
-            }
-            @bottom-center {
-                content: "CONFIDENTIEL";
-                font-size: 8px;
-                font-weight: 700;
-                color: #C0392B;
-                letter-spacing: 0.12em;
-            }
-            @bottom-right {
-                content: "Page " counter(page) " / " counter(pages);
-                font-size: 8px;
-                color: #8A93A6;
-            }
+<meta charset="UTF-8">
+<title>Rapport mensuel d'exposition — {{ periode_libelle }}</title>
+<style>
+    /* Polices embarquees (IBM Plex, licence SIL OFL, app/web/static/fonts) :
+       WeasyPrint tourne sur la VM de collecte, sans acces a Google Fonts. */
+    @font-face { font-family: "Plex Sans"; font-weight: 400; src: url("{{ url_for('static', filename='fonts/IBMPlexSans-400.ttf') }}"); }
+    @font-face { font-family: "Plex Sans"; font-weight: 500; src: url("{{ url_for('static', filename='fonts/IBMPlexSans-500.ttf') }}"); }
+    @font-face { font-family: "Plex Sans"; font-weight: 600; src: url("{{ url_for('static', filename='fonts/IBMPlexSans-600.ttf') }}"); }
+    @font-face { font-family: "Plex Serif"; font-weight: 500; src: url("{{ url_for('static', filename='fonts/IBMPlexSerif-500.ttf') }}"); }
+    @font-face { font-family: "Plex Serif"; font-weight: 600; src: url("{{ url_for('static', filename='fonts/IBMPlexSerif-600.ttf') }}"); }
+    @font-face { font-family: "Plex Mono"; font-weight: 400; src: url("{{ url_for('static', filename='fonts/IBMPlexMono-400.ttf') }}"); }
+    @font-face { font-family: "Plex Mono"; font-weight: 500; src: url("{{ url_for('static', filename='fonts/IBMPlexMono-500.ttf') }}"); }
+
+    :root {
+        --encre: #16222C;
+        --encre-2: #5E6E7A;
+        --encre-3: #8B98A2;
+        --filet: #DCE3E8;
+        --fond-leger: #F3F6F7;
+        --antic: #0B766C;
+        --crit: #C62828;
+        --haut: #E8590C;
+        --moy: #C98F00;
+        --faible: #8A97A3;
+        --cm-vert: #007A5E;
+        --cm-rouge: #CE1126;
+        --cm-jaune: #FCD116;
+        --serif: "Plex Serif", "DejaVu Serif", Georgia, serif;
+        --sans: "Plex Sans", "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+        --mono: "Plex Mono", "DejaVu Sans Mono", monospace;
+    }
+
+    /* En-tete et pied de page courants : repetes sur chaque page, quelle
+       que soit la longueur des tableaux. Classification au centre, comme
+       sur tout document a diffusion restreinte. */
+    @page {
+        size: A4;
+        margin: 22mm 17mm 18mm 17mm;
+
+        @top-left {
+            content: "SENTINEL · ANTIC / CIRT";
+            font-family: "Plex Sans", "DejaVu Sans", Arial, sans-serif; font-size: 7pt; letter-spacing: .06em;
+            color: #5E6E7A; vertical-align: bottom; padding-bottom: 2.5mm;
+            border-bottom: 0.5pt solid #DCE3E8;
         }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
-            color: #161F33;
-            font-size: 10.5px;
-            line-height: 1.55;
-            -webkit-font-smoothing: antialiased;
+        @top-center {
+            content: "CONFIDENTIEL — DIFFUSION RESTREINTE";
+            font-family: "Plex Sans", "DejaVu Sans", Arial, sans-serif; font-size: 7pt; font-weight: 600; letter-spacing: .14em;
+            color: #C62828; vertical-align: bottom; padding-bottom: 2.5mm;
+            border-bottom: 0.5pt solid #DCE3E8;
         }
-
-        /* ---------- En-tête ---------- */
-        .header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            border-bottom: 2.5px solid #0B1120;
-            padding-bottom: 14px;
+        @top-right {
+            content: "Réf. {{ reference }}";
+            font-family: "Plex Mono", "DejaVu Sans Mono", monospace; font-size: 7pt;
+            color: #5E6E7A; vertical-align: bottom; padding-bottom: 2.5mm;
+            border-bottom: 0.5pt solid #DCE3E8;
         }
-
-        .header-mark {
-            width: 34px;
-            height: 34px;
-            border: 2px solid #0B1120;
-            border-radius: 7px;
-            text-align: center;
-            line-height: 30px;
-            font-size: 15px;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            color: #0B1120;
-            margin-right: 12px;
+        @bottom-left {
+            content: "Généré le {{ date_generation.strftime('%d/%m/%Y à %H:%M') }} UTC";
+            font-family: "Plex Mono", "DejaVu Sans Mono", monospace; font-size: 7pt; color: #8B98A2;
+            vertical-align: top; padding-top: 2.5mm; border-top: 0.5pt solid #DCE3E8;
         }
-
-        .header-left { display: flex; align-items: flex-start; }
-
-        .header-brand {
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: #6B7891;
+        @bottom-right {
+            content: "Page " counter(page) " / " counter(pages);
+            font-family: "Plex Mono", "DejaVu Sans Mono", monospace; font-size: 7pt; color: #8B98A2;
+            vertical-align: top; padding-top: 2.5mm; border-top: 0.5pt solid #DCE3E8;
         }
+    }
 
-        .header-title {
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            margin-top: 5px;
-            color: #0B1120;
+    * { box-sizing: border-box; }
+    html { background: #FFFFFF; }
+    body {
+        margin: 0;
+        color: var(--encre);
+        background: #FFFFFF;
+        font-family: var(--sans);
+        font-size: 9pt;
+        line-height: 1.5;
+    }
+
+    /* Apercu HTML dans le navigateur : @page y est ignore, on reproduit
+       donc la feuille et son bandeau. Sans effet sur le PDF. */
+    .bandeau-ecran { display: none; }
+    @media screen {
+        html { background: #E3E8EC; }
+        body { max-width: 210mm; margin: 24px auto; padding: 16mm 17mm; box-shadow: 0 8px 28px rgba(0,0,0,.14); }
+        .bandeau-ecran {
+            display: flex; justify-content: space-between; gap: 4mm;
+            font-size: 7pt; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-2);
+            padding-bottom: 2.5mm; border-bottom: 0.5pt solid var(--filet); margin-bottom: 2mm;
         }
+        .bandeau-ecran .classif { color: var(--crit); font-weight: 600; letter-spacing: .14em; }
+        .bandeau-ecran .ref { font-family: var(--mono); letter-spacing: .02em; }
+    }
 
-        .header-period {
-            display: inline-block;
-            margin-top: 7px;
-            padding: 2px 9px;
-            border-radius: 20px;
-            background: #EEF1F6;
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            color: #3A465F;
-        }
+    /* ---------------- Titre ---------------- */
+    .titre { display: flex; align-items: center; gap: 5mm; margin-top: 4mm; }
+    .titre img { width: 19mm; height: 19mm; object-fit: contain; flex: none; }
+    .emetteur { font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; color: var(--encre-2); }
+    h1 { font-family: var(--serif); font-weight: 600; font-size: 21pt; line-height: 1.15; margin: 1mm 0; }
+    .periode { font-family: var(--serif); font-weight: 500; font-size: 12pt; color: var(--antic); }
 
-        .header-meta {
-            text-align: right;
-            font-size: 8.5px;
-            color: #8A93A6;
-            line-height: 1.7;
-            padding-top: 4px;
-            margin: 10px;
-        }
+    /* Lisere vert-rouge-jaune repris du medaillon ANTIC. */
+    .lisere { display: flex; height: 1.2mm; margin: 6mm 0 7mm; }
+    .lisere span { flex: 1; }
+    .lisere .v { background: var(--cm-vert); }
+    .lisere .r { background: var(--cm-rouge); }
+    .lisere .j { background: var(--cm-jaune); }
 
-        .header-meta strong {
-            display: block;
-            color: #3A465F;
-            font-size: 9px;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-        }
+    h2 {
+        font-family: var(--serif); font-weight: 600; font-size: 12pt;
+        margin: 0 0 3mm; break-after: avoid;
+    }
+    h2 .precision { font-family: var(--sans); font-weight: 400; font-size: 8pt; color: var(--encre-2); margin-left: 2mm; }
+    section + section { margin-top: 8mm; }
+    .nouvelle-page { break-before: page; }
 
-        /* ---------- Bandeau confidentiel ---------- */
-        .confidential-banner {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            background: #FDF3F1;
-            border-left: 3px solid #E8493A;
-            color: #A3291C;
-            padding: 9px 12px;
-            font-size: 9px;
-            line-height: 1.5;
-            border-radius: 0 4px 4px 0;
-            margin: 16px 0 22px 0;
-        }
+    .synthese { font-size: 10.5pt; line-height: 1.6; max-width: 150mm; margin: 0; }
+    .synthese strong { font-weight: 600; }
 
-        .confidential-banner .tag {
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            white-space: nowrap;
-        }
+    /* Chiffres cles : filets verticaux plutot que cartes - c'est un document. */
+    .chiffres {
+        display: flex; margin-top: 7mm;
+        border-top: 0.5pt solid var(--filet); border-bottom: 0.5pt solid var(--filet);
+    }
+    .chiffre { flex: 1; padding: 4mm 4mm 3.5mm; }
+    .chiffre + .chiffre { border-left: 0.5pt solid var(--filet); }
+    .chiffre .valeur { font-family: var(--serif); font-weight: 600; font-size: 22pt; line-height: 1; }
+    .chiffre .valeur.alerte { color: var(--crit); }
+    .chiffre .libelle { margin-top: 1.5mm; font-size: 7.5pt; color: var(--encre-2); line-height: 1.35; }
 
-        /* ---------- Statistiques ---------- */
-        .stats-grid {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 26px;
-        }
+    /* Barre de criticite empilee : une exposition = une unite. */
+    .barre-criticite { display: flex; height: 6mm; margin: 1mm 0 3mm; }
+    .barre-criticite span { display: block; margin-right: 0.6mm; }
+    .barre-criticite span:last-child { margin-right: 0; }
+    .legende-criticite { display: flex; }
+    .palier { flex: 1; padding-right: 3mm; }
+    .palier .puce { display: inline-block; width: 2.6mm; height: 2.6mm; border-radius: 0.6mm; margin-right: 1.5mm; }
+    .palier .nom { font-weight: 600; }
+    .palier .nombre { font-family: var(--mono); }
+    .palier .seuil { display: block; font-size: 7.5pt; color: var(--encre-2); padding-left: 4.1mm; }
 
-        .stat-box {
-            flex: 1;
-            border: 1px solid #DDE3ED;
-            border-top: 2.5px solid #0B1120;
-            border-radius: 5px;
-            padding: 12px 13px;
-            background: #FBFCFE;
-        }
+    .c-critique { background: var(--crit); }
+    .c-elevee { background: var(--haut); }
+    .c-moyenne { background: var(--moy); }
+    .c-faible { background: var(--faible); }
 
-        .stat-box.accent-warn { border-top-color: #E8A22B; }
-        .stat-box.accent-info { border-top-color: #2F6FB5; }
+    /* ---------------- Tableaux ---------------- */
+    table { width: 100%; border-collapse: collapse; font-size: 8.3pt; }
+    thead { display: table-header-group; }   /* repete en haut de chaque page */
+    thead th {
+        text-align: left; font-weight: 600; font-size: 7pt; letter-spacing: .07em;
+        text-transform: uppercase; color: var(--encre-2);
+        padding: 0 2.5mm 1.8mm; border-bottom: 0.8pt solid var(--encre);
+    }
+    tbody td { padding: 1.9mm 2.5mm; border-bottom: 0.5pt solid var(--filet); vertical-align: top; }
+    tr { break-inside: avoid; }
+    th:first-child, td:first-child { padding-left: 0; }
+    th:last-child, td:last-child { padding-right: 0; }
+    .num { text-align: right; font-family: var(--mono); }
+    .mono { font-family: var(--mono); font-size: 7.8pt; }
+    .discret { color: var(--encre-3); }
+    .entite { font-weight: 600; }
+    .secteur { display: block; font-size: 7.5pt; color: var(--encre-2); font-weight: 400; }
 
-        .stat-label {
-            font-size: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.09em;
-            color: #6B7891;
-            font-weight: 700;
-        }
+    .jauge { display: flex; align-items: center; }
+    .jauge .piste { flex: 1; height: 2.2mm; background: var(--fond-leger); border-radius: 1mm; overflow: hidden; }
+    .jauge .rempli { height: 2.2mm; background: var(--antic); border-radius: 1mm; }
+    .jauge .num { width: 9mm; }
 
-        .stat-value {
-            font-size: 26px;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            margin-top: 3px;
-            color: #0B1120;
-            font-variant-numeric: tabular-nums;
-        }
+    .deux-colonnes { display: flex; }
+    .deux-colonnes > div { flex: 1; }
+    .deux-colonnes > div + div { margin-left: 9mm; }
 
-        .stat-hint {
-            font-size: 8px;
-            color: #8A93A6;
-            margin-top: 2px;
-        }
+    /* La couleur double toujours le libelle, jamais seule. */
+    .niveau { white-space: nowrap; }
+    .niveau .marque { display: inline-block; width: 2.2mm; height: 2.2mm; border-radius: 50%; margin-right: 1.3mm; }
+    .niveau .n { color: var(--encre-2); font-family: var(--mono); font-size: 7.5pt; margin-left: 1mm; }
 
-        /* ---------- Sections ---------- */
-        h2 {
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-            color: #0B1120;
-            margin: 22px 0 10px 0;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #DDE3ED;
-            page-break-after: avoid;
-        }
+    .source { font-family: var(--mono); font-size: 7.3pt; color: var(--antic); white-space: nowrap; }
+    .statut { white-space: nowrap; }
+    .statut.new { color: var(--antic); font-weight: 600; }
+    .statut.false_positive { color: var(--encre-3); text-decoration: line-through; }
 
-        h2 .count {
-            float: right;
-            font-size: 8.5px;
-            font-weight: 600;
-            color: #6B7891;
-            letter-spacing: 0.05em;
-            padding-top: 3px;
-        }
+    .priorites { margin: 0; padding: 0; list-style: none; }
+    .priorites li { display: flex; padding: 2.2mm 0; border-bottom: 0.5pt solid var(--filet); break-inside: avoid; }
+    .priorites li:first-child { border-top: 0.5pt solid var(--filet); }
+    .priorites .niveau { width: 26mm; flex: none; }
+    .priorites .quoi { flex: 1; }
+    .priorites .statut { flex: none; margin-left: 3mm; }
 
-        /* ---------- Tableaux ---------- */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 18px;
-            page-break-inside: auto;
-        }
+    .vide { color: var(--encre-2); font-style: italic; padding: 2mm 0; }
 
-        thead { display: table-header-group; }
-        tr { page-break-inside: avoid; }
-
-        th {
-            text-align: left;
-            font-size: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.09em;
-            color: #6B7891;
-            font-weight: 700;
-            padding: 7px 9px;
-            background: #F5F7FA;
-            border-bottom: 1.5px solid #C8D1E0;
-        }
-
-        th:last-child, td:last-child { text-align: right; }
-
-        td {
-            padding: 7px 9px;
-            border-bottom: 1px solid #EEF1F6;
-            font-size: 9.5px;
-            vertical-align: middle;
-        }
-
-        tbody tr:nth-child(even) td { background: #FBFCFE; }
-
-        td.num {
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-            font-weight: 600;
-        }
-
-        td.entity { font-weight: 600; color: #0B1120; }
-
-        /* ---------- Badges ---------- */
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 8.5px;
-            font-weight: 700;
-            letter-spacing: 0.03em;
-            white-space: nowrap;
-        }
-
-        .badge-high { background: #FDF0EE; color: #C0392B; border: 1px solid #F3C9C2; }
-        .badge-mid  { background: #FEF6E8; color: #96631A; border: 1px solid #F0DCB4; }
-        .badge-low  { background: #EEF1F6; color: #5A667E; border: 1px solid #DDE3ED; }
-
-        .status-pill {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            background: #EEF1F6;
-            color: #3A465F;
-            font-size: 8.5px;
-            font-weight: 600;
-        }
-
-        /* ---------- Barre de répartition ---------- */
-        .bar-cell { width: 34%; }
-
-        .bar-track {
-            height: 6px;
-            background: #EEF1F6;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .bar-fill {
-            height: 6px;
-            background: #3A465F;
-            border-radius: 3px;
-        }
-
-        /* ---------- Divers ---------- */
-        .empty-note {
-            color: #8A93A6;
-            font-style: italic;
-            font-size: 9.5px;
-            padding: 12px;
-            border: 1px dashed #DDE3ED;
-            border-radius: 5px;
-            margin-bottom: 18px;
-        }
-
-        .footnote {
-            margin-top: 26px;
-            padding-top: 10px;
-            border-top: 1px solid #DDE3ED;
-            font-size: 8px;
-            color: #8A93A6;
-            line-height: 1.6;
-        }
-    </style>
+    .methode {
+        margin-top: 7mm; padding: 4mm 5mm; background: var(--fond-leger); border-radius: 1.5mm;
+        font-size: 7.8pt; line-height: 1.55; color: var(--encre-2); break-inside: avoid;
+    }
+    .methode strong { color: var(--encre); font-weight: 600; }
+    .methode p { margin: 0; }
+    .methode p + p { margin-top: 1.5mm; }
+</style>
 </head>
 <body>
 
-    <div class="header">
-        <div class="header-left">
-             <img src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="Logo ANTIC" style="width: 65px;height: 65px;object-fit: contain;display: block;flex: none;margin-right: 14px;">
-            <div>
-                <div class="header-brand">Sentinel / ANTIC — Surveillance Dark Web</div>
-                <div class="header-title">Rapport mensuel d'exposition</div>
-                <div class="header-period">PERIODE {{ mois }}/{{ annee }}</div>
-            </div>
-        </div>
-        <div class="header-meta">
-            <strong>Genere le</strong>
-            {{ date_generation.strftime('%d/%m/%Y a %H:%M') }} UTC
-        </div>
-    </div>
+<div class="bandeau-ecran">
+    <span>Sentinel · ANTIC / CIRT</span>
+    <span class="classif">Confidentiel — diffusion restreinte</span>
+    <span class="ref">Réf. {{ reference }}</span>
+</div>
 
-    <div class="confidential-banner">
-        <span class="tag">DOCUMENT CONFIDENTIEL</span>
-        <span>Diffusion limitee a l\'encadrement CIRT (CN-11). Ce rapport ne contient aucune donnee personnelle.</span>
+<div class="titre">
+    <img src="{{ url_for('static', filename='images/logo-antic.png') }}" alt="ANTIC">
+    <div>
+        <div class="emetteur">Agence Nationale des Technologies de l'Information et de la Communication</div>
+        <h1>Rapport mensuel d'exposition</h1>
+        <div class="periode">{{ periode_libelle }}</div>
     </div>
+</div>
 
-    <div class="stats-grid">
-        <div class="stat-box">
-            <div class="stat-label">Expositions detectees</div>
-            <div class="stat-value">{{ total_periode }}</div>
-            <div class="stat-hint">sur la periode analysee</div>
-        </div>
-        <div class="stat-box accent-warn">
-            <div class="stat-label">Criticite elevee ou critique</div>
-            <div class="stat-value">{{ nb_niveaux_hauts }}</div>
-            <div class="stat-hint">expositions a traiter en priorite</div>
-        </div>
-        <div class="stat-box accent-info">
-            <div class="stat-label">Secteurs touches</div>
-            <div class="stat-value">{{ repartition_secteur|length }}</div>
-            <div class="stat-hint">secteurs d'activite distincts</div>
-        </div>
-    </div>
+<div class="lisere"><span class="v"></span><span class="r"></span><span class="j"></span></div>
 
-    <h2>Répartition par secteur d'activité <span class="count">{{ repartition_secteur|length }} entrée(s)</span></h2>
-    {% if repartition_secteur %}
-    {% set max_secteur = repartition_secteur.values() | max %}
-    <table>
-        <thead>
-            <tr>
-                <th>Secteur</th>
-                <th class="bar-cell">Répartition</th>
-                <th>Nombre d'expositions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for secteur, count in repartition_secteur.items() %}
-            <tr>
-                <td class="entity">{{ secteur }}</td>
-                <td class="bar-cell">
-                    <div class="bar-track">
-                        <div class="bar-fill" style="width: {{ (count / max_secteur * 100) | round(0, 'floor') }}%;"></div>
-                    </div>
-                </td>
-                <td class="num">{{ count }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{# =========================== SYNTHESE =========================== #}
+<section>
+    <h2>Synthèse</h2>
+    {% if total_periode %}
+    <p class="synthese">
+        En {{ periode_libelle | lower }}, Sentinel a relevé
+        <strong>{{ total_periode }} exposition{{ 's' if total_periode > 1 }}</strong>
+        visant des entités camerounaises, dont
+        <strong>{{ nb_niveaux_hauts }} de criticité élevée ou critique</strong>.
+        {% if secteurs_principaux | length == 1 %}
+        Le secteur « {{ secteurs_principaux[0][0] }} » concentre les {{ total_periode }} expositions.
+        {% elif secteurs_principaux | length > 1 %}
+        Les secteurs « {{ secteurs_principaux[0][0] }} » et « {{ secteurs_principaux[1][0] }} »
+        concentrent {{ part_secteurs_principaux }} expositions sur {{ total_periode }}.
+        {% endif %}
+        {% if nb_a_qualifier %}
+        <strong>{{ nb_a_qualifier }} exposition{{ 's' if nb_a_qualifier > 1 }}</strong>
+        reste{{ 'nt' if nb_a_qualifier > 1 }} à qualifier par un analyste.
+        {% else %}
+        Toutes les expositions de la période ont été prises en charge par un analyste.
+        {% endif %}
+    </p>
     {% else %}
-    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
+    <p class="synthese">
+        Aucune exposition visant une entité camerounaise n'a été détectée en
+        {{ periode_libelle | lower }} sur les {{ nb_sources_actives }} sources surveillées.
+    </p>
     {% endif %}
 
-    <h2>Répartition par catégorie de fuite <span class="count">{{ repartition_categorie|length }} entrée(s)</span></h2>
-    {% if repartition_categorie %}
-    {% set max_cat = repartition_categorie.values() | max %}
-    <table>
-        <thead>
-            <tr>
-                <th>Catégorie</th>
-                <th class="bar-cell">Répartition</th>
-                <th>Nombre d'expositions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for cat, count in repartition_categorie.items() %}
-            <tr>
-                <td class="entity">{{ cat }}</td>
-                <td class="bar-cell">
-                    <div class="bar-track">
-                        <div class="bar-fill" style="width: {{ (count / max_cat * 100) | round(0, 'floor') }}%;"></div>
-                    </div>
-                </td>
-                <td class="num">{{ count }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
-    {% endif %}
-
-    <h2>Répartition par statut de traitement <span class="count">{{ repartition_statut|length }} entrée(s)</span></h2>
-    {% if repartition_statut %}
-    <table>
-        <thead>
-            <tr>
-                <th>Statut</th>
-                <th>Nombre d'expositions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for statut, count in repartition_statut.items() %}
-            <tr>
-                <td><span class="status-pill">{{ statut }}</span></td>
-                <td class="num">{{ count }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
-    {% endif %}
-
-    <h2>Détail des expositions <span class="count">triées par criticité décroissante</span></h2>
-    {% if entites %}
-    <table>
-        <thead>
-            <tr>
-                <th>Entité</th>
-                <th>Secteur</th>
-                <th>Catégorie</th>
-                <th>Statut</th>
-                <th>Sources</th>
-                <th>Criticité</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for e in entites %}
-            <tr>
-                <td class="entity">{{ e.nom }}</td>
-                <td>{{ e.secteur }}</td>
-                <td>{{ e.categorie }}</td>
-                <td><span class="status-pill">{{ e.statut }}</span></td>
-                <td>{{ e.sources|join(', ') if e.sources else '—' }}</td>
-                <td class="num">
-                    <span class="badge {% if e.niveau_criticite == 'critique' %}badge-high{% elif e.niveau_criticite == 'elevee' %}badge-high{% elif e.niveau_criticite == 'moyenne' %}badge-mid{% else %}badge-low{% endif %}">
-                        {{ e.niveau_criticite|capitalize }} ({{ e.criticite }})
-                    </span>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="empty-note">Aucune exposition detectee sur cette periode.</div>
-    {% endif %}
-
-    <div class="footnote">
-        Rapport genere automatiquement par Sentinel — systeme de surveillance dark web de l'ANTIC.
-        La criticite indique le nombre de selecteurs camerounais distincts reperes dans l'annonce ; elle est indicative
-        et doit etre corroborée par une analyse CIRT avant toute action operationnelle.
+    <div class="chiffres">
+        <div class="chiffre">
+            <div class="valeur">{{ total_periode }}</div>
+            <div class="libelle">exposition{{ 's' if total_periode > 1 }} détectée{{ 's' if total_periode > 1 }} sur la période</div>
+        </div>
+        <div class="chiffre">
+            <div class="valeur{{ ' alerte' if nb_niveaux_hauts }}">{{ nb_niveaux_hauts }}</div>
+            <div class="libelle">de criticité élevée ou critique</div>
+        </div>
+        <div class="chiffre">
+            <div class="valeur">{{ secteurs | length }}</div>
+            <div class="libelle">secteur{{ 's' if secteurs | length > 1 }} d'activité touché{{ 's' if secteurs | length > 1 }}</div>
+        </div>
+        <div class="chiffre">
+            <div class="valeur">{{ nb_sources_signalantes }}</div>
+            <div class="libelle">source{{ 's' if nb_sources_signalantes > 1 }} à l'origine d'un signalement, sur {{ nb_sources_actives }} surveillée{{ 's' if nb_sources_actives > 1 }}</div>
+        </div>
     </div>
+</section>
+
+{% if total_periode %}
+{# =========================== CRITICITE =========================== #}
+<section>
+    <h2>Criticité <span class="precision">nombre de sélecteurs camerounais distincts trouvés dans l'annonce</span></h2>
+    <div class="barre-criticite">
+        {% for p in criticite if p.nombre %}
+        <span class="c-{{ p.niveau }}" style="flex: {{ p.nombre }}"></span>
+        {% endfor %}
+    </div>
+    <div class="legende-criticite">
+        {% for p in criticite %}
+        <div class="palier">
+            <span class="puce c-{{ p.niveau }}"></span><span class="nom">{{ p.libelle }}</span> · <span class="nombre">{{ p.nombre }}</span>
+            <span class="seuil">{{ p.seuil }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+{# ======================= A TRAITER EN PRIORITE ======================= #}
+<section>
+    <h2>À traiter en priorité <span class="precision">criticité élevée ou critique, non encore qualifiées</span></h2>
+    {% if priorites %}
+    <ul class="priorites">
+        {% for e in priorites %}
+        <li>
+            <span class="niveau"><span class="marque c-{{ e.niveau_criticite }}"></span>{{ e.niveau_libelle }}<span class="n">{{ e.criticite }}</span></span>
+            <span class="quoi"><span class="entite">{{ e.nom }}</span> — {{ e.categorie_libelle | lower }}</span>
+            <span class="statut {{ e.statut }}">{{ e.statut_libelle }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="vide">Aucune exposition de criticité élevée ou critique n'attend de qualification.</p>
+    {% endif %}
+</section>
+
+{# =========================== REPARTITIONS =========================== #}
+<section class="nouvelle-page">
+    <div class="deux-colonnes">
+        <div>
+            <h2>Secteurs d'activité</h2>
+            {% set max_secteur = secteurs[0][1] if secteurs else 1 %}
+            <table>
+                <thead><tr><th>Secteur</th><th style="width: 42%">Expositions</th></tr></thead>
+                <tbody>
+                {% for nom, n in secteurs %}
+                <tr><td>{{ nom }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_secteur * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <h2>Nature des données</h2>
+            {% set max_categorie = categories[0][1] if categories else 1 %}
+            <table>
+                <thead><tr><th>Catégorie</th><th style="width: 42%">Expositions</th></tr></thead>
+                <tbody>
+                {% for libelle, n in categories %}
+                <tr><td>{{ libelle }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_categorie * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Origine des signalements <span class="precision">une exposition peut être signalée par plusieurs sources</span></h2>
+    <table>
+        <thead><tr><th>Source</th><th>Type</th><th class="num">Signalements</th><th class="num">Datés par la source</th></tr></thead>
+        <tbody>
+        {% for s in sources %}
+        <tr>
+            <td class="source{{ ' discret' if not s.signalements }}">{{ s.nom }}</td>
+            <td{{ ' class=discret' if not s.signalements }}>{{ s.type }}</td>
+            <td class="num{{ ' discret' if not s.signalements }}">{{ s.signalements }}</td>
+            <td class="num{{ ' discret' if not s.dates }}">{{ s.dates if s.signalements else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Suivi du traitement</h2>
+    {% set max_statut = statuts | map(attribute=1) | max if statuts else 1 %}
+    <table>
+        <thead><tr><th>Statut</th><th style="width: 55%">Expositions</th></tr></thead>
+        <tbody>
+        {% for libelle, n in statuts %}
+        <tr><td>{{ libelle }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_statut * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{# =========================== DETAIL =========================== #}
+<section class="nouvelle-page">
+    <h2>Détail des expositions <span class="precision">par criticité décroissante</span></h2>
+    <table>
+        <thead>
+            <tr><th>Entité</th><th>Nature</th><th>Criticité</th><th>Sources</th><th>Publication</th><th>Statut</th></tr>
+        </thead>
+        <tbody>
+        {% for e in entites %}
+        <tr>
+            <td class="entite">{{ e.nom }}<span class="secteur">{{ e.secteur }}</span></td>
+            <td>{{ e.categorie_libelle }}</td>
+            <td><span class="niveau"><span class="marque c-{{ e.niveau_criticite }}"></span>{{ e.niveau_libelle }}<span class="n">{{ e.criticite }}</span></span></td>
+            <td>{% for s in e.sources %}<span class="source">{{ s }}</span>{% if not loop.last %}<br>{% endif %}{% else %}<span class="discret">—</span>{% endfor %}</td>
+            <td class="mono{{ ' discret' if not e.date_publication }}">{{ e.date_publication or 'non datée' }}</td>
+            <td class="statut {{ e.statut }}">{{ e.statut_libelle }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+    <div class="methode">
+        <p><strong>Méthode.</strong> Sentinel indexe l'existence d'une fuite, jamais les données divulguées. La criticité compte les sélecteurs distincts du catalogue camerounais présents dans l'annonce ; elle est indicative et doit être corroborée par une analyse du CIRT avant toute action opérationnelle.</p>
+        <p><strong>Publication.</strong> Date affichée par la source elle-même. Plusieurs sites de rançongiciel ne datent pas leurs annonces : la mention « non datée » n'est pas une anomalie de collecte.</p>
+        <p><strong>Diffusion.</strong> Document réservé à l'encadrement du CIRT (CN-11). Il ne contient aucune donnée personnelle.</p>
+    </div>
+{% if total_periode %}
+</section>
+{% endif %}
 
 </body>
 </html>
