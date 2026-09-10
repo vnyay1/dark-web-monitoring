@@ -222,6 +222,10 @@ DATABASE_URL=sqlite:///dark_web_monitoring.db
 
 ### Base de données
 
+Le schéma est géré **uniquement par Alembic** : l'application ne crée aucune table et refuse de
+démarrer sur une base qui n'est pas à jour. Après chaque `git pull`, lancer la migration **avant**
+tout autre programme.
+
 ```bash
 alembic upgrade head
 python3 -m app.matching.seed_selecteurs

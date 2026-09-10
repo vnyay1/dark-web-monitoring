@@ -45,7 +45,7 @@ python3 -m app.pipeline --source payload
 # Retire a source and the data that exists only through it (dry-run unless --confirmer)
 python3 -m app.maintenance.retirer_source --lister
 
-# Database migrations (Alembic)
+# Database migrations (Alembic) - run BEFORE starting anything after a git pull
 alembic upgrade head
 alembic revision --autogenerate -m "description"
 
@@ -126,6 +126,16 @@ the live console but never persisted: CN-03 lists what may be stored, and a sele
 
 Criticality only ever increases on an existing exposition (`deduplication.py`): a later sighting that
 sees fewer selectors must not downgrade an exposition already qualified as critical.
+
+### Schema ownership (`app/db.py`, `migrations/`)
+
+**Alembic owns the schema.** `init_db()` does NOT create tables: it only checks the database is at
+the Alembic head and raises `BaseNonAJour` otherwise. It used to call `Base.metadata.create_all()`,
+and any entry point run between a `git pull` and `alembic upgrade head` would create the new tables
+from the models, making the next migration fail on "table already exists" (this happened on the VM
+with `etat_scheduler`). Never reintroduce `create_all()`. `migrations/env.py` takes the URL from
+`DATABASE_URL` so Alembic always migrates the application's database, not the one hardcoded in
+`alembic.ini`. Migrations are hand-written (see the note in revision `d6fb8279afd3`).
 
 ### Models (`app/models/__init__.py`)
 
