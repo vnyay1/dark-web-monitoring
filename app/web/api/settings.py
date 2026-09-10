@@ -1,5 +1,7 @@
 """FR-08/FR-10 - Configuration systeme et catalogue de selecteurs."""
 
+import logging
+
 from flask import jsonify, request
 from flask_login import current_user, login_required
 
@@ -11,6 +13,8 @@ from app.models import (
     CategorieSelecteur, ConfigurationSysteme, RoleUtilisateur, Selecteur,
 )
 from app.web.permissions import role_requis
+
+logger = logging.getLogger(__name__)
 
 
 def enregistrer(api_bp):
@@ -155,5 +159,39 @@ def enregistrer(api_bp):
             selecteur.actif = not selecteur.actif
             session.commit()
             return jsonify({"succes": True, "actif": selecteur.actif})
+        finally:
+            session.close()
+
+    @api_bp.route("/selecteurs/<selecteur_id>", methods=["DELETE"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def supprimer_selecteur(selecteur_id):
+        """
+        Suppression DEFINITIVE d'un selecteur du catalogue.
+
+        Aucune table ne reference les selecteurs : la criticite n'enregistre
+        pas les selecteurs trouves (CN-03). Les expositions deja detectees ne
+        sont donc pas affectees ; seules les collectes futures ne
+        rechercheront plus ce terme. La desactivation reste l'alternative
+        reversible.
+        """
+        session = get_session()
+        try:
+            selecteur = session.get(Selecteur, selecteur_id)
+            if selecteur is None:
+                return jsonify({
+                    "erreur": "introuvable",
+                    "message": "Selecteur inexistant.",
+                }), 404
+
+            valeur, categorie = selecteur.valeur, selecteur.categorie.value
+            session.delete(selecteur)
+            session.commit()
+
+            logger.warning(
+                f"[catalogue] Selecteur supprime par '{current_user.nom_utilisateur}' : "
+                f"{valeur!r} ({categorie})"
+            )
+            return jsonify({"succes": True, "valeur": valeur})
         finally:
             session.close()

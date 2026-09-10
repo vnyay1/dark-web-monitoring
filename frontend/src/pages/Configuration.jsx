@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { api } from "../api/client";
 import { useChargement, useMessages } from "../api/session";
+import Confirmation from "../components/Confirmation";
 import {
   Chargement,
   EnTetePage,
@@ -17,6 +18,20 @@ import {
   LIBELLE_NIVEAU,
   Messages,
 } from "../components/communs";
+
+/**
+ * Forme de comparaison pour la recherche : minuscules et accents retires,
+ * pour que "universite" trouve "Université".
+ */
+function pourRecherche(texte) {
+  return (texte || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+const libelleCategorie = (c) => c.replace(/_/g, " ");
 
 const NIVEAUX = ["faible", "moyenne", "elevee", "critique"];
 
@@ -28,6 +43,9 @@ export default function Configuration() {
 
   const [nouveau, setNouveau] = useState({ valeur: "", categorie: "" });
   const [recherche, setRecherche] = useState("");
+  const [filtreCategorie, setFiltreCategorie] = useState("");
+  const [aSupprimer, setASupprimer] = useState(null);
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
 
   async function enregistrer(cle, valeur) {
     try {
@@ -60,12 +78,38 @@ export default function Configuration() {
     }
   }
 
+  async function confirmerSuppression() {
+    setSuppressionEnCours(true);
+    try {
+      await api.supprimerSelecteur(aSupprimer.id);
+      ajouter(`Sélecteur « ${aSupprimer.valeur} » supprimé.`);
+      setASupprimer(null);
+      catalogue.recharger();
+    } catch (e) {
+      ajouter(e.message, "error");
+    } finally {
+      setSuppressionEnCours(false);
+    }
+  }
+
+  async function desactiverPlutot() {
+    const cible = aSupprimer;
+    setASupprimer(null);
+    await basculer(cible.id);
+    ajouter(`Sélecteur « ${cible.valeur} » désactivé.`);
+  }
+
   if (config.chargement || catalogue.chargement) return <Chargement />;
 
   const modifiable = config.donnees?.modifiable;
-  const selecteurs = (catalogue.donnees?.selecteurs || []).filter((s) =>
-    s.valeur.toLowerCase().includes(recherche.trim().toLowerCase()),
+  const terme = pourRecherche(recherche);
+  const tousSelecteurs = catalogue.donnees?.selecteurs || [];
+  const selecteurs = tousSelecteurs.filter(
+    (s) =>
+      (!terme || pourRecherche(s.valeur).includes(terme)) &&
+      (!filtreCategorie || s.categorie === filtreCategorie),
   );
+  const filtreActif = Boolean(terme || filtreCategorie);
   const actifs = (catalogue.donnees?.selecteurs || []).filter((s) => s.actif).length;
 
   return (
@@ -150,23 +194,10 @@ export default function Configuration() {
               <option value="">Choisir…</option>
               {(catalogue.donnees?.categories || []).map((c) => (
                 <option key={c} value={c}>
-                  {c.replace(/_/g, " ")}
+                  {libelleCategorie(c)}
                 </option>
               ))}
             </select>
-          </div>
-
-          <div className="field">
-            <label className="field-label" htmlFor="sel-q">
-              Rechercher
-            </label>
-            <input
-              id="sel-q"
-              className="input"
-              placeholder="Filtrer le catalogue…"
-              value={recherche}
-              onChange={(e) => setRecherche(e.target.value)}
-            />
           </div>
 
           <div className="btn-row">
@@ -176,6 +207,49 @@ export default function Configuration() {
           </div>
         </form>
 
+        {/* Barre de recherche dediee, au-dessus du tableau qu'elle filtre.
+            Filtrage en direct cote client : le catalogue compte au plus
+            quelques centaines d'entrees. */}
+        <div className="barre-recherche" role="search">
+          <input
+            className="input"
+            type="search"
+            placeholder="Rechercher un sélecteur par nom…"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            aria-label="Rechercher un sélecteur par nom"
+          />
+          <select
+            className="select"
+            value={filtreCategorie}
+            onChange={(e) => setFiltreCategorie(e.target.value)}
+            aria-label="Filtrer par catégorie"
+          >
+            <option value="">Toutes les catégories</option>
+            {(catalogue.donnees?.categories || []).map((c) => (
+              <option key={c} value={c}>
+                {libelleCategorie(c)}
+              </option>
+            ))}
+          </select>
+          <span className="barre-recherche-compte" aria-live="polite">
+            {filtreActif
+              ? `${selecteurs.length} résultat(s) sur ${tousSelecteurs.length}`
+              : `${tousSelecteurs.length} sélecteur(s)`}
+          </span>
+          {filtreActif && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setRecherche("");
+                setFiltreCategorie("");
+              }}
+            >
+              Effacer la recherche
+            </button>
+          )}
+        </div>
+
         <div className="table-wrap">
           <table className="data">
             <thead>
@@ -183,16 +257,17 @@ export default function Configuration() {
                 <th>Sélecteur</th>
                 <th>Catégorie</th>
                 <th>Origine</th>
-                <th style={{ width: 150 }}>État</th>
+                <th style={{ width: 110 }}>État</th>
+                <th style={{ width: 110 }}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {selecteurs.map((s) => (
                 <tr key={s.id}>
                   <td className="cell-entity">{s.valeur}</td>
-                  <td className="cell-muted">
-                    {s.categorie.replace(/_/g, " ")}
-                  </td>
+                  <td className="cell-muted">{libelleCategorie(s.categorie)}</td>
                   <td className="cell-muted">
                     {s.propose_par_ner ? "Proposé par NER" : "Catalogue"}
                   </td>
@@ -202,6 +277,15 @@ export default function Configuration() {
                       onClick={() => basculer(s.id)}
                     >
                       {s.actif ? "Actif" : "Inactif"}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-ghost btn-sm bouton-supprimer"
+                      onClick={() => setASupprimer(s)}
+                      aria-label={`Supprimer le sélecteur ${s.valeur}`}
+                    >
+                      Supprimer
                     </button>
                   </td>
                 </tr>
@@ -216,6 +300,35 @@ export default function Configuration() {
           </p>
         )}
       </section>
+
+      {aSupprimer && (
+        <Confirmation
+          titre="Supprimer ce sélecteur ?"
+          libelleConfirmer="Supprimer définitivement"
+          enCours={suppressionEnCours}
+          onConfirmer={confirmerSuppression}
+          onAnnuler={() => setASupprimer(null)}
+          actionSecondaire={
+            aSupprimer.actif
+              ? { libelle: "Désactiver plutôt", onClick: desactiverPlutot }
+              : null
+          }
+        >
+          <p className="fenetre-cible">
+            <strong>{aSupprimer.valeur}</strong>
+            <span className="cell-muted"> — {libelleCategorie(aSupprimer.categorie)}</span>
+          </p>
+          <p>
+            Il sera retiré du catalogue et ne sera plus recherché lors des
+            prochaines collectes. Les expositions déjà détectées ne sont pas
+            modifiées.
+          </p>
+          <p className="cell-muted">
+            Cette suppression est définitive. Pour suspendre le sélecteur sans le
+            perdre, désactivez-le plutôt : c'est réversible à tout moment.
+          </p>
+        </Confirmation>
+      )}
 
       <Messages messages={messages} />
     </>

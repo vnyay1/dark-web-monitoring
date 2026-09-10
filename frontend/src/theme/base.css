@@ -582,3 +582,95 @@ table.data tbody tr:hover {
   display: inline-block;
   vertical-align: middle;
 }
+
+/* --------------------------------------------------------------------
+   Barre de recherche au-dessus d'un tableau
+   -------------------------------------------------------------------- */
+
+.barre-recherche {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.barre-recherche .input {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.barre-recherche .select {
+  flex: 0 1 220px;
+  width: auto;
+}
+
+.barre-recherche-compte {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bouton-supprimer:hover:not(:disabled) {
+  color: var(--crit);
+  border-color: var(--crit-border);
+  background: var(--crit-bg);
+}
+
+/* --------------------------------------------------------------------
+   Fenetre de confirmation
+   -------------------------------------------------------------------- */
+
+.voile {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 6, 12, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 400;
+}
+
+.fenetre {
+  width: 100%;
+  max-width: 460px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px 22px 18px;
+}
+
+.fenetre-titre {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.fenetre-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.fenetre-cible {
+  font-size: 13.5px;
+  color: var(--text-primary);
+  padding: 9px 12px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+.fenetre-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}

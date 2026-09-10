@@ -121,6 +121,7 @@ export const api = {
   ajouterSelecteur: (valeur, categorie) =>
     requete("/selecteurs", corpsJson({ valeur, categorie })),
   basculerSelecteur: (id) => requete(`/selecteurs/${id}/basculer`, corpsJson()),
+  supprimerSelecteur: (id) => requete(`/selecteurs/${id}`, { method: "DELETE" }),
 
   // --- Comptes ---
   utilisateurs: () => requete("/utilisateurs"),
