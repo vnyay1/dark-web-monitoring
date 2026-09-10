@@ -133,13 +133,14 @@
 }
 
 /* Le bouton Menu n'apparait que sur ecran etroit, ou la navigation
-   horizontale devient penible a faire defiler. */
-.nav-toggle {
+   horizontale devient penible a faire defiler. Selecteur qualifie par
+   .topbar : il doit l'emporter sur .btn quel que soit l'ordre des feuilles. */
+.topbar .nav-toggle {
   display: none;
 }
 
 @media (max-width: 860px) {
-  .nav-toggle {
+  .topbar .nav-toggle {
     display: inline-flex;
   }
 
