@@ -16,6 +16,7 @@ import { api } from "../api/client";
 import { useSession } from "../api/session";
 import {
   dureeDepuis,
+  dureeEntre,
   EnTetePage,
   formaterDateHeure,
   formaterHeure,
@@ -36,6 +37,7 @@ const LIBELLE_STATUT = {
 };
 
 const CLASSE_EVENEMENT = {
+  circuit_renouvele: "ev-tor",
   debut_cycle: "ev-cycle",
   fin_cycle: "ev-cycle",
   debut_source: "ev-source",
@@ -44,6 +46,7 @@ const CLASSE_EVENEMENT = {
 };
 
 const PREFIXE_EVENEMENT = {
+  circuit_renouvele: "TOR",
   debut_cycle: "CYCLE",
   fin_cycle: "CYCLE",
   debut_source: "SOURCE",
@@ -57,6 +60,7 @@ export default function Scheduler() {
 
   const [etat, setEtat] = useState(null);
   const [lignes, setLignes] = useState([]);
+  const [historiqueTronque, setHistoriqueTronque] = useState(false);
   const [message, setMessage] = useState(null);
   const [action, setAction] = useState(null);
   const [autoDefilement, setAutoDefilement] = useState(true);
@@ -77,11 +81,15 @@ export default function Scheduler() {
       const nouvelEtat = await api.schedulerEtat();
       setEtat(nouvelEtat);
 
-      // Premier passage : on se cale sur la fin du fil pour ne pas rejouer
-      // sept jours d'historique a l'ouverture de la page.
+      // Premier passage (ouverture de la page, ou retour depuis une autre
+      // page) : on recharge le cycle en cours ou le dernier cycle, puis le
+      // sondage enchaine sur le direct a partir de son dernier evenement.
+      // Le fil vit en base : changer de page ne perd rien.
       if (curseur.current === null) {
-        const depart = await api.schedulerEvenements();
-        curseur.current = depart.dernier_id;
+        const historique = await api.schedulerHistorique();
+        curseur.current = historique.dernier_id;
+        setLignes(historique.evenements);
+        setHistoriqueTronque(Boolean(historique.tronque));
         return;
       }
 
@@ -170,7 +178,7 @@ export default function Scheduler() {
             </div>
             <div className="sched-statut-detail">
               {actif
-                ? `Processus ${etat.pid} sur ${etat.hostname}`
+                ? `Processus ${etat.pid} sur ${etat.hostname}, lancé il y a ${dureeDepuis(etat.demarre_le, maintenant)}`
                 : "Aucun processus de collecte en cours d'exécution"}
             </div>
           </div>
@@ -228,12 +236,24 @@ export default function Scheduler() {
           hint={enCollecte ? "analyse en cours" : "aucune analyse en cours"}
           accent={enCollecte}
         />
+        {/* Duree du CYCLE : avance pendant une collecte, se fige a sa fin
+            (on lit alors la duree du dernier cycle) et repart de zero au
+            cycle suivant. L'age du processus reste sur la carte de statut. */}
         <MetriqueSched
-          label="Temps écoulé"
-          valeur={actif ? dureeDepuis(etat.demarre_le, maintenant) : "—"}
-          hint={
-            actif ? `démarré à ${formaterHeure(etat.demarre_le)} UTC` : "à l'arrêt"
+          label={enCollecte ? "Temps écoulé" : "Durée du dernier cycle"}
+          valeur={
+            etat?.debut_collecte
+              ? dureeEntre(etat.debut_collecte, enCollecte ? null : etat.fin_collecte, maintenant)
+              : "—"
           }
+          hint={
+            etat?.debut_collecte
+              ? enCollecte
+                ? `cycle lancé à ${formaterHeure(etat.debut_collecte)} UTC`
+                : `${formaterHeure(etat.debut_collecte)} → ${formaterHeure(etat.fin_collecte)} UTC`
+              : "aucun cycle effectué"
+          }
+          accent={enCollecte}
         />
         <MetriqueSched
           label="Dernière collecte"
@@ -263,6 +283,15 @@ export default function Scheduler() {
         />
       </div>
 
+      <CarteTor
+        etat={etat}
+        actif={actif}
+        maintenant={maintenant}
+        peutVerifier={peutPiloter}
+        enCours={action === "ip"}
+        onVerifier={() => executer("ip", api.schedulerVerifierIp)}
+      />
+
       {etat?.derniere_stats && (
         <ResumeCycle stats={etat.derniere_stats} />
       )}
@@ -286,9 +315,13 @@ export default function Scheduler() {
             </label>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={() => setLignes([])}
+              onClick={() => {
+                setLignes([]);
+                setHistoriqueTronque(false);
+              }}
+              title="Vide seulement l'affichage : le fil reste enregistré et réapparaît au prochain chargement de la page"
             >
-              Effacer
+              Vider l'affichage
             </button>
           </div>
         </div>
@@ -305,7 +338,13 @@ export default function Scheduler() {
               </span>
             </div>
           ) : (
-            lignes.map((ligne) => (
+            <>
+            {historiqueTronque && (
+              <div className="console-vide-note" style={{ marginBottom: 6 }}>
+                … début du cycle non affiché (seules les lignes les plus récentes sont rechargées)
+              </div>
+            )}
+            {lignes.map((ligne) => (
               <div
                 key={ligne.id}
                 className={`console-ligne ${CLASSE_EVENEMENT[ligne.type] || ""}`}
@@ -318,12 +357,68 @@ export default function Scheduler() {
                 </span>
                 <span className="console-message">{ligne.message}</span>
               </div>
-            ))
+            ))}
+            </>
           )}
           <div ref={finDuFil} />
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * Noeud de sortie Tor, tel que publie par le processus scheduler. Le
+ * serveur web ne parle jamais a Tor : le bouton ne fait que demander une
+ * verification au scheduler, qui la traite sous quelques secondes.
+ */
+function CarteTor({ etat, actif, maintenant, peutVerifier, enCours, onVerifier }) {
+  const ip = etat?.ip_sortie;
+  const enAttente = etat?.verification_ip_demandee;
+
+  return (
+    <section className={`card card-pad carte-tor${actif ? "" : " inactive"}`}>
+      <div className="carte-tor-corps">
+        <div>
+          <div className="stat-label">Nœud de sortie Tor</div>
+          <div className="carte-tor-ip">{ip || "—"}</div>
+          <div className="stat-hint">
+            {!ip
+              ? "aucune IP constatée pour l'instant"
+              : actif
+                ? `vérifiée il y a ${dureeDepuis(etat.ip_verifiee_le, maintenant)}`
+                : `dernière IP connue, vérifiée le ${formaterDateHeure(etat.ip_verifiee_le)}`}
+          </div>
+          {etat?.ip_sortie_precedente && (
+            <div className="stat-hint">
+              précédente : {etat.ip_sortie_precedente} · changement à{" "}
+              {formaterHeure(etat.ip_changee_le)} UTC
+            </div>
+          )}
+        </div>
+
+        {peutVerifier && (
+          <button
+            className="btn btn-sm"
+            disabled={!actif || enCours || enAttente}
+            onClick={onVerifier}
+            title={
+              actif
+                ? "Demande au planificateur de vérifier l'IP de sortie du circuit courant"
+                : "Démarrez le planificateur : c'est lui qui interroge Tor"
+            }
+          >
+            {enCours || enAttente ? "Vérification…" : "Vérifier maintenant"}
+          </button>
+        )}
+      </div>
+
+      <p className="carte-tor-note">
+        L'IP change à chaque renouvellement de circuit. Tor peut réattribuer la
+        même sortie de temps à autre ; une IP qui ne change jamais signale en
+        revanche un renouvellement défaillant.
+      </p>
+    </section>
   );
 }
 

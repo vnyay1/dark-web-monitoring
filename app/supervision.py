@@ -123,6 +123,7 @@ def reclamer_verrou() -> tuple:
                 heartbeat=maintenant,
                 source_en_cours=None,
                 collecte_immediate_demandee=False,
+                verification_ip_demandee=False,
             )
         )
         session.commit()
@@ -147,6 +148,10 @@ def liberer_verrou():
     session = get_session()
     try:
         etat = _etat(session)
+        # Un arret pendant une collecte clot le cycle : sans cela, la duree
+        # affichee n'aurait pas de fin et continuerait de courir.
+        if etat.statut == StatutScheduler.COLLECTE_EN_COURS and etat.fin_collecte is None:
+            etat.fin_collecte = utc_now()
         etat.actif = False
         etat.statut = StatutScheduler.ARRETE
         etat.pid = None
@@ -193,12 +198,46 @@ def enregistrer_planification(prochaine_execution):
         session.close()
 
 
+def marquer_debut_collecte():
+    """
+    Ouvre un cycle de collecte. La duree affichee par la console repart de
+    zero a partir d'ici : fin_collecte est videe jusqu'a la cloture.
+    """
+    session = get_session()
+    try:
+        etat = _etat(session)
+        maintenant = utc_now()
+        etat.statut = StatutScheduler.COLLECTE_EN_COURS
+        etat.debut_collecte = maintenant
+        etat.fin_collecte = None
+        etat.source_en_cours = None
+        etat.heartbeat = maintenant
+        session.commit()
+    finally:
+        session.close()
+
+
+def interrompre_collecte():
+    """Clot un cycle qui s'est termine en erreur, sans en archiver le resume."""
+    session = get_session()
+    try:
+        etat = _etat(session)
+        etat.fin_collecte = utc_now()
+        etat.statut = StatutScheduler.EN_ATTENTE
+        etat.source_en_cours = None
+        etat.heartbeat = utc_now()
+        session.commit()
+    finally:
+        session.close()
+
+
 def enregistrer_fin_de_cycle(stats: list):
     """Archive le resume du cycle qui vient de s'achever."""
     session = get_session()
     try:
         etat = _etat(session)
-        etat.derniere_execution = utc_now()
+        etat.fin_collecte = utc_now()
+        etat.derniere_execution = etat.fin_collecte
         etat.source_en_cours = None
         etat.statut = StatutScheduler.EN_ATTENTE
         etat.heartbeat = utc_now()
@@ -234,6 +273,73 @@ def consommer_demande_collecte() -> bool:
         if not etat.collecte_immediate_demandee:
             return False
         etat.collecte_immediate_demandee = False
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+# ---------------------------------------------------------------------
+# Noeud de sortie Tor
+# ---------------------------------------------------------------------
+
+def publier_ip_sortie(ip: str, verifiee_le) -> bool:
+    """
+    Enregistre l'IP de sortie constatee par le processus scheduler.
+
+    Retourne True si elle differe de la precedente : c'est ce changement,
+    et non chaque verification, qui est signale dans le fil d'activite.
+    Apres un NEWNYM, Tor peut legitimement reattribuer la meme sortie : une
+    IP inchangee isolee n'est pas une panne, une IP qui ne change JAMAIS en
+    est une.
+    """
+    session = get_session()
+    try:
+        etat = _etat(session)
+        ancienne = etat.ip_sortie
+        etat.ip_verifiee_le = verifiee_le
+
+        a_change = ip != ancienne
+        if a_change:
+            etat.ip_sortie_precedente = ancienne
+            etat.ip_sortie = ip
+            etat.ip_changee_le = verifiee_le
+
+        session.commit()
+    finally:
+        session.close()
+
+    if a_change:
+        message = f"Nouveau circuit Tor : sortie {ip}"
+        if ancienne:
+            message += f" (precedente {ancienne})"
+        emettre(TypeEvenementCollecte.CIRCUIT_RENOUVELE, message)
+
+    return a_change
+
+
+def demander_verification_ip() -> bool:
+    """Leve le drapeau lu par le scheduler, qui seul parle a Tor."""
+    session = get_session()
+    try:
+        etat = _etat(session)
+        if _verrou_est_perime(etat):
+            return False
+        etat.verification_ip_demandee = True
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+def consommer_demande_verification_ip() -> bool:
+    """Retourne True si une verification d'IP etait demandee, et l'efface."""
+    session = get_session()
+    try:
+        etat = _etat(session)
+        if not etat.verification_ip_demandee:
+            return False
+        etat.verification_ip_demandee = False
         session.commit()
         return True
     finally:
@@ -295,17 +401,55 @@ def evenements_depuis(dernier_id: int = 0, limite: int = 100) -> list:
             .limit(limite)
             .all()
         )
-        return [
-            {
-                "id": e.id,
-                "horodatage": e.horodatage.isoformat(),
-                "type": e.type_evenement.value,
-                "source": e.source,
-                "message": e.message,
-                "exposition_id": e.exposition_id,
-            }
-            for e in lignes
-        ]
+        return [_serialiser_evenement(e) for e in lignes]
+    finally:
+        session.close()
+
+
+def _serialiser_evenement(evenement) -> dict:
+    return {
+        "id": evenement.id,
+        "horodatage": evenement.horodatage.isoformat(),
+        "type": evenement.type_evenement.value,
+        "source": evenement.source,
+        "message": evenement.message,
+        "exposition_id": evenement.exposition_id,
+    }
+
+
+def evenements_du_dernier_cycle(limite: int = 400) -> dict:
+    """
+    Evenements du cycle en cours, ou du dernier cycle termine, en ordre
+    chronologique : c'est ce que la console reaffiche quand on revient sur
+    la page. Sans cycle connu, les derniers evenements.
+
+    Retourne {"evenements": [...], "tronque": bool}. Au-dela de `limite`,
+    seules les lignes les plus recentes sont gardees : une console sert a
+    suivre la fin d'un cycle, pas a relire son debut.
+    """
+    limite = max(1, min(limite, MAX_EVENEMENTS_PAR_LECTURE))
+
+    session = get_session()
+    try:
+        debut = (
+            session.query(EvenementCollecte.id)
+            .filter(EvenementCollecte.type_evenement == TypeEvenementCollecte.DEBUT_CYCLE)
+            .order_by(EvenementCollecte.id.desc())
+            .first()
+        )
+
+        query = session.query(EvenementCollecte)
+        if debut:
+            query = query.filter(EvenementCollecte.id >= debut[0])
+
+        # Les `limite + 1` plus recents : un de plus pour savoir s'il y en a trop.
+        recents = query.order_by(EvenementCollecte.id.desc()).limit(limite + 1).all()
+        tronque = len(recents) > limite
+
+        return {
+            "evenements": [_serialiser_evenement(e) for e in reversed(recents[:limite])],
+            "tronque": tronque,
+        }
     finally:
         session.close()
 
@@ -351,6 +495,21 @@ def purger_evenements(session=None, jours: int = RETENTION_EVENEMENTS_JOURS) -> 
 # Lecture pour l'interface
 # ---------------------------------------------------------------------
 
+def _fin_de_cycle_effective(etat, vivant: bool):
+    """
+    Fin du dernier cycle, pour figer la duree affichee.
+
+    Un processus tue en pleine collecte (kill -9, coupure de VM) n'a pas pu
+    clore son cycle : son dernier heartbeat est alors la meilleure borne
+    connue, faute de quoi la duree continuerait de courir indefiniment.
+    """
+    if etat.fin_collecte is not None or etat.debut_collecte is None:
+        return etat.fin_collecte
+    if etat.statut == StatutScheduler.COLLECTE_EN_COURS and vivant:
+        return None  # cycle reellement en cours : la duree avance
+    return etat.heartbeat or etat.debut_collecte
+
+
 def etat_courant() -> dict:
     """Instantane complet de l'etat du scheduler, pret a serialiser."""
     session = get_session()
@@ -376,6 +535,13 @@ def etat_courant() -> dict:
             "prochaine_execution": horodater(etat.prochaine_execution) if vivant else None,
             "collecte_immediate_demandee": bool(etat.collecte_immediate_demandee),
             "derniere_stats": json.loads(etat.derniere_stats) if etat.derniere_stats else None,
+            "debut_collecte": horodater(etat.debut_collecte),
+            "fin_collecte": horodater(_fin_de_cycle_effective(etat, vivant)),
+            "ip_sortie": etat.ip_sortie,
+            "ip_sortie_precedente": etat.ip_sortie_precedente,
+            "ip_verifiee_le": horodater(etat.ip_verifiee_le),
+            "ip_changee_le": horodater(etat.ip_changee_le),
+            "verification_ip_demandee": bool(etat.verification_ip_demandee),
         }
     finally:
         session.close()

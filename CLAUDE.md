@@ -196,7 +196,17 @@ otherwise a `kill -9` would block the system permanently. Living in the database
 start from the web UI and from the command line alike.
 
 The pipeline publishes progress events (`DEBUT_SOURCE`, `NOUVELLE_EXPOSITION`, `FIN_SOURCE`) consumed
-by the supervision console. **Collection failures deliberately do not produce an event feed entry
+by the supervision console, which polls with a cursor (`/api/scheduler/evenements?depuis=<id>`) and,
+on (re)mount, reloads the current or last cycle (`?historique=cycle`) - events live in the database,
+so leaving the page loses nothing. The displayed elapsed time is the CYCLE duration
+(`debut_collecte`/`fin_collecte`), frozen while idle, not the process age.
+
+**The web server never talks to Tor.** `app/tor` records the last exit IP it observed (on every
+circuit renewal) in process memory, without DB access; the scheduler's `job_synchroniser_tor`
+publishes it to `EtatScheduler` and emits `CIRCUIT_RENOUVELE` on change, and serves the UI's
+"verify now" request through a flag, like the immediate-collection request. That job is separate
+from `job_verifier_demande` on purpose: the latter runs a manual collection inline and stays busy
+for its whole duration. **Collection failures deliberately do not produce an event feed entry
 beyond a neutral closing line** — they are already in `JournalAudit` with the detail auditing needs,
 and repeating them would drown the progress feed.
 

@@ -106,6 +106,8 @@ export const api = {
   schedulerEtat: () => requete("/scheduler/etat"),
   schedulerEvenements: (depuis) =>
     requete(`/scheduler/evenements${depuis === undefined ? "" : `?depuis=${depuis}`}`),
+  schedulerHistorique: () => requete("/scheduler/evenements?historique=cycle"),
+  schedulerVerifierIp: () => requete("/scheduler/verifier-ip", corpsJson()),
   schedulerDemarrer: () => requete("/scheduler/demarrer", corpsJson()),
   schedulerArreter: () => requete("/scheduler/arreter", corpsJson()),
   schedulerCollecteImmediate: () =>

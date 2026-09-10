@@ -466,6 +466,7 @@ class TypeEvenementCollecte(enum.Enum):
     FIN_SOURCE = "fin_source"
     NOUVELLE_EXPOSITION = "nouvelle_exposition"
     FIN_CYCLE = "fin_cycle"
+    CIRCUIT_RENOUVELE = "circuit_renouvele"   # nouvelle IP de sortie Tor constatee
 
 
 class EtatScheduler(Base):
@@ -512,6 +513,21 @@ class EtatScheduler(Base):
     derniere_stats = Column(Text, nullable=True)  # resume JSON du dernier cycle
 
     collecte_immediate_demandee = Column(Boolean, nullable=False, default=False)
+
+    # Bornes du cycle de collecte en cours ou du dernier cycle : le "temps
+    # ecoule" affiche est la duree du CYCLE, figee en veille, et non l'age
+    # du processus, qui continuait d'avancer pendant la veille.
+    debut_collecte = Column(DateTime(timezone=True), nullable=True)
+    fin_collecte = Column(DateTime(timezone=True), nullable=True)
+
+    # Noeud de sortie Tor, publie par le processus scheduler (le serveur web
+    # ne parle jamais a Tor). Une IP de relais Tor est une donnee
+    # d'infrastructure publique, pas une donnee personnelle (CN-04).
+    ip_sortie = Column(String(64), nullable=True)
+    ip_sortie_precedente = Column(String(64), nullable=True)
+    ip_verifiee_le = Column(DateTime(timezone=True), nullable=True)
+    ip_changee_le = Column(DateTime(timezone=True), nullable=True)
+    verification_ip_demandee = Column(Boolean, nullable=False, default=False)
 
     def __repr__(self):
         return f"<EtatScheduler {self.statut.value} pid={self.pid}>"
