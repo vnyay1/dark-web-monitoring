@@ -6,6 +6,12 @@ MISE A JOUR : utilise desormais le module centralise app.tor.
 
 PAGINATION (reconnaissance VM, 11/09/2026) : div.pagination, lien
 a.page-btn "NEXT >>" vers /?page=N.
+
+DATES (reconnaissance VM, 11/09/2026) : une partie des cartes n'affiche ni
+AUDIT ID ni DISCOVERY DATE - 5 sur 10 en page 2. Les cartes datees sont
+rangees de la plus recente a la plus ancienne sur les deux pages : une
+carte sans date est donc bornee par la carte datee qui la precede
+(LISTING_CHRONOLOGIQUE, cf. BaseConnector._poser_dates_plafond).
 """
 
 import logging
@@ -27,6 +33,7 @@ class DataExposureLogsConnector(BaseConnector):
 
     SUPPORTE_PAGINATION = True
     MAX_PAGES_LISTING = 30
+    LISTING_CHRONOLOGIQUE = True
 
 
     def parse(self, raw_content):

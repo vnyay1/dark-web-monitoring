@@ -135,6 +135,11 @@ class BaseConnector:
     # de pagination sur la periode passe alors par une sonde (cf. en-tete).
     DATE_SUR_DETAIL = False
 
+    # Annonces rangees de la plus recente a la plus ancienne, pages suivantes
+    # comprises (a verifier par reconnaissance, --phase pages). Une annonce
+    # sans date recoit alors une date PLAFOND, cf. _poser_dates_plafond().
+    LISTING_CHRONOLOGIQUE = False
+
     MAX_PAGES_LISTING = 1
     PAGES_GRACE = 1          # pages explorees au-dela de la 1re page 100% connue
     MAX_DETAILS_PAR_RUN = 0
@@ -374,6 +379,8 @@ class BaseConnector:
             }
 
         self._phase_detail(entries, entrees_connues, budget, stats, erreurs)
+        if self.LISTING_CHRONOLOGIQUE:
+            self._poser_dates_plafond(entries)
         self._journaliser_synthese(stats, erreurs, True, debut)
 
         return {
@@ -518,6 +525,24 @@ class BaseConnector:
             for e in entries
         )
         return [d for d in dates if d is not None]
+
+    def _poser_dates_plafond(self, entries):
+        """
+        Sur un listing chronologique, une annonce sans date lisible n'est pas
+        plus recente que l'annonce datee qui la precede : cette date devient
+        sa "date_plafond". Ce n'est PAS une date de publication - elle n'est
+        jamais enregistree - mais une borne, qui suffit au pipeline pour
+        ecarter l'annonce quand elle tombe avant la periode. Une annonce
+        sans date placee avant toute annonce datee n'a pas de plafond : elle
+        reste analysee, comme toute annonce non datee.
+        """
+        plafond = None
+        for entry in entries:
+            dates = self.dates_lisibles([entry])
+            if dates:
+                plafond = dates[0]
+            elif plafond is not None:
+                entry["date_plafond"] = plafond
 
     def _entree_a_sonder(self, page_entries, entrees_connues):
         """
