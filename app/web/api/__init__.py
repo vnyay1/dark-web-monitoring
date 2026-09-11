@@ -107,8 +107,11 @@ def _installer_gestionnaires_erreurs(app):
                 "message": "Authentification requise.",
             }), 401
 
-        from flask import redirect, url_for
-        return redirect(url_for("auth.login", next=request.path))
+        # Hors API (telechargements /reports, /compliance) : retour a
+        # l'ecran de connexion de l'interface React. Il n'existe plus de
+        # page de connexion cote serveur vers laquelle rediriger.
+        from flask import redirect
+        return redirect("/connexion")
 
     @app.errorhandler(403)
     def interdit(erreur):

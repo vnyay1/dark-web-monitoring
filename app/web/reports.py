@@ -12,7 +12,7 @@ Le rapport mensuel reste rendu par un gabarit Jinja
 mis en page pour WeasyPrint, pas une page d'interface.
 """
 
-from flask import Blueprint, send_file, Response, request
+from flask import Blueprint, Response, abort, request
 from flask_login import login_required
 
 from app.reports.monthly_report import generer_rapport_html, generer_rapport_pdf
@@ -23,32 +23,40 @@ from app.web.permissions import role_requis
 reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
 
 
+def _mois_annee() -> tuple:
+    """
+    Mois et annee demandes, le mois courant par defaut (y compris pour une
+    valeur non numerique, cf. type=int). Un mois hors 1-12 est refuse en
+    400 : int() leve auparavant une erreur 500 sur toute valeur invalide.
+    """
+    maintenant = utc_now()
+    mois = request.args.get("mois", maintenant.month, type=int)
+    annee = request.args.get("annee", maintenant.year, type=int)
+    if not 1 <= mois <= 12:
+        abort(400, "Mois invalide (1 a 12).")
+    return mois, annee
+
+
 @reports_bp.route("/monthly/html")
 @login_required
 @role_requis(RoleUtilisateur.SUPERVISOR)
 def monthly_html():
-    mois = int(request.args.get("mois", utc_now().month))
-    annee = int(request.args.get("annee", utc_now().year))
-    html_content = generer_rapport_html(mois, annee)
-    return Response(html_content, mimetype="text/html")
+    mois, annee = _mois_annee()
+    return Response(generer_rapport_html(mois, annee), mimetype="text/html")
 
 
 @reports_bp.route("/monthly/pdf")
 @login_required
 @role_requis(RoleUtilisateur.SUPERVISOR)
 def monthly_pdf():
-    mois = int(request.args.get("mois", utc_now().month))
-    annee = int(request.args.get("annee", utc_now().year))
-
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        chemin = generer_rapport_pdf(mois, annee, tmp.name)
-
-    return send_file(
-        chemin,
+    mois, annee = _mois_annee()
+    return Response(
+        generer_rapport_pdf(mois, annee),
         mimetype="application/pdf",
-        as_attachment=True,
-        download_name=f"rapport_sentinel_{mois:02d}-{annee}.pdf",
+        headers={
+            "Content-Disposition":
+                f"attachment; filename=rapport_sentinel_{mois:02d}-{annee}.pdf"
+        },
     )
 
 
@@ -56,9 +64,8 @@ def monthly_pdf():
 @login_required
 @role_requis(RoleUtilisateur.SUPERVISOR)
 def export_json():
-    data = exporter_json()
     return Response(
-        data,
+        exporter_json(),
         mimetype="application/json",
         headers={"Content-Disposition": "attachment; filename=expositions_export.json"},
     )
@@ -68,9 +75,8 @@ def export_json():
 @login_required
 @role_requis(RoleUtilisateur.SUPERVISOR)
 def export_csv():
-    data = exporter_csv()
     return Response(
-        data,
+        exporter_csv(),
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=expositions_export.csv"},
     )

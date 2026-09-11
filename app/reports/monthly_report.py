@@ -62,7 +62,7 @@ def _rendre_chemins_static_relatifs(html_content: str) -> str:
     return _STATIC_URL_PATTERN.sub(r"url(\1static/", html_content)
 
 
-def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
+def collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
     """
     Rassemble les statistiques agregees du mois donne, sans jamais
     exposer le detail nominatif au-dela du nom de l'entite elle-meme
@@ -251,14 +251,18 @@ def _statistiques_sources(session, ids_expositions: list) -> list:
 
 def generer_rapport_html(mois: int, annee: int) -> str:
     """Genere le rapport au format HTML (chaine de caracteres)."""
-    stats = _collecter_statistiques_mensuelles(mois, annee)
+    stats = collecter_statistiques_mensuelles(mois, annee)
     return render_template("rapport_mensuel.html", **stats)
 
 
-def generer_rapport_pdf(mois: int, annee: int, chemin_sortie: str) -> str:
+def generer_rapport_pdf(mois: int, annee: int) -> bytes:
+    """
+    Genere le rapport au format PDF, en memoire : les octets sont servis
+    tels quels, sans fichier temporaire a nettoyer.
+    """
     from weasyprint import HTML
     html_content = generer_rapport_html(mois, annee)
     html_content_pdf = _rendre_chemins_static_relatifs(html_content)
-    HTML(string=html_content_pdf, base_url=str(_WEB_DIR)).write_pdf(chemin_sortie)
-    logger.info(f"[reports] Rapport PDF genere : {chemin_sortie}")
-    return chemin_sortie
+    pdf = HTML(string=html_content_pdf, base_url=str(_WEB_DIR)).write_pdf()
+    logger.info(f"[reports] Rapport PDF genere ({mois:02d}/{annee}, {len(pdf)} octets).")
+    return pdf
