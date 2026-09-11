@@ -59,7 +59,6 @@ def serialiser(exposition, detaille: bool = False) -> dict:
     donnees = {
         "id": exposition.id,
         "nom_entite": exposition.nom_entite,
-        "type_entite": exposition.type_entite.value if exposition.type_entite else None,
         # FR-13 : categories des selecteurs qui ont declenche l'exposition.
         "categories": [{"id": c.id, "nom": c.nom} for c in exposition.categories],
         "criticite": exposition.criticite,
@@ -71,7 +70,6 @@ def serialiser(exposition, detaille: bool = False) -> dict:
             exposition.date_publication_source.isoformat()
             if exposition.date_publication_source else None
         ),
-        "nombre_enregistrements_revendique": exposition.nombre_enregistrements_revendique,
         "nb_sources": len(exposition.sources),
         "sources": sorted({
             sr.source.nom for sr in exposition.sources if sr.source is not None

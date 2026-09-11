@@ -371,8 +371,6 @@ def _serialiser_selecteur(selecteur) -> dict:
         "valeur": selecteur.valeur,
         "categorie": {"id": selecteur.categorie.id, "nom": selecteur.categorie.nom},
         "actif": selecteur.actif,
-        "propose_par_ner": selecteur.propose_par_ner,
-        "valide_par_analyste": selecteur.valide_par_analyste,
     }
 
 

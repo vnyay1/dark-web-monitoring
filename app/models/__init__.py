@@ -18,7 +18,6 @@ from sqlalchemy import (
     String,
     DateTime,
     Integer,
-    Float,
     Boolean,
     Enum as SAEnum,
     ForeignKey,
@@ -52,11 +51,6 @@ def utc_now():
 # ---------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------
-
-class TypeEntite(enum.Enum):
-    PUBLIQUE = "publique"
-    PRIVEE = "privee"
-
 
 class StatutExposition(enum.Enum):
     NEW = "new"
@@ -164,14 +158,11 @@ class Exposition(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     nom_entite = Column(String(255), nullable=False)
-    type_entite = Column(SAEnum(TypeEntite), nullable=True)
 
     date_premiere_detection = Column(DateTime(timezone=True), nullable=False,
                                       default=utc_now)
     date_derniere_detection = Column(DateTime(timezone=True), nullable=False,
                                       default=utc_now)
-
-    nombre_enregistrements_revendique = Column(Integer, nullable=True)
 
     # FR-10 - criticite = nombre de selecteurs DISTINCTS trouves dans
     # l'entree ; niveau_criticite en est le palier lisible. On ne stocke
@@ -255,7 +246,6 @@ class Source(Base):
 
     derniere_collecte_reussie = Column(DateTime(timezone=True), nullable=True)
     nombre_erreurs = Column(Integer, nullable=False, default=0)
-    temps_reponse_moyen = Column(Float, nullable=True)
 
     actif = Column(Boolean, nullable=False, default=True)
 
@@ -287,10 +277,6 @@ class Selecteur(Base):
     valeur = Column(String(255), nullable=False)
     categorie_id = Column(String(36), ForeignKey("categories.id"), nullable=False)
     actif = Column(Boolean, nullable=False, default=True)
-
-    # FR-14 : sélecteurs proposés par NER, en attente de validation par un analyste
-    propose_par_ner = Column(Boolean, nullable=False, default=False)
-    valide_par_analyste = Column(Boolean, nullable=False, default=True)
 
     categorie = relationship("Categorie", back_populates="selecteurs")
 

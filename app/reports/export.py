@@ -19,13 +19,11 @@ def _exposition_vers_dict(exposition) -> dict:
     return {
         "id": exposition.id,
         "nom_entite": exposition.nom_entite,
-        "type_entite": exposition.type_entite.value if exposition.type_entite else None,
         # Plusieurs categories possibles (FR-13) : jointes par " ; " pour
         # rester une seule colonne lisible dans un tableur.
         "categories": " ; ".join(c.nom for c in exposition.categories),
         "date_premiere_detection": exposition.date_premiere_detection.date().isoformat(),
         "date_derniere_detection": exposition.date_derniere_detection.date().isoformat(),
-        "nombre_enregistrements_revendique": exposition.nombre_enregistrements_revendique,
         "criticite": exposition.criticite,
         "niveau_criticite": exposition.niveau_criticite.value,
         "date_publication_source": (
