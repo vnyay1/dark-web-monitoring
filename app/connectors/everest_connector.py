@@ -143,23 +143,3 @@ class EverestConnector(BaseConnector):
             "date_publication": posts[0].get("date") if posts else None,
             "texte_brut": self.nettoyer_urls(" ".join(filter(None, morceaux))),
         }
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = EverestConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        stats = result["statistiques_crawl"]
-        print(f"[OK] {data['nb_entries']} categorie(s), "
-              f"{stats['details_ok']} page(s) de detail recuperee(s), "
-              f"{stats['details_ignores']} hors budget.")
-        for entry in data["entries"][:5]:
-            print(f"\n--- {entry['nom_entite_detecte']} ({entry['identifiant_entree']}) ---")
-            print(f"  niveau : {entry['niveau_detail']}")
-            print(f"  texte  : {len(entry['texte_brut'])} caracteres")
-    else:
-        print(f"[ECHEC page d'accueil] {result['error']}")

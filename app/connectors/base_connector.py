@@ -155,8 +155,8 @@ class BaseConnector:
     def __init__(self, db_session=None, source_id=None):
         """
         db_session : session SQLAlchemy pour le journal d'audit (FR-17).
-        Optionnelle : sans elle, la journalisation est ignoree (tests
-        manuels via les blocs __main__, sans base de donnees).
+        Optionnelle : sans elle, la journalisation est ignoree (outil de
+        reconnaissance, tests hors ligne sans base de donnees).
 
         source_id : identifiant de l'enregistrement Source correspondant,
         pour lier les entrees du journal a la bonne source.

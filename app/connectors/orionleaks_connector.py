@@ -86,24 +86,3 @@ class OrionLeaksConnector(BaseConnector):
             if lien.get_text(strip=True).lower() == "next":
                 return self._page_suivante_validee(lien.get("href"), page_courante)
         return None
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = OrionLeaksConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
-        for i, entry in enumerate(data["entries"][:5], start=1):
-            print(f"\n--- Entree {i} ---")
-            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
-            print(f"  URL victime : {entry['url_victime']}")
-            print(f"  Date : {entry['date_publication']}")
-            print(f"  Statut : {entry['statut']}")
-            print(f"  Lien donnees present : {entry['lien_donnees_present']}")
-            print(f"  Message : {entry['message']}")
-    else:
-        print(f"[ECHEC] {result['error']}")

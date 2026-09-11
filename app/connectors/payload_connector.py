@@ -79,22 +79,3 @@ class PayloadConnector(BaseConnector):
             "texte_global": texte_global,
             "nb_entries": len(entries),
         }
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = PayloadConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
-        for i, entry in enumerate(data["entries"][:5], start=1):
-            print(f"\n--- Entree {i} ---")
-            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
-            print(f"  Taille : {entry['taille']}")
-            print(f"  Timer : {entry['timer']}")
-            print(f"  Lien : {entry['lien_detail']}")
-    else:
-        print(f"[ECHEC] {result['error']}")

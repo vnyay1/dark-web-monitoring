@@ -166,22 +166,3 @@ class SafePayConnector(BaseConnector):
 
         date = " ".join(" ".join(morceaux).split()).strip(" |·-,")
         return date or None
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = SafePayConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
-        for i, entry in enumerate(data["entries"][:5], start=1):
-            print(f"\n--- Entree {i} ---")
-            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
-            print(f"  Pays : {entry['code_pays']}")
-            print(f"  Statut : {entry['statut']}")
-            print(f"  Vues : {entry['vues']}")
-    else:
-        print(f"[ECHEC] {result['error']}")
