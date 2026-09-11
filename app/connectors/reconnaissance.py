@@ -287,19 +287,53 @@ def phase_formes(connecteur):
           f"{connecteur.url_detail(entrees[0]) if entrees else '-'}")
 
 
-def phase_dates(connecteur, limite=15, pages_detail=0):
+# Libelle de champ affiche par un site : capitales suivies de deux-points
+# ("DISCOVERY DATE:", "AUDIT ID:"). Seul le libelle est retenu, jamais la
+# valeur qui le suit.
+LIBELLE_CHAMP = re.compile(r"^\s*([A-Z][A-Z0-9 _/-]{1,40}?)\s*:")
+
+
+def _libelles_de_champs(html):
+    """Libelles de champs de la page et leur nombre d'occurrences."""
+    compte = {}
+    for ligne in BeautifulSoup(html, "html.parser").get_text("\n").splitlines():
+        trouve = LIBELLE_CHAMP.match(ligne)
+        if trouve:
+            libelle = trouve.group(1).strip()
+            compte[libelle] = compte.get(libelle, 0) + 1
+    return sorted(compte.items(), key=lambda kv: -kv[1])
+
+
+def phase_dates(connecteur, limite=15, pages_detail=0, page=1):
     """
     Chaines de date brutes des entrees du listing, et leur interpretation.
 
     N'imprime RIEN d'autre que la date : ni nom d'entite, ni description.
+    Seule exception, les LIBELLES des champs de la page (sans leur valeur),
+    pour comprendre ou se trouve la date d'une annonce qui n'en montre pas.
+
+    page : page de listing a examiner (pagination du connecteur suivie,
+    une requete par page, delai FR-06 compris).
     """
     from app.connectors.dates import CLES_DATE, parser_date
 
-    reponse = _recuperer(connecteur, connecteur.TARGET_URL)
+    url = connecteur.TARGET_URL
+    for courante in range(1, page):
+        raw = _recuperer(connecteur, url).text
+        try:
+            url = connecteur.url_page_suivante(raw, courante)
+        finally:
+            del raw  # CN-05
+        if not url:
+            raise SystemExit(f"La source ne compte que {courante} page(s).")
+
+    reponse = _recuperer(connecteur, url)
     entrees = connecteur.parse(reponse.text).get("entries", [])
+    libelles = _libelles_de_champs(reponse.text)
 
     print()
-    print(f"{len(entrees)} entree(s) dans le listing ; {min(limite, len(entrees))} affichee(s).")
+    print(f"PAGE {page} : {len(entrees)} entree(s) dans le listing ; "
+          f"{min(limite, len(entrees))} affichee(s).")
     print(f"DATE_FORMATS actuels : {connecteur.DATE_FORMATS or '(aucun, formats communs seulement)'}")
     print("-" * 64)
 
@@ -319,6 +353,13 @@ def phase_dates(connecteur, limite=15, pages_detail=0):
 
     print("-" * 64)
     print(f"  {reconnues} date(s) reconnue(s) sur {min(limite, len(entrees))}.")
+
+    if libelles:
+        print()
+        print("LIBELLES DE CHAMPS DE LA PAGE (valeurs non affichees)")
+        print("-" * 64)
+        for libelle, nombre in libelles:
+            print(f"  {libelle!r:44} x{nombre}")
 
     if not connecteur.SUPPORTE_DETAIL:
         return
@@ -457,6 +498,8 @@ def _analyser_arguments():
                          help="Phase pages : nombre maximum de pages a suivre")
     parseur.add_argument("--index", type=int, default=0,
                          help="Entree du listing dont on inspecte le detail")
+    parseur.add_argument("--page", type=int, default=1,
+                         help="Phase dates : page de listing a examiner")
     parseur.add_argument("--detail", type=int, default=0,
                          help="Phase dates : nombre de pages de detail a lire en plus du listing")
     parseur.add_argument("--profondeur", type=int, default=6,
@@ -484,6 +527,6 @@ if __name__ == "__main__":
     elif arguments.phase == "pages":
         phase_pages(connecteur, arguments.max)
     elif arguments.phase == "dates":
-        phase_dates(connecteur, pages_detail=arguments.detail)
+        phase_dates(connecteur, pages_detail=arguments.detail, page=arguments.page)
     else:
         phase_detail(connecteur, arguments.index, arguments.profondeur)
