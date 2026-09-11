@@ -51,13 +51,13 @@ Cette contrainte est non négociable et prévaut sur toute exigence fonctionnell
 | Langage | Python 3.11+ |
 | Collecte | `requests`, `stem` (Tor), `BeautifulSoup4` |
 | Planification | `APScheduler` |
-| Matching / NLP | `re`, `RapidFuzz`, `spaCy` |
+| Matching | `re`, `RapidFuzz` |
 | Persistance | `SQLAlchemy`, `SQLite`, `Alembic` |
-| Interface web | `Flask`, `Flask-Login`, `Jinja2` |
-| Rapports | `WeasyPrint` (PDF), export `json` / `csv` |
+| Interface web | API JSON `Flask` + `Flask-Login`, interface `React` (Vite, compilée dans `frontend/dist`) |
+| Rapports | `WeasyPrint` (PDF, gabarit `Jinja2`), export `json` / `csv` |
 | Réseau anonyme | Tor (proxy SOCKS, VM isolée) |
 
-Dépendances complètes : [`requirements.txt`](./requirements.txt)
+Dépendances directes, versions épinglées : [`requirements.txt`](./requirements.txt)
 
 Note : `pydyf` est épinglé à la version `0.11.0` (compatibilité stricte avec `weasyprint==62.3`, une version plus récente casse la génération PDF).
 
