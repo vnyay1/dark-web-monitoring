@@ -6,13 +6,13 @@
  * l'API porte sa propre garde role_requis cote serveur.
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { api } from "../api/client";
 import { useSession } from "../api/session";
 import logoAntic from "../assets/logo-antic.png";
-import { LIBELLE_ROLE } from "./communs";
+import { Chargement, LIBELLE_ROLE } from "./communs";
 import "./layout.css";
 
 const ENTREES = [
@@ -119,7 +119,11 @@ export default function Layout() {
       </header>
 
       <main className="page">
-        <Outlet context={{ rafraichirAlertes: () => setNonLues(0) }} />
+        {/* Pages chargees a la demande (cf. App.jsx) : seul le contenu
+            attend, la navigation reste en place. */}
+        <Suspense fallback={<Chargement />}>
+          <Outlet context={{ rafraichirAlertes: () => setNonLues(0) }} />
+        </Suspense>
       </main>
     </div>
   );
