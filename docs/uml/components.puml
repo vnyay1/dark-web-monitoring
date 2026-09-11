@@ -1,60 +1,71 @@
 @startuml Components_DarkWebMonitoring
 
-package "VM Isolee (Kali)" {
+' Architecture de Sentinel : deux processus Python sur la VM de collecte,
+' qui ne communiquent que par la base de donnees.
 
-  component "Planificateur\n(APScheduler)" as Scheduler
+package "VM isolee (Kali)" {
 
-  package "Couche Collecte" {
-    component "BaseConnector\n(interface FR-02)" as BaseConnector
-    component "RansomwareConnector\n(x5)" as RansomwareConn
-    component "PasteForumConnector\n(x2)" as PasteConn
-    component "TelegramConnector" as TelegramConn
-    component "Module Tor\n(FR-01, stem)" as TorModule
+  package "Processus scheduler (app/scheduler.py)" {
+    component "APScheduler\n(1 cycle / jour, heure aleatoire)" as Scheduler
+    component "Supervision\n(verrou d'instance unique,\nevenements)" as Supervision
+
+    package "Collecte (app/connectors)" {
+      component "BaseConnector\n(FR-02 : listing, pagination,\npages de detail, delai 30-45 s)" as BaseConnector
+      component "Connecteurs\n(payload, orion_leaks, blackwater,\ndata_exposure_logs, safepay,\ncmd_organization, everest)" as Connecteurs
+      component "Registre du crawl\n(app/crawl)" as Registre
+    }
+
+    component "Module Tor\n(FR-01 : proxy SOCKS, stem,\nrenouvellement de circuit)" as Tor
+
+    package "Analyse (app/matching)" {
+      component "Pipeline\n(app/pipeline.py)" as Pipeline
+      component "Moteur de correspondance\n(exact, casse, RapidFuzz)" as Engine
+      component "Faux positifs\n(FR-11)" as Exclusion
+      component "Criticite + categories\n(FR-10, FR-13)" as Criticite
+      component "Deduplication\n(FR-12)" as Dedup
+    }
+
+    component "Alertes\n(FR-25/26 : interface, email,\nSMS, WhatsApp)" as Alertes
   }
 
-  package "Couche Analyse" {
-    component "Matching Engine\n(FR-08 a FR-13)" as MatchingEngine
-    component "Catalogue de\nSelecteurs" as Selecteurs
+  package "Processus web (run.py)" {
+    component "API JSON Flask\n(/api, 4 roles, en-tete XHR)" as API
+    component "Telechargements\n(/reports, /compliance)" as Downloads
+    component "Rapport mensuel\n(Jinja2 + WeasyPrint)" as PDF
+    component "Interface React\n(frontend/dist, servie par Flask)" as SPA
   }
 
-  package "Couche Persistance" {
-    component "SQLAlchemy Models" as Models
-    database "SQLite" as DB
-    component "Journal d'audit\n(append-only)" as AuditLog
-  }
-
-  package "Couche Presentation" {
-    component "Flask App\n(routes)" as FlaskApp
-    component "Templates Jinja2\n+ Chart.js" as Templates
-    component "Generateur PDF\n(WeasyPrint)" as PDFGen
-  }
-
-  component "Analyste CIRT\n(navigateur)" as Analyste
-
+  database "SQLite\n(schema gere par Alembic)" as DB
 }
 
-Scheduler --> RansomwareConn
-Scheduler --> PasteConn
-Scheduler --> TelegramConn
+actor "Analyste CIRT\n(navigateur)" as Analyste
+cloud "Sources .onion" as Onion
 
-RansomwareConn ..|> BaseConnector
-PasteConn ..|> BaseConnector
-TelegramConn ..|> BaseConnector
+Scheduler --> Pipeline : cycle
+Scheduler --> Supervision
+Connecteurs ..|> BaseConnector
+Pipeline --> Connecteurs : collect()
+Connecteurs --> Tor : get_via_tor()
+Tor --> Onion : requetes passives
+BaseConnector ..> Registre : entrees deja traitees\n(fournies par le pipeline)
 
-RansomwareConn --> TorModule
-PasteConn --> TorModule
+Pipeline --> Engine : texte en memoire\n(CN-05)
+Engine --> Exclusion
+Exclusion --> Criticite
+Criticite --> Dedup
+Dedup --> DB : Exposition,\nSourceReference
+Pipeline --> Alertes
+Pipeline --> Supervision : evenements
+Registre --> DB
+Supervision --> DB : EtatScheduler,\nEvenementCollecte
+BaseConnector --> DB : JournalAudit
 
-BaseConnector --> MatchingEngine : texte extrait\n(RAM uniquement, CN-05)
-MatchingEngine --> Selecteurs : consulte
-MatchingEngine --> Models : indicateur detecte
-BaseConnector --> AuditLog : resultat collecte
-
-Models --> DB
-AuditLog --> DB
-
-FlaskApp --> Models : lecture/ecriture
-FlaskApp --> Templates
-FlaskApp --> PDFGen
-Analyste --> FlaskApp : HTTPS (authentifie)
+Analyste --> SPA : HTTPS (session)
+SPA --> API : fetch JSON
+SPA --> Downloads : liens natifs
+Downloads --> PDF
+API --> DB
+Downloads --> DB
+API ..> Supervision : demandes (collecte immediate,\nverification IP) via la base
 
 @enduml
