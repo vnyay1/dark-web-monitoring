@@ -108,24 +108,3 @@ class DataExposureLogsConnector(BaseConnector):
             if "next" in lien.get_text(strip=True).lower():
                 return self._page_suivante_validee(lien.get("href"), page_courante)
         return None
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = DataExposureLogsConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
-        for i, entry in enumerate(data["entries"][:5], start=1):
-            print(f"\n--- Entree {i} ---")
-            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
-            print(f"  Audit ID : {entry['audit_id']}")
-            print(f"  Date decouverte : {entry['discovery_date']}")
-            print(f"  Pays (indicatif) : {entry['code_pays_indicatif']}")
-            print(f"  Statut : {entry['statut']}")
-            print(f"  Lien detail : {entry['lien_detail']}")
-    else:
-        print(f"[ECHEC] {result['error']}")

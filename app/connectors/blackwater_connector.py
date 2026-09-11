@@ -79,22 +79,3 @@ class BlackWaterConnector(BaseConnector):
         soup = BeautifulSoup(raw_content, "html.parser")
         lien = soup.select_one("ul.pagination li.next:not(.disabled) a")
         return self._page_suivante_validee(lien.get("href"), page_courante) if lien else None
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = BlackWaterConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
-        for i, entry in enumerate(data["entries"][:5], start=1):
-            print(f"\n--- Entree {i} ---")
-            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
-            print(f"  Date : {entry['date_publication']}")
-            print(f"  Description (nettoyee) : {entry['description']}")
-            print(f"  Lien detail : {entry['lien_detail']}")
-    else:
-        print(f"[ECHEC] {result['error']}")

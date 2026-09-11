@@ -93,21 +93,3 @@ class CmdOrganizationConnector(BaseConnector):
             "texte_global": texte_global,
             "nb_entries": len(entries),
         }
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-    connector = CmdOrganizationConnector()
-    result = connector.collect()
-
-    if result["success"]:
-        data = result["extracted_text"]
-        print(f"[OK] {data['nb_entries']} entree(s) trouvee(s).")
-        for i, entry in enumerate(data["entries"][:5], start=1):
-            print(f"\n--- Entree {i} ---")
-            print(f"  Nom detecte : {entry['nom_entite_detecte']}")
-            print(f"  Volume revendique : {entry['volume_revendique']}")
-            print(f"  Nb liens documents : {entry['nb_liens_documents']}")
-    else:
-        print(f"[ECHEC] {result['error']}")

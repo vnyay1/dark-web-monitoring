@@ -58,8 +58,10 @@ python3 -m app.create_user
 
 There is no configured test runner, linter, or formatter in this repo (`tests/` contains only an
 empty `__init__.py`, and there's no pytest/flake8/ruff config) — don't assume `pytest` or `ruff` will
-work; verify changes by running the relevant module directly (many have a `__main__` block, e.g.
-`app/pipeline.py`, `app/alerting/test_alerting_manual.py`) or via the Flask dev server.
+work; verify changes by running the relevant module directly (e.g. `app/pipeline.py --source X`,
+`app/connectors/dates.py`), offline with a fake connector or a copy of the database
+(`DATABASE_URL`), or via the Flask dev server. Connectors have no `__main__` block on purpose: they
+printed post excerpts; `app.connectors.reconnaissance` prints only structure and dates.
 
 Required `.env` variables (no defaults — `app/config.py` reads them via `os.getenv` without fallback,
 so missing vars raise at import time): `DATABASE_URL`, `FLASK_SECRET_KEY`, `TOR_SOCKS_PROXY`,
