@@ -108,7 +108,10 @@ Publication dates arrive as site-specific strings under inconsistent keys (`date
 `discovery_date`, `date`). `_normaliser_entry()` in `pipeline.py` funnels them through
 `app/connectors/dates.py::parser_date()` using each connector's `DATE_FORMATS`. An unparseable date
 yields `None` and the entry is analysed ANYWAY — three sources (payload, safepay, cmd_organization)
-publish no date at all, and dropping them would mean no longer watching them.
+publish no date at all, and dropping them would mean no longer watching them. On a listing verified as
+newest-first (`LISTING_CHRONOLOGIQUE`, data_exposure_logs), an undated entry gets a `date_plafond`: the
+date of the dated entry above it. It is an upper bound used only by the date window, never stored as
+a publication date.
 
 ### Matching (`app/matching/`)
 

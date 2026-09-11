@@ -125,6 +125,9 @@ def _normaliser_entry(entry, connector) -> dict:
         "texte_brut": entry.get("texte_brut") or "",
         "reference_source": str(reference)[:LONGUEUR_MAX_REFERENCE],
         "date_publication": date_publication,
+        # Borne posee par un connecteur a listing chronologique sur une
+        # annonce non datee ; sert a la fenetre d'analyse, jamais enregistree.
+        "date_plafond": entry.get("date_plafond"),
         "niveau_detail": entry.get("niveau_detail", "listing"),
         "a_page_detail": (
             bool(connector.url_detail(entry)) if connector.SUPPORTE_DETAIL else False
@@ -149,8 +152,13 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     # Une entree SANS date exploitable est analysee quand meme : trois de
     # nos sources (payload, safepay, cmd_organization) ne datent pas leurs
     # annonces, les ecarter reviendrait a cesser de les surveiller.
+    #
+    # Sur un listing chronologique, une annonce sans date n'est pas plus
+    # recente que l'annonce datee qui la precede (date_plafond) : si cette
+    # borne est deja hors periode, l'annonce l'est aussi.
     date_publication = entry.get("date_publication")
-    if date_publication is not None and date_publication < seuils["date_limite"]:
+    date_reference = date_publication or entry.get("date_plafond")
+    if date_reference is not None and date_reference < seuils["date_limite"]:
         stats["nb_hors_periode"] += 1
         return False
 
