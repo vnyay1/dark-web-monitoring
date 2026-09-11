@@ -15,18 +15,26 @@ courants ("Artificial", "start-of-the-art", "co-educational, multi-
 denominational"). Une verification de FRONTIERE DE MOT est desormais
 appliquee pour tout selecteur de longueur <= SEUIL_LONGUEUR_MOT_ENTIER,
 afin de n'accepter que des correspondances sur des mots complets/isoles.
+
+PERFORMANCE - le moteur tourne sur CHAQUE annonce collectee, contre tout
+le catalogue (~380 selecteurs), et un texte de detail peut compter 3 000
+mots. Les pretraitements du texte (minuscules, mots, fenetres de mots) ne
+dependent pas du selecteur : ils sont faits UNE fois par texte
+(_ContexteTexte) au lieu d'une fois par selecteur, et la comparaison
+approximative passe par rapidfuzz.process.extract, qui boucle en C.
 """
 
 import re
 import logging
 from dataclasses import dataclass
-from rapidfuzz import fuzz
+from functools import lru_cache
+
+from rapidfuzz import fuzz, process
 
 logger = logging.getLogger(__name__)
 
 
 FUZZY_THRESHOLD = 85
-FUZZY_WINDOW_MARGIN = 3
 
 # En-dessous (ou egal) de cette longueur de caracteres, un selecteur est
 # considere "court" et DOIT correspondre a un mot entier isole (frontiere
@@ -50,28 +58,48 @@ class MatchResult:
     categorie_lieu_generique: bool = False
 
 
+class _ContexteTexte:
+    """
+    Pretraitements d'UN texte, partages par tous les selecteurs du
+    catalogue. Les fenetres de mots sont construites a la demande, une
+    fois par taille (1 mot, 2 mots...), puis gardees.
+    """
+
+    def __init__(self, texte: str):
+        self.texte = texte
+        self.texte_lower = texte.lower()
+        self.mots = texte.split()
+        self._fenetres = {}
+
+    def fenetres(self, nb_mots: int) -> tuple:
+        """(segments, segments en minuscules) de nb_mots mots consecutifs."""
+        if nb_mots not in self._fenetres:
+            segments = [
+                " ".join(self.mots[i: i + nb_mots]) for i in range(len(self.mots))
+            ]
+            self._fenetres[nb_mots] = (segments, [s.lower() for s in segments])
+        return self._fenetres[nb_mots]
+
+
 def _est_selecteur_court(selecteur_valeur: str) -> bool:
     """Determine si un selecteur necessite une verification de mot entier."""
     return len(selecteur_valeur) <= SEUIL_LONGUEUR_MOT_ENTIER
 
 
-def _construire_pattern_mot_entier(selecteur_valeur: str) -> re.Pattern:
+@lru_cache(maxsize=None)
+def _pattern_mot_entier(selecteur_valeur: str) -> re.Pattern:
     """
-    Construit une regex exigeant une VRAIE frontiere de mot pour un
-    selecteur court : espace, debut/fin de chaine, ou ponctuation de
-    phrase (. , ; : ! ?) - mais PAS un tiret ou une apostrophe, qui
-    laisseraient passer des faux positifs comme "state-of-the-art"
-    matchant le selecteur "ART".
+    Regex exigeant une VRAIE frontiere de mot autour d'un selecteur court,
+    SENSIBLE a la casse : espace, debut/fin de chaine ou ponctuation de
+    phrase - mais PAS un tiret, qui laisserait passer "state-of-the-art"
+    pour le selecteur "ART".
 
-    On utilise des lookaround (?<!...) / (?!...) plutot que \\b, car \\b
-    considere le tiret comme une frontiere valide, ce qui est insuffisant
-    ici.
+    Lookaround (?<!...) / (?!...) plutot que \\b, car \\b considere le
+    tiret comme une frontiere valide. Compilee une seule fois par
+    selecteur : le catalogue est le meme pour toutes les annonces.
     """
     escaped = re.escape(selecteur_valeur)
-    # Le caractere avant ne doit pas etre une lettre, un chiffre, ni un tiret
-    # Le caractere apres ne doit pas etre une lettre, un chiffre, ni un tiret
-    pattern = r"(?<![A-Za-z0-9\-])" + escaped + r"(?![A-Za-z0-9\-])"
-    return re.compile(pattern, re.IGNORECASE)
+    return re.compile(r"(?<![A-Za-z0-9\-])" + escaped + r"(?![A-Za-z0-9\-])")
 
 
 def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
@@ -79,9 +107,7 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
     results = []
 
     if _est_selecteur_court(selecteur_valeur):
-        escaped = re.escape(selecteur_valeur)
-        pattern = re.compile(r"(?<![A-Za-z0-9\-])" + escaped + r"(?![A-Za-z0-9\-])")
-        for m in pattern.finditer(texte):
+        for m in _pattern_mot_entier(selecteur_valeur).finditer(texte):
             results.append(MatchResult(
                 selecteur_valeur=selecteur_valeur,
                 selecteur_categorie="",
@@ -92,7 +118,7 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
             ))
         return results
 
-    # Selecteur long : comportement precedent (recherche de sous-chaine)
+    # Selecteur long : recherche de sous-chaine
     start = 0
     while True:
         idx = texte.find(selecteur_valeur, start)
@@ -110,7 +136,8 @@ def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
     return results
 
 
-def _match_case_insensitive(texte: str, selecteur_valeur: str) -> list[MatchResult]:
+def _match_case_insensitive(texte: str, selecteur_valeur: str,
+                            texte_lower: str = None) -> list[MatchResult]:
     """
     Recherche des occurrences insensibles a la casse (hors matches deja
     exacts).
@@ -130,9 +157,10 @@ def _match_case_insensitive(texte: str, selecteur_valeur: str) -> list[MatchResu
     if _est_selecteur_court(selecteur_valeur):
         return []
 
-    # Selecteur long : comportement precedent (sous-chaine insensible a la casse)
+    # Selecteur long : sous-chaine insensible a la casse
     results = []
-    texte_lower = texte.lower()
+    if texte_lower is None:
+        texte_lower = texte.lower()
     selecteur_lower = selecteur_valeur.lower()
     start = 0
     while True:
@@ -153,7 +181,8 @@ def _match_case_insensitive(texte: str, selecteur_valeur: str) -> list[MatchResu
     return results
 
 
-def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRESHOLD) -> list[MatchResult]:
+def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRESHOLD,
+                 contexte: _ContexteTexte = None) -> list[MatchResult]:
     """
     Recherche des correspondances approximatives via une fenetre glissante
     de mots, comparee au selecteur avec RapidFuzz (ratio de similarite).
@@ -173,51 +202,59 @@ def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRES
         # strict et suffisant pour un acronyme.
         return []
 
-    results = []
-    mots = texte.split()
+    contexte = contexte or _ContexteTexte(texte)
     nb_mots_selecteur = max(len(selecteur_valeur.split()), 1)
+    segments, segments_lower = contexte.fenetres(nb_mots_selecteur)
+    selecteur_lower = selecteur_valeur.lower()
 
-    seen_positions = set()
+    # Tous les segments au-dessus du seuil, calcules en C. Tries ensuite
+    # par position dans le texte : l'ordre des resultats compte (le premier
+    # selecteur trouve sert de nom d'entite de repli dans le pipeline).
+    trouves = sorted(
+        process.extract(
+            selecteur_lower, segments_lower,
+            scorer=fuzz.ratio, score_cutoff=threshold, limit=None,
+        ),
+        key=lambda resultat: resultat[2],
+    )
 
-    for i in range(len(mots)):
-        segment = " ".join(mots[i: i + nb_mots_selecteur])
-        if not segment:
+    results = []
+    for segment_lower, score, index in trouves:
+        # Identique au selecteur : deja couvert par exact/insensible_casse.
+        if segment_lower == selecteur_lower:
             continue
-
-        score = fuzz.ratio(segment.lower(), selecteur_valeur.lower())
-
-        if score >= threshold and segment.lower() != selecteur_valeur.lower():
-            position_key = i
-            if position_key in seen_positions:
-                continue
-            seen_positions.add(position_key)
-
-            results.append(MatchResult(
-                selecteur_valeur=selecteur_valeur,
-                selecteur_categorie="",
-                type_correspondance="fuzzy",
-                similarite=score,
-                segment_trouve=segment,
-                position=texte.find(segment) if segment in texte else -1,
-            ))
+        segment = segments[index]
+        results.append(MatchResult(
+            selecteur_valeur=selecteur_valeur,
+            selecteur_categorie="",
+            type_correspondance="fuzzy",
+            similarite=score,
+            segment_trouve=segment,
+            position=texte.find(segment),
+        ))
 
     return results
 
 
 def match_text_against_selecteur(texte: str, selecteur_valeur: str, selecteur_categorie: str,
                                    enable_fuzzy: bool = True,
-                                   lieu_generique: bool = False) -> list[MatchResult]:
+                                   lieu_generique: bool = False,
+                                   contexte: _ContexteTexte = None) -> list[MatchResult]:
     """
     Applique les trois niveaux de correspondance pour UN selecteur donne.
     Retourne la liste de toutes les correspondances trouvees.
+
+    contexte : pretraitements du texte, partages entre selecteurs par
+    match_text_against_catalogue ; construit ici s'il n'est pas fourni.
     """
+    contexte = contexte or _ContexteTexte(texte)
     all_matches: list[MatchResult] = []
 
     all_matches.extend(_match_exact(texte, selecteur_valeur))
-    all_matches.extend(_match_case_insensitive(texte, selecteur_valeur))
+    all_matches.extend(_match_case_insensitive(texte, selecteur_valeur, contexte.texte_lower))
 
     if enable_fuzzy:
-        all_matches.extend(_match_fuzzy(texte, selecteur_valeur))
+        all_matches.extend(_match_fuzzy(texte, selecteur_valeur, contexte=contexte))
 
     for m in all_matches:
         m.selecteur_categorie = selecteur_categorie
@@ -235,6 +272,7 @@ def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: boo
     (valeur, categorie_id[, lieu_generique]) pour les tests.
     Retourne toutes les correspondances trouvees, tous selecteurs confondus.
     """
+    contexte = _ContexteTexte(texte)
     all_results: list[MatchResult] = []
 
     for selecteur in selecteurs:
@@ -249,8 +287,11 @@ def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: boo
         matches = match_text_against_selecteur(
             texte, valeur, categorie,
             enable_fuzzy=enable_fuzzy, lieu_generique=lieu_generique,
+            contexte=contexte,
         )
         all_results.extend(matches)
 
-    logger.info(f"Matching termine : {len(all_results)} correspondance(s) trouvee(s).")
+    # Une ligne par annonce analysee : niveau DEBUG, sinon elle noie le
+    # journal d'un cycle de plusieurs centaines d'annonces.
+    logger.debug(f"Matching termine : {len(all_results)} correspondance(s) trouvee(s).")
     return all_results
