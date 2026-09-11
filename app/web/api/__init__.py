@@ -1,17 +1,12 @@
 """
 Couche API JSON consommee par l'interface React.
 
-POURQUOI UNE COUCHE SEPAREE - les blueprints historiques rendent des
-gabarits Jinja et repondent aux erreurs par une redirection ou une page
-HTML. Une application monopage a besoin de codes de statut et de JSON :
-une redirection 302 vers /login est suivie en silence par fetch(), qui
-recoit alors du HTML la ou il attendait des donnees, sans jamais voir
-qu'il n'etait pas authentifie.
-
-Les regles metier ne sont PAS reecrites ici : ces modules reutilisent les
-memes requetes, la meme politique de mots de passe et les memes gardes
-role_requis que les blueprints Jinja, dont ils prendront la place une fois
-toutes les pages portees.
+POURQUOI DU JSON PARTOUT - une application monopage a besoin de codes de
+statut et de JSON : une redirection 302 vers une page de connexion est
+suivie en silence par fetch(), qui recoit alors du HTML la ou il attendait
+des donnees, sans jamais voir qu'il n'etait pas authentifie. Seuls les
+telechargements (app/web/reports.py, app/web/compliance.py) restent hors
+de /api.
 
 SECURITE - deux protections ajoutees au passage :
 

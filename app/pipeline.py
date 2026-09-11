@@ -1,7 +1,7 @@
 """
 Pipeline complet : Connecteur -> Fenetre temporelle -> Matching Engine ->
-Filtrage faux positifs -> Criticite -> Categorisation -> Deduplication ->
-Persistance -> Audit.
+Filtrage faux positifs -> Criticite (et categories des selecteurs trouves)
+-> Deduplication -> Persistance -> Alertes.
 
 Chaque connecteur retourne un dict {"entries": [...], "texte_global": ...,
 "nb_entries": int}. Le pipeline traite CHAQUE entree individuellement
@@ -325,15 +325,8 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
     source.nombre_erreurs = 0
     session.commit()
 
-    extracted = result["extracted_text"]
-
-    # Compatibilite : tous nos connecteurs actuels retournent un dict
-    # avec "entries", mais on protege contre un futur connecteur qui
-    # retournerait juste une chaine de texte brute
-    if isinstance(extracted, dict) and "entries" in extracted:
-        entries_brutes = extracted["entries"]
-    else:
-        entries_brutes = [{"texte_brut": str(extracted)}]
+    # collect() renvoie toujours ses entrees sous "entries" (BaseConnector).
+    entries_brutes = result["extracted_text"]["entries"]
 
     stats["nb_entries_brutes"] = len(entries_brutes)
 

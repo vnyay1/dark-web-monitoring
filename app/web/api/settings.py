@@ -13,7 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.models import (
-    Categorie, ConfigurationSysteme, Exposition, RoleUtilisateur, Selecteur,
+    Categorie, ConfigurationSysteme, RoleUtilisateur, Selecteur,
     exposition_categories,
 )
 from app.web.permissions import role_requis
@@ -74,18 +74,9 @@ def enregistrer(api_bp):
         return jsonify({"succes": True, "cle": cle, "valeur": valeur})
 
     # ------------------------------------------------------------------
-    # Categories (FR-13) - gerees par l'administrateur
+    # Categories (FR-13) - gerees par l'administrateur. La liste, avec ses
+    # compteurs, est servie avec le catalogue par GET /selecteurs.
     # ------------------------------------------------------------------
-
-    @api_bp.route("/categories", methods=["GET"])
-    @login_required
-    @role_requis(RoleUtilisateur.ADMIN)
-    def lire_categories():
-        session = get_session()
-        try:
-            return jsonify({"categories": _categories_avec_compteurs(session)})
-        finally:
-            session.close()
 
     @api_bp.route("/categories", methods=["POST"])
     @login_required

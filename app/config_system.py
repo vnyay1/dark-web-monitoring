@@ -8,7 +8,7 @@ Valeurs par defaut fournies si la cle n'existe pas encore en base
 
 import logging
 from app.db import get_session
-from app.models import ConfigurationSysteme
+from app.models import ConfigurationSysteme, NiveauCriticite
 
 logger = logging.getLogger(__name__)
 
@@ -58,23 +58,13 @@ VALEURS_PAR_DEFAUT = {
     ),
 }
 
-# Paliers acceptes pour les cles de type "niveau", du moins au plus grave.
-NIVEAUX_ORDONNES = ("faible", "moyenne", "elevee", "critique")
-
-# Cles retirees lors du passage du score de confiance a la criticite
-# (FR-10). Elles sont supprimees de la base au demarrage, sinon l'ecran
-# d'administration continuerait a proposer des reglages sans effet.
-CLES_OBSOLETES = (
-    "seuil_alerte_minimum",
-    "seuil_alerte_critique",
-    "seuil_alerte_eleve",
-    "seuil_hausse_confirmation",
-    "seuil_enregistrement_minimum",
-)
+# Paliers acceptes pour les cles de type "niveau", du moins au plus grave
+# (ordre de declaration de NiveauCriticite).
+NIVEAUX_ORDONNES = tuple(niveau.value for niveau in NiveauCriticite)
 
 
 def type_de_cle(cle: str) -> str:
-    """Type declare d'une cle de configuration ("int", "float" ou "niveau")."""
+    """Type declare d'une cle de configuration ("int" ou "niveau")."""
     if cle not in VALEURS_PAR_DEFAUT:
         raise KeyError(f"Cle de configuration inconnue : {cle}")
     return VALEURS_PAR_DEFAUT[cle][2]
@@ -96,12 +86,6 @@ def valider_valeur(cle: str, valeur: str) -> str:
         if entier < 0:
             raise ValueError("Cette valeur ne peut pas etre negative.")
         return str(entier)
-
-    if attendu == "float":
-        try:
-            return str(float(valeur))
-        except ValueError:
-            raise ValueError("Cette valeur doit etre un nombre.")
 
     if attendu == "niveau":
         if valeur.lower() not in NIVEAUX_ORDONNES:
@@ -127,10 +111,6 @@ def get_config(cle: str) -> str:
     raise KeyError(f"Cle de configuration inconnue : {cle}")
 
 
-def get_config_float(cle: str) -> float:
-    return float(get_config(cle))
-
-
 def get_config_int(cle: str) -> int:
     return int(get_config(cle))
 
@@ -138,12 +118,7 @@ def get_config_int(cle: str) -> int:
 def get_config_niveau(cle: str):
     """
     Lit une cle de type "niveau" et renvoie le NiveauCriticite correspondant.
-
-    Import local : app.models importe indirectement ce module, un import
-    au niveau du fichier creerait un cycle.
     """
-    from app.models import NiveauCriticite
-
     return NiveauCriticite(get_config(cle))
 
 
@@ -165,22 +140,20 @@ def set_config(cle: str, valeur: str):
 
 
 def init_config_defaults():
-    """Insere les valeurs par defaut en base si elles n'existent pas encore."""
+    """
+    Insere les valeurs par defaut en base si elles n'existent pas encore.
+
+    Les cles retirees lors du passage a la criticite ne sont plus purgees
+    ici : la migration a1c7e3f42b90 les supprime, et init_db() impose que
+    la base soit a la derniere revision avant tout demarrage.
+    """
     session = get_session()
-
-    for cle, (valeur, description, _type) in VALEURS_PAR_DEFAUT.items():
-        existing = session.query(ConfigurationSysteme).filter_by(cle=cle).first()
-        if not existing:
-            entry = ConfigurationSysteme(cle=cle, valeur=valeur, description=description)
-            session.add(entry)
-
-    supprimees = (
-        session.query(ConfigurationSysteme)
-        .filter(ConfigurationSysteme.cle.in_(CLES_OBSOLETES))
-        .delete(synchronize_session=False)
-    )
-    if supprimees:
-        logger.info(f"[config] {supprimees} cle(s) obsolete(s) supprimee(s).")
-
-    session.commit()
+    try:
+        presentes = {cle for (cle,) in session.query(ConfigurationSysteme.cle)}
+        for cle, (valeur, description, _type) in VALEURS_PAR_DEFAUT.items():
+            if cle not in presentes:
+                session.add(ConfigurationSysteme(cle=cle, valeur=valeur, description=description))
+        session.commit()
+    finally:
+        session.close()
     session.close()

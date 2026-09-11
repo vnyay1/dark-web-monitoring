@@ -25,16 +25,16 @@ import requests
 import random
 from stem import Signal
 from stem.control import Controller
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
-TOR_SOCKS_PROXY = os.getenv("TOR_SOCKS_PROXY")
-TOR_CONTROL_PORT = int(os.getenv("TOR_CONTROL_PORT"))
-TOR_CONTROL_PASSWORD = os.getenv("TOR_CONTROL_PASSWORD")
+# Lus une seule fois, par app.config (.env), comme le reste de la
+# configuration.
+TOR_SOCKS_PROXY = Config.TOR_SOCKS_PROXY
+TOR_CONTROL_PORT = Config.TOR_CONTROL_PORT
+TOR_CONTROL_PASSWORD = Config.TOR_CONTROL_PASSWORD
 
 DEFAULT_HEADERS = {
     "User-Agent": (

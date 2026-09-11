@@ -5,8 +5,9 @@ Regle d'identite proposee (a valider avec l'encadrant si possible - aucune
 formule n'est donnee dans le cahier des charges) : deux detections sont
 considerees comme LE MEME incident si :
   1. Le nom d'entite est identique ou tres similaire (fuzzy)
-  2. La categorie de fuite est identique
-  3. La premiere detection existante date de moins de FENETRE_JOURS jours
+  2. La premiere detection existante date de moins de FENETRE_JOURS jours
+Les categories ne sont pas un critere : elles sont reunies (cf.
+enregistrer_exposition).
 
 Si une correspondance est trouvee : la date de derniere detection est mise
 a jour, et une nouvelle SourceReference est ajoutee sans creer de nouvelle

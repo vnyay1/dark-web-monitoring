@@ -127,7 +127,6 @@ export const api = {
     }),
 
   // --- Categories (FR-13) ---
-  categories: () => requete("/categories"),
   creerCategorie: (donnees) => requete("/categories", corpsJson(donnees)),
   modifierCategorie: (id, donnees) =>
     requete(`/categories/${id}`, { ...corpsJson(donnees), method: "PUT" }),

@@ -11,7 +11,6 @@ naturellement de cette garantie.
 import re
 import logging
 from pathlib import Path
-from datetime import timedelta
 from collections import Counter
 
 from flask import render_template
