@@ -1,66 +1,192 @@
 @startuml ClassDiagram_DarkWebMonitoring
 
-class Exposition {
-  +id : UUID
-  +nom_entite : str
-  +secteur_activite : str
-  +type_entite : enum {publique, privee}
-  +categorie_fuite : enum
-  +date_premiere_detection : datetime
-  +date_derniere_detection : datetime
-  +nombre_enregistrements_revendique : int
-  +score_confiance : float
-  +statut : enum
-  --
-  +changer_statut(nouveau_statut)
+' Modele de donnees de Sentinel (app/models/__init__.py).
+' CN-03 / CN-04 : seules des metadonnees sont stockees - aucune donnee
+' divulguee, aucun nom de personne, aucun extrait d'annonce.
+
+skinparam classAttributeIconSize 0
+hide empty methods
+
+package "Expositions" {
+
+  class Exposition {
+    +id : UUID
+    +nom_entite : str
+    +criticite : int
+    +niveau_criticite : NiveauCriticite
+    +statut : StatutExposition
+    +date_premiere_detection : datetime
+    +date_derniere_detection : datetime
+    +date_publication_source : datetime
+    --
+    +changer_statut(nouveau_statut)
+  }
+
+  class SourceReference {
+    +id : UUID
+    +type_source : TypeSource
+    +reference_source : str
+    +date_publication : datetime
+    +date_signalement : datetime
+  }
+
+  class Categorie {
+    +id : UUID
+    +nom : str
+    +description : str
+    +lieu_generique : bool
+    +prioritaire : bool
+    +date_creation : datetime
+  }
+
+  class Selecteur {
+    +id : UUID
+    +valeur : str
+    +actif : bool
+  }
+
+  class ExclusionFauxPositif {
+    +id : UUID
+    +motif : str
+    +ajoute_par : str
+    +date_ajout : datetime
+  }
+
+  class Alerte {
+    +id : UUID
+    +canal : CanalAlerte
+    +statut_envoi : StatutEnvoiAlerte
+    +date_creation : datetime
+    +date_envoi : datetime
+    +lue : bool
+    +details_echec : str
+  }
 }
 
-class SourceReference {
-  +id : UUID
-  +exposition_id : UUID
-  +type_source : enum {ransomware_site, paste, forum, telegram}
-  +reference_source : str
-  --
+package "Collecte" {
+
+  class Source {
+    +id : UUID
+    +nom : str
+    +type_source : TypeSource
+    +url_ou_identifiant : str
+    +derniere_collecte_reussie : datetime
+    +nombre_erreurs : int
+    +actif : bool
+    --
+    +est_indisponible() : bool
+  }
+
+  class EntreeCollectee {
+    +id : UUID
+    +identifiant_entree : str
+    +statut_detail : StatutDetailEntree
+    +date_premiere_vue : datetime
+    +date_derniere_vue : datetime
+    +date_detail_traite : datetime
+    +nb_echecs_detail : int
+    +a_produit_exposition : bool
+  }
+
+  class JournalAudit <<append-only>> {
+    +id : UUID
+    +horodatage : datetime
+    +resultat : ResultatAudit
+    +details : str
+  }
+
+  class EtatScheduler <<ligne unique>> {
+    +actif : bool
+    +statut : StatutScheduler
+    +pid : int
+    +heartbeat : datetime
+    +source_en_cours : str
+    +prochaine_execution : datetime
+    +debut_collecte : datetime
+    +fin_collecte : datetime
+    +ip_sortie : str
+    +collecte_immediate_demandee : bool
+    +verification_ip_demandee : bool
+  }
+
+  class EvenementCollecte {
+    +id : int
+    +horodatage : datetime
+    +type_evenement : TypeEvenementCollecte
+    +source : str
+    +message : str
+  }
 }
 
-class Source {
-  +id : UUID
-  +nom : str
-  +type_source : enum
-  +url_ou_identifiant : str
-  +derniere_collecte_reussie : datetime
-  +nombre_erreurs : int
-  +temps_reponse_moyen : float
-  --
-  +est_indisponible() : bool
+package "Administration" {
+
+  class User {
+    +id : UUID
+    +nom_utilisateur : str
+    +mot_de_passe_hash : str
+    +role : RoleUtilisateur
+    +actif : bool
+    +date_creation : datetime
+  }
+
+  class HistoriqueRole {
+    +id : UUID
+    +ancien_role : RoleUtilisateur
+    +nouveau_role : RoleUtilisateur
+    +date_modification : datetime
+  }
+
+  class ConfigurationSysteme {
+    +cle : str
+    +valeur : str
+    +description : str
+  }
 }
 
-class Selecteur {
-  +id : UUID
-  +valeur : str
-  +categorie : enum {domaine, telephone, ministere, banque, ...}
-  +actif : bool
-  --
+enum NiveauCriticite {
+  FAIBLE
+  MOYENNE
+  ELEVEE
+  CRITIQUE
 }
 
-class ExclusionFauxPositif {
-  +id : UUID
-  +motif : str
-  +ajoute_par : str
-  --
+enum StatutExposition {
+  NEW
+  UNDER_REVIEW
+  CONFIRMED
+  FALSE_POSITIVE
+  NOTIFIED
+  CLOSED
 }
 
-class JournalAudit {
-  +id : UUID
-  +horodatage : datetime
-  +source_id : UUID
-  +resultat : enum {succes, echec}
-  --
+enum RoleUtilisateur {
+  USER
+  SUPERVISOR
+  ADMIN
+  SUPER_ADMIN
 }
 
-Exposition "1" -- "0..*" SourceReference : possède >
-SourceReference "0..*" -- "1" Source : provient de >
-Selecteur "0..*" --> "0..*" Exposition : génère >
+Exposition "1" *-- "1..*" SourceReference : signalee par >
+SourceReference "0..*" --> "0..1" Source : provient de >
+Exposition "0..*" -- "0..*" Categorie : exposition_categories
+Selecteur "0..*" --> "1" Categorie : appartient a >
+Exposition "1" *-- "0..*" Alerte : declenche >
 Source "1" -- "0..*" JournalAudit : historique >
+Source "1" -- "0..*" EntreeCollectee : registre du crawl >
+EvenementCollecte "0..*" --> "0..1" Exposition : annonce >
+User "1" -- "0..*" HistoriqueRole : cible / auteur >
+
+note right of Categorie
+  Les categories d'une exposition sont
+  celles des selecteurs trouves (FR-13).
+  prioritaire : canaux d'alerte renforces (FR-26).
+  lieu_generique : regle "liste de pays" (FR-11).
+end note
+
+note bottom of Exposition
+  criticite = nombre de selecteurs
+  DISTINCTS trouves (FR-10) ;
+  ne diminue jamais.
+end note
 
 @enduml

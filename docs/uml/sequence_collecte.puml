@@ -1,0 +1,65 @@
+@startuml Sequence_Collecte
+
+' Un cycle de collecte quotidien (app/scheduler.py -> app/pipeline.py).
+
+participant "APScheduler" as Scheduler
+participant "Supervision" as Supervision
+participant "Pipeline" as Pipeline
+participant "Connecteur\n(BaseConnector)" as Connecteur
+participant "Module Tor" as Tor
+participant "Source .onion" as Source
+participant "Analyse\n(matching, faux positifs,\ncriticite, categories)" as Analyse
+participant "Deduplication" as Dedup
+participant "Alertes" as Alertes
+database "Base SQLite" as DB
+
+Scheduler -> Supervision : marquer_debut_collecte()
+Supervision -> DB : EtatScheduler (COLLECTE_EN_COURS)
+
+loop pour chaque connecteur actif
+  Pipeline -> DB : entrees deja traitees (registre),\nperiode et plafond de pages (configuration)
+  Pipeline -> Connecteur : collect(entrees_connues, budget, profondeur, date_limite)
+
+  group Listing (pagination bornee)
+    loop page par page
+      Connecteur -> Tor : get_via_tor(url)\n(30 a 45 s apres la fin de la requete precedente)
+      Tor -> Source : GET
+      Source --> Tor : HTML
+      Tor --> Connecteur : reponse
+      Connecteur -> Connecteur : parse() puis del raw (CN-05)
+      note right of Connecteur
+        Arret : page hors periode, dates illisibles,
+        pages deja connues, derniere page ou plafond.
+      end note
+    end
+  end
+
+  group Detail (entrees nouvelles, dans le budget)
+    Connecteur -> Tor : page de detail (url_detail() seul juge, CN-04)
+    Tor --> Connecteur : texte concatene a l'entree
+  end
+
+  Connecteur -> DB : JournalAudit (1 ligne de synthese)
+  Connecteur --> Pipeline : entrees (texte en memoire)
+
+  loop pour chaque entree
+    Pipeline -> Pipeline : fenetre temporelle\n(date ou date plafond)
+    Pipeline -> Analyse : texte, catalogue de selecteurs
+    Analyse --> Pipeline : criticite + categories
+    alt criticite suffisante
+      Pipeline -> Dedup : enregistrer_exposition()
+      Dedup -> DB : Exposition / SourceReference\n(union des categories, criticite monotone)
+      Pipeline -> Alertes : declencher_alertes()
+      Alertes -> DB : Alerte (canaux selon niveau x priorite)
+      Pipeline -> Supervision : NOUVELLE_EXPOSITION
+    end
+    Pipeline -> DB : EntreeCollectee marquee traitee
+  end
+  Pipeline -> Supervision : FIN_SOURCE
+end
+
+Pipeline -> DB : purge du registre et des evenements anciens
+Scheduler -> Supervision : enregistrer_fin_de_cycle()
+Scheduler -> Scheduler : planifier le prochain cycle\n(heure aleatoire dans la plage reglee)
+
+@enduml

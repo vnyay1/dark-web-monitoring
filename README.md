@@ -118,6 +118,11 @@ dark-web-monitoring/
 │   │   └── export.py
 │   │
 │   ├── config_system.py          # configuration dynamique (seuils, etc.)
+│   ├── libelles.py               # libellés français des statuts et niveaux
+│   │
+│   ├── maintenance/              # outils ponctuels (simulation par défaut)
+│   │   ├── recategoriser.py       # catégories des expositions anciennes
+│   │   └── retirer_source.py      # retrait d'une source et de ses données
 │   │
 │   └── web/                      # couche serveur
 │       ├── auth.py                # socle Flask-Login (FR-24)
