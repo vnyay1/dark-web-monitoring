@@ -21,6 +21,13 @@ deux phases :
        - "dates_illisibles" : aucune date lisible sur la page. Garde-fou :
          sans lui, un site qui changerait son format de date serait
          parcouru jusqu'au plafond a chaque cycle.
+     Une source qui ne date ses annonces que sur la page de detail
+     (DATE_SUR_DETAIL, safepay) est datee par SONDE : la page de detail de
+     la derniere annonce NOUVELLE de la page de listing est visitee des la
+     phase de listing. Cette visite n'est pas perdue - l'entree est alors
+     enrichie comme en phase de detail, qui ne la revisite pas.
+     Chaque lien de pagination est valide par _page_suivante_validee() :
+     meme domaine, meme chemin que le listing, page suivante exactement.
 
   2. DETAIL : pour les entrees NOUVELLES uniquement, et dans la limite
      du budget alloue, recuperation de la page de detail dont le texte
@@ -64,7 +71,7 @@ import logging
 import random
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from app.connectors.dates import CLES_DATE, parser_date
 from app.tor import get_via_tor, renew_tor_circuit
@@ -123,6 +130,10 @@ class BaseConnector:
     # Formats strptime propres a la source, essayes en premier par
     # app.connectors.dates.parser_date() avant les formats communs.
     DATE_FORMATS = ()
+
+    # Le listing ne date pas ses annonces, la page de detail si : l'arret
+    # de pagination sur la periode passe alors par une sonde (cf. en-tete).
+    DATE_SUR_DETAIL = False
 
     MAX_PAGES_LISTING = 1
     PAGES_GRACE = 1          # pages explorees au-dela de la 1re page 100% connue
@@ -345,7 +356,7 @@ class BaseConnector:
         stats = {
             "pages_listing": 0, "entrees": 0, "nouvelles": 0,
             "details_ok": 0, "details_echec": 0, "details_ignores": 0,
-            "budget_alloue": budget, "arret": "page_unique",
+            "budget_alloue": budget, "sondes_date": 0, "arret": "page_unique",
         }
         erreurs = {}
 
@@ -445,7 +456,9 @@ class BaseConnector:
                 break
 
             if date_limite is not None:
-                arret = self._arret_par_date(page_entries, date_limite)
+                arret = self._arret_par_date(
+                    page_entries, date_limite, entrees_connues, stats, erreurs
+                )
                 if arret:
                     stats["arret"] = arret
                     break
@@ -465,20 +478,21 @@ class BaseConnector:
         )
         return entries, None
 
-    def _arret_par_date(self, page_entries, date_limite):
+    def _arret_par_date(self, page_entries, date_limite, entrees_connues, stats, erreurs):
         """
         Motif d'arret si la page ne justifie pas de demander la suivante,
         None sinon. Les entrees de la page elle-meme sont conservees : c'est
         le pipeline qui ecarte celles hors periode.
         """
-        dates = [
-            parser_date(
-                next((e.get(cle) for cle in CLES_DATE if e.get(cle)), None),
-                self.DATE_FORMATS, source=self.SOURCE_NAME, journaliser=False,
-            )
-            for e in page_entries
-        ]
-        lisibles = [d for d in dates if d is not None]
+        if self.DATE_SUR_DETAIL:
+            sonde = self._entree_a_sonder(page_entries, entrees_connues)
+            if sonde is None:
+                # Rien de nouveau a dater sur cette page : c'est l'arret sur
+                # pages connues (et sa page de tolerance) qui borne la suite.
+                return None
+            lisibles = [d for d in [self.dater_par_sonde(sonde, stats, erreurs)] if d]
+        else:
+            lisibles = self.dates_lisibles(page_entries)
 
         if not lisibles:
             logger.warning(
@@ -494,6 +508,47 @@ class BaseConnector:
             return "hors_periode"
         return None
 
+    def dates_lisibles(self, entries):
+        """Dates interpretables des entrees (memes regles que le pipeline)."""
+        dates = (
+            parser_date(
+                next((e.get(cle) for cle in CLES_DATE if e.get(cle)), None),
+                self.DATE_FORMATS, source=self.SOURCE_NAME, journaliser=False,
+            )
+            for e in entries
+        )
+        return [d for d in dates if d is not None]
+
+    def _entree_a_sonder(self, page_entries, entrees_connues):
+        """
+        Derniere annonce NOUVELLE et visitable de la page, ou None. La
+        derniere, car un listing presente les annonces de la plus recente a
+        la plus ancienne ; une NOUVELLE, car sa page de detail aurait de
+        toute facon ete visitee : la sonde ne coute alors aucune requete
+        de plus. Seules les entrees retenues par le listing (niveau_detail
+        pose) sont candidates - pas un doublon epingle ecarte.
+        """
+        for entry in reversed(page_entries):
+            if (
+                "niveau_detail" in entry
+                and entry.get("identifiant_entree") not in entrees_connues
+                and self.SUPPORTE_DETAIL
+                and self.url_detail(entry)
+            ):
+                return entry
+        return None
+
+    def dater_par_sonde(self, entry, stats, erreurs):
+        """
+        Visite la page de detail de l'entree (si ce n'est deja fait) et
+        retourne sa date interpretee, ou None.
+        """
+        if entry.get("niveau_detail") != "detail":
+            stats["sondes_date"] = stats.get("sondes_date", 0) + 1
+            self._enrichir_par_detail(entry, stats, erreurs)
+        dates = self.dates_lisibles([entry])
+        return dates[0] if dates else None
+
     def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs):
         """
         Enrichit les entrees NOUVELLES par leur page de detail, dans la
@@ -503,46 +558,59 @@ class BaseConnector:
         if not self.SUPPORTE_DETAIL or budget <= 0:
             return
 
+        # Les entrees deja visitees par une sonde de date (ou dont la sonde
+        # a echoue) ne sont pas revisitees.
         candidats = [
             e for e in entries
-            if e["identifiant_entree"] not in entrees_connues and self.url_detail(e)
+            if e["identifiant_entree"] not in entrees_connues
+            and e.get("niveau_detail") != "detail"
+            and not e.get("echec_detail")
+            and self.url_detail(e)
         ]
         candidats.sort(key=self.priorite_detail, reverse=True)  # tri stable
         stats["details_ignores"] = max(0, len(candidats) - budget)
 
         for entry in candidats[:budget]:
+            self._enrichir_par_detail(entry, stats, erreurs)
+
+    def _enrichir_par_detail(self, entry, stats, erreurs):
+        """
+        Recupere la page de detail d'une entree et fusionne son contenu.
+        Retourne True si l'entree a ete enrichie.
+        """
+        try:
+            # Une seule tentative : une page de detail en echec est
+            # reessayee au run suivant via le registre, plutot que de
+            # consommer ici plusieurs delais complets sur une entree.
+            raw = self.fetch(self.url_detail(entry), max_retries=1)
             try:
-                # Une seule tentative : une page de detail en echec est
-                # reessayee au run suivant via le registre, plutot que de
-                # consommer ici plusieurs delais complets sur une entree.
-                raw = self.fetch(self.url_detail(entry), max_retries=1)
-                try:
-                    enrichi = self.parse_detail(raw, entry) or {}
-                finally:
-                    del raw  # CN-05
-            except Exception as e:
-                logger.warning(
-                    f"[{self.SOURCE_NAME}] Detail indisponible pour "
-                    f"{entry['identifiant_entree']} : {e}"
-                )
-                entry["echec_detail"] = self._libelle_erreur(e)
-                self._compter_erreur(erreurs, "detail", e)
-                stats["details_echec"] += 1
-                continue
+                enrichi = self.parse_detail(raw, entry) or {}
+            finally:
+                del raw  # CN-05
+        except Exception as e:
+            logger.warning(
+                f"[{self.SOURCE_NAME}] Detail indisponible pour "
+                f"{entry['identifiant_entree']} : {e}"
+            )
+            entry["echec_detail"] = self._libelle_erreur(e)
+            self._compter_erreur(erreurs, "detail", e)
+            stats["details_echec"] += 1
+            return False
 
-            # Le listing garde la priorite, SAUF la ou il n'avait rien : un
-            # listing qui pose "date_publication": None ne doit pas masquer la
-            # date trouvee sur la page de detail (setdefault() l'ignorait,
-            # la cle existant deja).
-            for cle, valeur in enrichi.items():
-                if cle != "texte_brut" and entry.get(cle) in (None, ""):
-                    entry[cle] = valeur
+        # Le listing garde la priorite, SAUF la ou il n'avait rien : un
+        # listing qui pose "date_publication": None ne doit pas masquer la
+        # date trouvee sur la page de detail (setdefault() l'ignorait,
+        # la cle existant deja).
+        for cle, valeur in enrichi.items():
+            if cle != "texte_brut" and entry.get(cle) in (None, ""):
+                entry[cle] = valeur
 
-            entry["texte_brut"] = " ".join(filter(None, [
-                entry.get("texte_brut"), enrichi.get("texte_brut"),
-            ]))[:LIMITE_TEXTE_BRUT]
-            entry["niveau_detail"] = "detail"
-            stats["details_ok"] += 1
+        entry["texte_brut"] = " ".join(filter(None, [
+            entry.get("texte_brut"), enrichi.get("texte_brut"),
+        ]))[:LIMITE_TEXTE_BRUT]
+        entry["niveau_detail"] = "detail"
+        stats["details_ok"] += 1
+        return True
 
     # ------------------------------------------------------------------
     # Journal d'audit (FR-17, append-only)
@@ -602,6 +670,27 @@ class BaseConnector:
     # ------------------------------------------------------------------
     # Utilitaires
     # ------------------------------------------------------------------
+
+    def _page_suivante_validee(self, lien, page_courante):
+        """
+        URL absolue de la page page_courante + 1 d'apres un lien de
+        pagination trouve dans la page, ou None si le lien n'a pas la forme
+        attendue. Controle commun a tous les connecteurs pagines :
+        - meme domaine et meme chemin que le listing (TARGET_URL) : on ne
+          suit jamais, sous couvert de pagination, un lien vers une autre
+          page du site (CN-04, comme url_detail) ;
+        - parametre "page" egal a page_courante + 1 : un lien "suivant" qui,
+          sur la derniere page, pointerait vers elle-meme ferait boucler.
+        """
+        if not lien:
+            return None
+        listing = urlparse(self.TARGET_URL)
+        cible = urlparse(urljoin(self.TARGET_URL, lien.strip()))
+        if cible.netloc != listing.netloc or (cible.path or "/") != (listing.path or "/"):
+            return None
+        if parse_qs(cible.query).get("page") != [str(page_courante + 1)]:
+            return None
+        return cible.geturl()
 
     def _chemin_interne(self, lien):
         """

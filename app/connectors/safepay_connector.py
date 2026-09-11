@@ -18,6 +18,11 @@ liceite favorable : HTML, meme domaine, page d'annonce) :
           div#countdown-link-block    NON LU : lien vers les donnees, affiche
                                       une fois le compte a rebours ecoule (CN-04)
       div.card-footer                 retour au blog
+
+PAGINATION (reconnaissance VM, 11/09/2026) : a.page-link, lien ">>" (un
+seul chevron) vers /?page=N ; ">>>>" (deux chevrons) mene a la derniere
+page. Le listing n'etant pas date, la pagination s'arrete sur la date lue
+par sonde sur la page de detail (DATE_SUR_DETAIL, cf. BaseConnector).
 """
 
 import logging
@@ -35,12 +40,16 @@ class SafePayConnector(BaseConnector):
 
     TARGET_URL = "http://safepaypfxntwixwjrlcscft433ggemlhgkkdupi2ynhtcmvdgubmoyd.onion/"
 
-    # Page de detail : seule source de la date de publication. Le listing
-    # ne compte qu'une dizaine d'annonces et seules les NOUVELLES sont
-    # visitees : ce budget suffit, a raison d'une requete toutes les 30 a
-    # 45 s (FR-06).
+    # Page de detail : seule source de la date de publication. Seules les
+    # annonces NOUVELLES sont visitees, a raison d'une requete toutes les 30
+    # a 45 s (FR-06) ; celles que le budget ne sert pas le sont au cycle
+    # suivant. Les sondes de date (une par page de listing) s'y ajoutent.
     SUPPORTE_DETAIL = True
     MAX_DETAILS_PAR_RUN = 10
+
+    SUPPORTE_PAGINATION = True
+    DATE_SUR_DETAIL = True
+    MAX_PAGES_LISTING = 30
 
     # Seule forme de lien verifiee comme page d'annonce (reconnaissance).
     PREFIXE_ANNONCE = "/blog/post/"
@@ -93,6 +102,13 @@ class SafePayConnector(BaseConnector):
             "nb_entries": len(entries),
         }
 
+
+    def url_page_suivante(self, raw_content, page_courante):
+        soup = BeautifulSoup(raw_content, "html.parser")
+        for lien in soup.select("a.page-link"):
+            if lien.get_text(strip=True) == "\u00bb":
+                return self._page_suivante_validee(lien.get("href"), page_courante)
+        return None
 
     def url_detail(self, entry):
         """

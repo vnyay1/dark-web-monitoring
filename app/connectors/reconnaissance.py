@@ -357,8 +357,6 @@ def phase_pages(connecteur, maximum=3):
     d'annonces, plage de dates. Aucun autre contenu n'est imprime.
     Sert a valider un connecteur pagine avant de l'activer en collecte.
     """
-    from app.connectors.dates import CLES_DATE, parser_date
-
     if not connecteur.SUPPORTE_PAGINATION:
         print("\nCe connecteur ne declare pas de pagination (SUPPORTE_PAGINATION = False) :")
         print("seule la page 1 est lue en collecte. Voir --phase listing, CANDIDATS PAGINATION.")
@@ -366,6 +364,7 @@ def phase_pages(connecteur, maximum=3):
 
     netloc_source = urlparse(connecteur.TARGET_URL or "").netloc
     url = connecteur.TARGET_URL
+    stats, erreurs = {"details_ok": 0, "details_echec": 0}, {}
     print()
     for page in range(1, maximum + 1):
         raw = _recuperer(connecteur, url).text
@@ -375,18 +374,28 @@ def phase_pages(connecteur, maximum=3):
         finally:
             del raw  # CN-05
 
-        dates = [
-            d for d in (
-                parser_date(next((e.get(c) for c in CLES_DATE if e.get(c)), None),
-                            connecteur.DATE_FORMATS, source=connecteur.SOURCE_NAME)
-                for e in entrees
-            ) if d is not None
-        ]
-        plage = (
-            f"{min(dates):%d/%m/%Y} -> {max(dates):%d/%m/%Y}" if dates else "aucune date lisible"
-        )
         print(f"  page {page} : {_forme_url(url, netloc_source)}")
-        print(f"           {len(entrees)} annonce(s), {len(dates)} datee(s), {plage}")
+        if connecteur.DATE_SUR_DETAIL:
+            # Meme sonde qu'en collecte : la derniere annonce de la page.
+            for e in entrees:
+                e["identifiant_entree"] = connecteur.identifiant_entree(e)
+                e["niveau_detail"] = "listing"
+            sonde = connecteur._entree_a_sonder(entrees, set())
+            date = connecteur.dater_par_sonde(sonde, stats, erreurs) if sonde else None
+            lue = f"{date:%d/%m/%Y}" if date else "illisible"
+            print(f"           {len(entrees)} annonce(s), derniere annonce datee "
+                  f"par sa page de detail : {lue}")
+        else:
+            dates = connecteur.dates_lisibles(entrees)
+            plage = (
+                f"{min(dates):%d/%m/%Y} -> {max(dates):%d/%m/%Y}" if dates
+                else "aucune date lisible"
+            )
+            ordre = ""
+            if len(dates) > 1:
+                ordre = (", de la plus recente a la plus ancienne"
+                         if dates == sorted(dates, reverse=True) else ", ORDRE NON CHRONOLOGIQUE")
+            print(f"           {len(entrees)} annonce(s), {len(dates)} datee(s), {plage}{ordre}")
 
         if not suivante:
             print("  -> fin de la pagination (url_page_suivante renvoie None)")
