@@ -337,13 +337,25 @@ def phase_dates(connecteur, limite=15, pages_detail=0, page=1):
     print(f"DATE_FORMATS actuels : {connecteur.DATE_FORMATS or '(aucun, formats communs seulement)'}")
     print("-" * 64)
 
+    # Meme borne qu'en collecte pour les annonces non datees (cf.
+    # BaseConnector._poser_dates_plafond). Calculee sur cette seule page :
+    # une annonce non datee en tete de page N serait, en collecte, bornee
+    # par la derniere annonce datee de la page N-1.
+    if connecteur.LISTING_CHRONOLOGIQUE:
+        connecteur._poser_dates_plafond(entrees)
+
     reconnues = 0
     for index, entree in enumerate(entrees[:limite]):
         cle, brute = next(
             ((c, entree.get(c)) for c in CLES_DATE if entree.get(c)), (None, None)
         )
         if brute is None:
-            print(f"  [{index:>2}] aucune date dans le listing")
+            plafond = entree.get("date_plafond")
+            suite = (
+                f" -> plafond {plafond:%Y-%m-%d} (date de l'annonce datee precedente)"
+                if plafond else ""
+            )
+            print(f"  [{index:>2}] aucune date dans le listing{suite}")
             continue
 
         interpretee = parser_date(brute, connecteur.DATE_FORMATS, source=connecteur.SOURCE_NAME)
