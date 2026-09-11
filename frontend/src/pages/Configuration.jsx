@@ -596,7 +596,6 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
             <tr>
               <th>Sélecteur</th>
               <th>Catégorie</th>
-              <th>Origine</th>
               <th style={{ width: 110 }}>État</th>
               <th style={{ width: 190 }}>
                 <span className="sr-only">Actions</span>
@@ -608,9 +607,6 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
               <tr key={s.id}>
                 <td className="cell-entity">{s.valeur}</td>
                 <td className="cell-muted">{s.categorie.nom}</td>
-                <td className="cell-muted">
-                  {s.propose_par_ner ? "Proposé par NER" : "Catalogue"}
-                </td>
                 <td>
                   <button
                     className={`btn btn-sm ${s.actif ? "" : "btn-ghost"}`}

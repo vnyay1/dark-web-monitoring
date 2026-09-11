@@ -131,16 +131,6 @@ export default function DetailExposition() {
                 : "non datée par la source"
             }
           />
-          <Ligne
-            terme="Enregistrements revendiqués"
-            valeur={
-              donnees.nombre_enregistrements_revendique
-                ? donnees.nombre_enregistrements_revendique.toLocaleString(
-                    "fr-FR",
-                  )
-                : "non revendiqué"
-            }
-          />
         </dl>
       </section>
 

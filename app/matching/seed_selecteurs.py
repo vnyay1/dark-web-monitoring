@@ -720,8 +720,6 @@ def seed():
                 valeur=valeur,
                 categorie=categorie,
                 actif=True,
-                propose_par_ner=False,
-                valide_par_analyste=True,
             )
 
             session.add(selecteur)

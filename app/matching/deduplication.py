@@ -107,8 +107,6 @@ def enregistrer_exposition(
     reference_source: str,
     criticite: int,
     niveau_criticite: NiveauCriticite,
-    nombre_enregistrements: int = None,
-    type_entite=None,
     source_id: str = None,
     date_publication=None,
 ) -> tuple:
@@ -167,9 +165,7 @@ def enregistrer_exposition(
     # Aucun incident correspondant : creation d'une nouvelle Exposition
     nouvelle_exposition = Exposition(
         nom_entite=nom_entite,
-        type_entite=type_entite,
         categories=categories,
-        nombre_enregistrements_revendique=nombre_enregistrements,
         criticite=criticite,
         niveau_criticite=niveau_criticite,
         date_publication_source=date_publication,

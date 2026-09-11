@@ -193,7 +193,6 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         reference_source=entry["reference_source"],
         criticite=detail.nb_selecteurs,
         niveau_criticite=detail.niveau,
-        nombre_enregistrements=None,
         source_id=source.id,
         date_publication=date_publication,
     )
