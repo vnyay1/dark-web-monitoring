@@ -8,26 +8,33 @@
  * Ce n'est qu'une commodite d'affichage. L'autorisation qui fait foi est
  * celle du serveur : chaque endpoint porte @role_requis, et un utilisateur
  * qui forcerait une URL n'obtiendrait qu'un 403 en JSON.
+ *
+ * Chaque page est chargee a la demande (React.lazy) : l'ecran de connexion
+ * ne telecharge plus le code de toutes les pages, ni surtout Recharts, qui
+ * ne sert qu'au tableau de bord et pese plus que tout le reste. Le Suspense
+ * des pages protegees est dans Layout, pour que la navigation reste
+ * affichee pendant le chargement d'une page.
  */
 
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useSession } from "./api/session";
 import Layout from "./components/Layout";
 import { Chargement } from "./components/communs";
 
-import Alertes from "./pages/Alertes";
-import Audit from "./pages/Audit";
-import Comptes from "./pages/Comptes";
-import Configuration from "./pages/Configuration";
-import Conformite from "./pages/Conformite";
-import Connexion from "./pages/Connexion";
-import Dashboard from "./pages/Dashboard";
-import DetailExposition from "./pages/DetailExposition";
-import Expositions from "./pages/Expositions";
-import HistoriqueRoles from "./pages/HistoriqueRoles";
-import Rapports from "./pages/Rapports";
-import Scheduler from "./pages/Scheduler";
+const Alertes = lazy(() => import("./pages/Alertes"));
+const Audit = lazy(() => import("./pages/Audit"));
+const Comptes = lazy(() => import("./pages/Comptes"));
+const Configuration = lazy(() => import("./pages/Configuration"));
+const Conformite = lazy(() => import("./pages/Conformite"));
+const Connexion = lazy(() => import("./pages/Connexion"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DetailExposition = lazy(() => import("./pages/DetailExposition"));
+const Expositions = lazy(() => import("./pages/Expositions"));
+const HistoriqueRoles = lazy(() => import("./pages/HistoriqueRoles"));
+const Rapports = lazy(() => import("./pages/Rapports"));
+const Scheduler = lazy(() => import("./pages/Scheduler"));
 
 function RouteProtegee({ children, role }) {
   const { utilisateur, chargement, aRole } = useSession();
@@ -56,7 +63,14 @@ function RouteProtegee({ children, role }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/connexion" element={<Connexion />} />
+      <Route
+        path="/connexion"
+        element={
+          <Suspense fallback={<Chargement />}>
+            <Connexion />
+          </Suspense>
+        }
+      />
 
       <Route
         element={
