@@ -7,6 +7,10 @@ une URL .onion pointant DIRECTEMENT vers les donnees divulguees. Cette
 URL est systematiquement retiree du texte conserve.
 
 MISE A JOUR : utilise desormais le module centralise app.tor.
+
+PAGINATION (reconnaissance VM, 11/09/2026) : ul.pagination, element
+li.next vers /?page=N&per-page=M ; sur la derniere page, li.next porte la
+classe "disabled" et ne contient plus de lien.
 """
 
 import logging
@@ -21,6 +25,9 @@ class BlackWaterConnector(BaseConnector):
     SOURCE_TYPE = "ransomware_site"
 
     TARGET_URL = "http://ejzl7cjxmkx7lzhiqwidmrwtfjv45pkczbc4fnyaut3t7gll3yaiq5id.onion/"
+
+    SUPPORTE_PAGINATION = True
+    MAX_PAGES_LISTING = 30
 
 
     def parse(self, raw_content):
@@ -67,6 +74,11 @@ class BlackWaterConnector(BaseConnector):
             "texte_global": texte_global,
             "nb_entries": len(entries),
         }
+
+    def url_page_suivante(self, raw_content, page_courante):
+        soup = BeautifulSoup(raw_content, "html.parser")
+        lien = soup.select_one("ul.pagination li.next:not(.disabled) a")
+        return self._page_suivante_validee(lien.get("href"), page_courante) if lien else None
 
 
 if __name__ == "__main__":

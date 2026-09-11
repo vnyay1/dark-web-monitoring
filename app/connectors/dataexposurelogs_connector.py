@@ -3,6 +3,9 @@ FR-03 - Connecteur reel #3 : Data Exposure logs (ransomware leak site).
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
 MISE A JOUR : utilise desormais le module centralise app.tor.
+
+PAGINATION (reconnaissance VM, 11/09/2026) : div.pagination, lien
+a.page-btn "NEXT >>" vers /?page=N.
 """
 
 import logging
@@ -21,6 +24,9 @@ class DataExposureLogsConnector(BaseConnector):
 
     ONCLICK_URL_PATTERN = re.compile(r"window\.open\('([^']+)'")
     STATUS_CLASS_PATTERN = re.compile(r"status-([A-Za-z_]+)")
+
+    SUPPORTE_PAGINATION = True
+    MAX_PAGES_LISTING = 30
 
 
     def parse(self, raw_content):
@@ -88,6 +94,13 @@ class DataExposureLogsConnector(BaseConnector):
             "texte_global": texte_global,
             "nb_entries": len(entries),
         }
+
+    def url_page_suivante(self, raw_content, page_courante):
+        soup = BeautifulSoup(raw_content, "html.parser")
+        for lien in soup.select(".pagination a.page-btn"):
+            if "next" in lien.get_text(strip=True).lower():
+                return self._page_suivante_validee(lien.get("href"), page_courante)
+        return None
 
 
 if __name__ == "__main__":

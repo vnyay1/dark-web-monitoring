@@ -8,6 +8,9 @@ JAMAIS etre suivi/telecharge - on enregistre uniquement son existence
 (booleen), jamais l'URL ni le contenu qu'il pointe.
 
 MISE A JOUR : utilise desormais le module centralise app.tor.
+
+PAGINATION (reconnaissance VM, 11/09/2026) : ul.pagination a.page-link,
+lien "Next" vers ../news/home?page=N.
 """
 
 import logging
@@ -22,6 +25,11 @@ class OrionLeaksConnector(BaseConnector):
     SOURCE_TYPE = "ransomware_site"
 
     TARGET_URL = "http://cjfntkj5qeizxowuy3srceg7zo6namc3kfeor7pfn6bpdkl3w265ooid.onion/news/home"
+
+    # Plafond propre au connecteur ; le plafond effectif est le plus petit
+    # de celui-ci et du reglage pages_listing_max.
+    SUPPORTE_PAGINATION = True
+    MAX_PAGES_LISTING = 30
 
 
     def parse(self, raw_content):
@@ -71,6 +79,13 @@ class OrionLeaksConnector(BaseConnector):
             "texte_global": texte_global,
             "nb_entries": len(entries),
         }
+
+    def url_page_suivante(self, raw_content, page_courante):
+        soup = BeautifulSoup(raw_content, "html.parser")
+        for lien in soup.select("ul.pagination a.page-link"):
+            if lien.get_text(strip=True).lower() == "next":
+                return self._page_suivante_validee(lien.get("href"), page_courante)
+        return None
 
 
 if __name__ == "__main__":
