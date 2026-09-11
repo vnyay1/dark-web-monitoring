@@ -107,7 +107,6 @@ def enregistrer_exposition(
     criticite: int,
     niveau_criticite: NiveauCriticite,
     nombre_enregistrements: int = None,
-    secteur_activite: str = None,
     type_entite=None,
     source_id: str = None,
     date_publication=None,
@@ -167,7 +166,6 @@ def enregistrer_exposition(
     # Aucun incident correspondant : creation d'une nouvelle Exposition
     nouvelle_exposition = Exposition(
         nom_entite=nom_entite,
-        secteur_activite=secteur_activite,
         type_entite=type_entite,
         categories=categories,
         nombre_enregistrements_revendique=nombre_enregistrements,

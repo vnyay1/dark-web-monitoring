@@ -59,7 +59,6 @@ def serialiser(exposition, detaille: bool = False) -> dict:
     donnees = {
         "id": exposition.id,
         "nom_entite": exposition.nom_entite,
-        "secteur_activite": exposition.secteur_activite,
         "type_entite": exposition.type_entite.value if exposition.type_entite else None,
         # FR-13 : categories des selecteurs qui ont declenche l'exposition.
         "categories": [{"id": c.id, "nom": c.nom} for c in exposition.categories],
@@ -93,10 +92,6 @@ def enregistrer(api_bp):
         session = get_session()
         try:
             query = session.query(Exposition)
-
-            secteur = request.args.get("secteur", "").strip()
-            if secteur:
-                query = query.filter(Exposition.secteur_activite == secteur)
 
             # Un filtre dont la valeur est invalide est ignore plutot que
             # rejete : l'interface ne doit pas casser sur un parametre
@@ -138,18 +133,11 @@ def enregistrer(api_bp):
                 .all()
             )
 
-            secteurs = sorted({
-                e.secteur_activite
-                for e in session.query(Exposition.secteur_activite).distinct()
-                if e.secteur_activite
-            })
-
             return jsonify({
                 "expositions": [serialiser(e) for e in lignes],
                 "total": total,
                 "tronque": total > len(lignes),
                 "referentiels": {
-                    "secteurs": secteurs,
                     "categories": [
                         {"id": c.id, "nom": c.nom}
                         for c in session.query(Categorie).order_by(Categorie.nom)

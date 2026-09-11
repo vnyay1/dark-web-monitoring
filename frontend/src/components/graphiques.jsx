@@ -3,7 +3,7 @@
  *
  * DEUX ROLES DE COULEUR, DEUX TRAITEMENTS - et un seul de chaque :
  *
- *  1. MAGNITUDE (repartition par categorie, par secteur) : une seule teinte.
+ *  1. MAGNITUDE (repartition par categorie) : une seule teinte.
  *     Ces barres comparent des quantites, pas des identites ; leur donner une
  *     couleur par barre ferait croire a une signification qui n'existe pas.
  *

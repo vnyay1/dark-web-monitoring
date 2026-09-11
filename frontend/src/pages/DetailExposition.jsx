@@ -51,10 +51,7 @@ export default function DetailExposition() {
 
   return (
     <>
-      <EnTetePage
-        titre={donnees.nom_entite}
-        sousTitre={donnees.secteur_activite || "Secteur non renseigné"}
-      >
+      <EnTetePage titre={donnees.nom_entite}>
         <button className="btn btn-ghost" onClick={() => navigate(-1)}>
           Retour
         </button>

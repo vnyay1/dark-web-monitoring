@@ -102,6 +102,7 @@ def enregistrer(api_bp):
                 nom=donnees["nom"].strip(),
                 description=(donnees.get("description") or "").strip() or None,
                 lieu_generique=bool(donnees.get("lieu_generique")),
+                prioritaire=bool(donnees.get("prioritaire")),
             )
             session.add(categorie)
             session.commit()
@@ -129,6 +130,7 @@ def enregistrer(api_bp):
             categorie.nom = donnees["nom"].strip()
             categorie.description = (donnees.get("description") or "").strip() or None
             categorie.lieu_generique = bool(donnees.get("lieu_generique"))
+            categorie.prioritaire = bool(donnees.get("prioritaire"))
             session.commit()
 
             logger.info(
@@ -364,6 +366,7 @@ def _serialiser_categorie(categorie, nb_selecteurs=None, nb_expositions=None) ->
         "nom": categorie.nom,
         "description": categorie.description,
         "lieu_generique": categorie.lieu_generique,
+        "prioritaire": categorie.prioritaire,
     }
     if nb_selecteurs is not None:
         donnees["nb_selecteurs"] = nb_selecteurs

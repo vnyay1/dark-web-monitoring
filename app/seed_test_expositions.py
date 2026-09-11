@@ -46,7 +46,6 @@ def _source_de_test(session, data):
 TEST_DATA = [
     {
         "nom_entite": "MINFI (Ministere des Finances)",
-        "secteur_activite": "Administration publique",
         "type_entite": TypeEntite.PUBLIQUE,
         "categories": ["Ministère", "Domaine internet"],
         "criticite": 4,
@@ -58,7 +57,6 @@ TEST_DATA = [
     },
     {
         "nom_entite": "Afriland First Bank",
-        "secteur_activite": "Finance",
         "type_entite": TypeEntite.PRIVEE,
         "categories": ["Banque"],
         "criticite": 3,
@@ -70,7 +68,6 @@ TEST_DATA = [
     },
     {
         "nom_entite": "Universite de Yaounde I",
-        "secteur_activite": "Education",
         "type_entite": TypeEntite.PUBLIQUE,
         "categories": ["Université", "Ville / région"],
         "criticite": 2,
@@ -82,7 +79,6 @@ TEST_DATA = [
     },
     {
         "nom_entite": "MTN Cameroon",
-        "secteur_activite": "Telecommunications",
         "type_entite": TypeEntite.PRIVEE,
         "categories": ["Télécommunications"],
         "criticite": 5,
@@ -94,7 +90,6 @@ TEST_DATA = [
     },
     {
         "nom_entite": "CAMTEL",
-        "secteur_activite": "Telecommunications",
         "type_entite": TypeEntite.PUBLIQUE,
         "categories": ["Télécommunications", "Entreprise"],
         "criticite": 1,
@@ -106,7 +101,6 @@ TEST_DATA = [
     },
     {
         "nom_entite": "SONARA",
-        "secteur_activite": "Energie",
         "type_entite": TypeEntite.PUBLIQUE,
         "categories": ["Entreprise"],
         "criticite": 3,
@@ -118,7 +112,6 @@ TEST_DATA = [
     },
     {
         "nom_entite": "Ecobank Cameroun",
-        "secteur_activite": "Finance",
         "type_entite": TypeEntite.PRIVEE,
         "categories": ["Banque"],
         "criticite": 4,
@@ -140,7 +133,6 @@ def seed_test_data():
 
         exposition = Exposition(
             nom_entite=data["nom_entite"],
-            secteur_activite=data["secteur_activite"],
             type_entite=data["type_entite"],
             categories=[
                 c for c in session.query(Categorie).filter(Categorie.nom.in_(data["categories"]))

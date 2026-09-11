@@ -38,10 +38,6 @@ export default function Dashboard() {
     ([libelle, valeur]) => ({ libelle, valeur }),
   );
 
-  const parSecteur = Object.entries(donnees.repartition_secteur)
-    .map(([libelle, valeur]) => ({ libelle, valeur }))
-    .slice(0, 10);
-
   const sourcesEnAlerte = donnees.sources.filter((s) => s.indisponible);
 
   return (
@@ -106,15 +102,7 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <div className="grid grid-2" style={{ marginBottom: 22 }}>
-        <section className="card card-pad">
-          <h2 className="section-title">
-            Secteurs concernés
-            {parSecteur.length === 10 && <span className="count">top 10</span>}
-          </h2>
-          <BarresHorizontales donnees={parSecteur} suffixe="exposition(s)" />
-        </section>
-
+      <div style={{ marginBottom: 22 }}>
         <section className="card card-pad">
           <h2 className="section-title">
             État des sources

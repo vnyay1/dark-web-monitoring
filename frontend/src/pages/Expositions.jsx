@@ -24,7 +24,6 @@ const FILTRES_VIDES = {
   niveau_min: "",
   categorie: "",
   statut: "",
-  secteur: "",
   periode: "",
 };
 
@@ -156,25 +155,6 @@ export default function Expositions() {
         </div>
 
         <div className="field">
-          <label className="field-label" htmlFor="f-secteur">
-            Secteur
-          </label>
-          <select
-            id="f-secteur"
-            className="select"
-            value={filtres.secteur}
-            onChange={(e) => modifier("secteur", e.target.value)}
-          >
-            <option value="">Tous</option>
-            {(referentiels?.secteurs || []).map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
           <label className="field-label" htmlFor="f-periode">
             Période (jours)
           </label>
@@ -241,11 +221,6 @@ export default function Expositions() {
                   <tr key={e.id}>
                     <td className="cell-entity">
                       <Link to={`/expositions/${e.id}`}>{e.nom_entite}</Link>
-                      {e.secteur_activite && (
-                        <div className="cell-muted" style={{ fontSize: 11 }}>
-                          {e.secteur_activite}
-                        </div>
-                      )}
                     </td>
                     <td>
                       <PastilleCriticite

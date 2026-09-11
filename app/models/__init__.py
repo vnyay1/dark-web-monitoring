@@ -125,6 +125,12 @@ class Categorie(Base):
     d'entite camerounaise. La regle de faux positif correspondante
     (app.matching.exclusion) suit cet indicateur, et non un nom de
     categorie qu'un renommage casserait.
+
+    prioritaire : secteur prioritaire au sens de FR-26 (administration,
+    finance, telecommunications). Les alertes sur une exposition portant
+    une telle categorie empruntent les canaux renforces (app.alerting.rules).
+    Cet indicateur remplace le champ texte Exposition.secteur_activite, que
+    rien ne renseignait.
     """
     __tablename__ = "categories"
 
@@ -132,6 +138,7 @@ class Categorie(Base):
     nom = Column(String(100), nullable=False, unique=True)
     description = Column(Text, nullable=True)
     lieu_generique = Column(Boolean, nullable=False, default=False)
+    prioritaire = Column(Boolean, nullable=False, default=False)
     date_creation = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     selecteurs = relationship("Selecteur", back_populates="categorie")
@@ -157,7 +164,6 @@ class Exposition(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     nom_entite = Column(String(255), nullable=False)
-    secteur_activite = Column(String(255), nullable=True)
     type_entite = Column(SAEnum(TypeEntite), nullable=True)
 
     date_premiere_detection = Column(DateTime(timezone=True), nullable=False,
