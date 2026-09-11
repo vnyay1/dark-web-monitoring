@@ -76,15 +76,6 @@ def _verrou_est_perime(etat: EtatScheduler) -> bool:
     return (utc_now() - etat.heartbeat).total_seconds() > PEREMPTION_VERROU_SECONDES
 
 
-def scheduler_est_actif() -> bool:
-    """True si un processus scheduler vivant detient le verrou."""
-    session = get_session()
-    try:
-        return not _verrou_est_perime(_etat(session))
-    finally:
-        session.close()
-
-
 # ---------------------------------------------------------------------
 # Verrou d'instance unique
 # ---------------------------------------------------------------------

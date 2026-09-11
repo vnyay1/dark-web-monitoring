@@ -51,12 +51,7 @@ def _construire_message(exposition, est_confirmation: bool = False) -> tuple:
 # Ordre des paliers, du moins au plus grave. Sert a comparer le niveau
 # d'une exposition au niveau minimum configure : NiveauCriticite est une
 # enumeration de chaines, donc non ordonnable telle quelle.
-ORDRE_NIVEAUX = {
-    NiveauCriticite.FAIBLE: 0,
-    NiveauCriticite.MOYENNE: 1,
-    NiveauCriticite.ELEVEE: 2,
-    NiveauCriticite.CRITIQUE: 3,
-}
+ORDRE_NIVEAUX = {niveau: rang for rang, niveau in enumerate(NiveauCriticite)}
 
 
 def declencher_alertes(session, exposition, est_nouvelle: bool = True,

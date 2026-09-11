@@ -77,10 +77,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _pairs(values, category):
-    return [(value, category) for value in values]
-
-
 # ============================================================================
 # Catalogue enrichi
 # ============================================================================
