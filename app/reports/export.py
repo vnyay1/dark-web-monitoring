@@ -19,7 +19,6 @@ def _exposition_vers_dict(exposition) -> dict:
     return {
         "id": exposition.id,
         "nom_entite": exposition.nom_entite,
-        "secteur_activite": exposition.secteur_activite,
         "type_entite": exposition.type_entite.value if exposition.type_entite else None,
         # Plusieurs categories possibles (FR-13) : jointes par " ; " pour
         # rester une seule colonne lisible dans un tableur.

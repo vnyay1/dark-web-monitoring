@@ -131,7 +131,12 @@ export default function Configuration() {
 /* Categories                                                          */
 /* ================================================================== */
 
-const CATEGORIE_VIDE = { nom: "", description: "", lieu_generique: false };
+const CATEGORIE_VIDE = {
+  nom: "",
+  description: "",
+  lieu_generique: false,
+  prioritaire: false,
+};
 
 function SectionCategories({ categories, agir }) {
   const [nouvelle, setNouvelle] = useState(CATEGORIE_VIDE);
@@ -223,6 +228,11 @@ function SectionCategories({ categories, agir }) {
           coche={nouvelle.lieu_generique}
           onChange={(v) => setNouvelle((n) => ({ ...n, lieu_generique: v }))}
         />
+        <CasePrioritaire
+          id="cat-prio"
+          coche={nouvelle.prioritaire}
+          onChange={(v) => setNouvelle((n) => ({ ...n, prioritaire: v }))}
+        />
         <div className="btn-row">
           <button className="btn btn-primary" type="submit">
             Ajouter
@@ -248,6 +258,15 @@ function SectionCategories({ categories, agir }) {
               <tr key={c.id}>
                 <td className="cell-entity">
                   {c.nom}
+                  {c.prioritaire && (
+                    <span
+                      className="pill pill-warn"
+                      style={{ marginLeft: 8 }}
+                      title="Secteur prioritaire : alertes par SMS et WhatsApp dès les niveaux élevés"
+                    >
+                      prioritaire
+                    </span>
+                  )}
                   {c.lieu_generique && (
                     <span
                       className="pill pill-neutral"
@@ -323,6 +342,11 @@ function SectionCategories({ categories, agir }) {
             coche={enEdition.lieu_generique}
             onChange={(v) => setEnEdition((c) => ({ ...c, lieu_generique: v }))}
           />
+          <CasePrioritaire
+            id="edit-cat-prio"
+            coche={enEdition.prioritaire}
+            onChange={(v) => setEnEdition((c) => ({ ...c, prioritaire: v }))}
+          />
           <p className="cell-muted">
             Le nouveau nom s'applique aussi aux {enEdition.nb_expositions}{" "}
             exposition(s) qui portent déjà cette catégorie.
@@ -397,6 +421,25 @@ function CaseLieuGenerique({ id, coche, onChange }) {
         Noms de lieux génériques
         <span className="case-aide">
           villes, régions : écartés s'ils figurent dans une simple liste de pays
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function CasePrioritaire({ id, coche, onChange }) {
+  return (
+    <label className="case-a-cocher" htmlFor={id}>
+      <input
+        id={id}
+        type="checkbox"
+        checked={coche}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        Secteur prioritaire
+        <span className="case-aide">
+          alertes par SMS dès le niveau élevé, WhatsApp au niveau critique
         </span>
       </span>
     </label>

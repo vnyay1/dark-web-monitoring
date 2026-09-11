@@ -196,7 +196,9 @@ account (super_admin is unrestricted). When adding a new protected route, follow
 ### Alerting (`app/alerting/`)
 
 `rules.py` selects channels by criticality level × sector priority, `dispatcher.py` orchestrates
-dispatch, `senders.py` implements the actual email/SMS/WhatsApp/interface sends. Triggered from
+dispatch, `senders.py` implements the actual email/SMS/WhatsApp/interface sends. "Sector priority"
+(FR-26) is read from the exposition's categories (`Categorie.prioritaire`, admin-editable) or a
+`.gov.cm` entity name — there is no sector field on `Exposition` any more (it was never filled). Triggered from
 `app/pipeline.py` via `declencher_alertes()` on new detections, or on an existing exposition whose
 criticality rose by at least `hausse_criticite_confirmation`. INTERFACE receives every alert; the
 intrusive channels are reserved for the high levels.

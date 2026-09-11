@@ -51,6 +51,9 @@ class CategorieSelecteur:
     # Noms de lieux generiques : la regle "liste de pays" s'y applique.
     LIEUX_GENERIQUES = {VILLE_REGION}
 
+    # Secteurs prioritaires (FR-26) : canaux d'alerte renforces.
+    PRIORITAIRES = {MINISTERE, AGENCE_GOUVERNEMENTALE, BANQUE, MICROFINANCE, TELECOM}
+
 
 def _categorie(session, cache, nom):
     """Categorie par son nom, creee au besoin (base neuve)."""
@@ -59,6 +62,7 @@ def _categorie(session, cache, nom):
         if categorie is None:
             categorie = Categorie(
                 nom=nom, lieu_generique=nom in CategorieSelecteur.LIEUX_GENERIQUES,
+                prioritaire=nom in CategorieSelecteur.PRIORITAIRES,
             )
             session.add(categorie)
             session.flush()

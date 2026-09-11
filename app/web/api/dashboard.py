@@ -22,9 +22,6 @@ def enregistrer(api_bp):
             seuil_7j = utc_now() - timedelta(days=7)
             seuil_30j = utc_now() - timedelta(days=30)
 
-            secteurs = Counter(
-                (e.secteur_activite or "Non renseigne") for e in expositions
-            )
             # Une exposition compte dans CHACUNE de ses categories : le
             # total de cette repartition peut depasser le nombre
             # d'expositions (precise a l'ecran).
@@ -61,7 +58,6 @@ def enregistrer(api_bp):
                     1 for e in expositions
                     if e.niveau_criticite in (NiveauCriticite.ELEVEE, NiveauCriticite.CRITIQUE)
                 ),
-                "repartition_secteur": dict(secteurs.most_common()),
                 "repartition_categorie": dict(categories.most_common()),
                 "repartition_criticite": repartition_criticite,
                 "repartition_statut": dict(statuts.most_common()),

@@ -2,7 +2,7 @@
 FR-27 - Generation du rapport mensuel d'exposition (PDF et HTML).
 
 Contient uniquement des statistiques agregees et une repartition par
-secteur - AUCUNE donnee personnelle, conformement a l'exigence explicite
+categorie - AUCUNE donnee personnelle, conformement a l'exigence explicite
 du cahier des charges. Le modele de donnees ne stocke de toute facon
 jamais ce type d'information (CN-03/CN-04), donc ce rapport hérite
 naturellement de cette garantie.
@@ -85,9 +85,6 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
 
     total_periode = len(expositions_du_mois)
 
-    repartition_secteur = Counter(
-        (e.secteur_activite or "Non renseigné") for e in expositions_du_mois
-    )
     # Une exposition compte dans CHACUNE de ses categories (FR-13) : le
     # total peut depasser le nombre d'expositions, ce que le document dit.
     repartition_categorie = Counter(
@@ -121,7 +118,6 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
     entites = [
         {
             "nom": e.nom_entite,
-            "secteur": e.secteur_activite or "Non renseigné",
             "categories": [c.nom for c in e.categories],
             "criticite": e.criticite,
             "niveau_criticite": e.niveau_criticite.value,
@@ -144,8 +140,15 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
         if e.niveau_criticite in niveaux_hauts and e.statut in a_qualifier
     ][:8]
 
-    secteurs = repartition_secteur.most_common()
-    secteurs_principaux = secteurs[:2]
+    # Deux categories les plus representees, et le nombre d'expositions
+    # qui en relevent : compte sur les EXPOSITIONS, pas en additionnant les
+    # deux effectifs, qui compteraient deux fois une exposition portant
+    # les deux categories.
+    categories_principales = [nom for nom, _ in repartition_categorie.most_common(2)]
+    part_categories_principales = sum(
+        1 for e in expositions_du_mois
+        if any(c.nom in categories_principales for c in e.categories)
+    )
 
     sources = _statistiques_sources(session, [e.id for e in expositions_du_mois])
 
@@ -160,13 +163,11 @@ def _collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
         "repartition_criticite": dict(repartition_criticite),
         "nb_niveaux_hauts": nb_niveaux_hauts,
         "nb_a_qualifier": repartition_statut.get(StatutExposition.NEW.value, 0),
-        "repartition_secteur": dict(repartition_secteur),
         "repartition_categorie": dict(repartition_categorie),
         "repartition_statut": dict(repartition_statut),
         "criticite": _paliers(repartition_criticite),
-        "secteurs": secteurs,
-        "secteurs_principaux": secteurs_principaux,
-        "part_secteurs_principaux": sum(n for _, n in secteurs_principaux),
+        "categories_principales": categories_principales,
+        "part_categories_principales": part_categories_principales,
         "categories": repartition_categorie.most_common(),
         "statuts": [
             (libelles.STATUT[s.value], repartition_statut[s.value])

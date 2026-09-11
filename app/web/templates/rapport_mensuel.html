@@ -164,7 +164,6 @@
     .mono { font-family: var(--mono); font-size: 7.8pt; }
     .discret { color: var(--encre-3); }
     .entite { font-weight: 600; }
-    .secteur { display: block; font-size: 7.5pt; color: var(--encre-2); font-weight: 400; }
 
     .jauge { display: flex; align-items: center; }
     .jauge .piste { flex: 1; height: 2.2mm; background: var(--fond-leger); border-radius: 1mm; overflow: hidden; }
@@ -231,11 +230,11 @@
         <strong>{{ total_periode }} exposition{{ 's' if total_periode > 1 }}</strong>
         visant des entités camerounaises, dont
         <strong>{{ nb_niveaux_hauts }} de criticité élevée ou critique</strong>.
-        {% if secteurs_principaux | length == 1 %}
-        Le secteur « {{ secteurs_principaux[0][0] }} » concentre les {{ total_periode }} expositions.
-        {% elif secteurs_principaux | length > 1 %}
-        Les secteurs « {{ secteurs_principaux[0][0] }} » et « {{ secteurs_principaux[1][0] }} »
-        concentrent {{ part_secteurs_principaux }} expositions sur {{ total_periode }}.
+        {% if categories_principales | length == 1 %}
+        La catégorie « {{ categories_principales[0] }} » concerne {{ part_categories_principales }} exposition{{ 's' if part_categories_principales > 1 }} sur {{ total_periode }}.
+        {% elif categories_principales | length > 1 %}
+        Les catégories « {{ categories_principales[0] }} » et « {{ categories_principales[1] }} »
+        concernent {{ part_categories_principales }} exposition{{ 's' if part_categories_principales > 1 }} sur {{ total_periode }}.
         {% endif %}
         {% if nb_a_qualifier %}
         <strong>{{ nb_a_qualifier }} exposition{{ 's' if nb_a_qualifier > 1 }}</strong>
@@ -261,8 +260,8 @@
             <div class="libelle">de criticité élevée ou critique</div>
         </div>
         <div class="chiffre">
-            <div class="valeur">{{ secteurs | length }}</div>
-            <div class="libelle">secteur{{ 's' if secteurs | length > 1 }} d'activité touché{{ 's' if secteurs | length > 1 }}</div>
+            <div class="valeur">{{ categories | length }}</div>
+            <div class="libelle">catégorie{{ 's' if categories | length > 1 }} d'entités touchée{{ 's' if categories | length > 1 }}</div>
         </div>
         <div class="chiffre">
             <div class="valeur">{{ nb_sources_signalantes }}</div>
@@ -312,18 +311,6 @@
 <section class="nouvelle-page">
     <div class="deux-colonnes">
         <div>
-            <h2>Secteurs d'activité</h2>
-            {% set max_secteur = secteurs[0][1] if secteurs else 1 %}
-            <table>
-                <thead><tr><th>Secteur</th><th style="width: 42%">Expositions</th></tr></thead>
-                <tbody>
-                {% for nom, n in secteurs %}
-                <tr><td>{{ nom }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_secteur * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <div>
             <h2>Catégories <span class="precision">une exposition peut en porter plusieurs</span></h2>
             {% set max_categorie = categories[0][1] if categories else 1 %}
             <table>
@@ -331,6 +318,18 @@
                 <tbody>
                 {% for libelle, n in categories %}
                 <tr><td>{{ libelle }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_categorie * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <h2>Suivi du traitement</h2>
+            {% set max_statut = statuts | map(attribute=1) | max if statuts else 1 %}
+            <table>
+                <thead><tr><th>Statut</th><th style="width: 42%">Expositions</th></tr></thead>
+                <tbody>
+                {% for libelle, n in statuts %}
+                <tr><td>{{ libelle }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_statut * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -355,19 +354,6 @@
     </table>
 </section>
 
-<section>
-    <h2>Suivi du traitement</h2>
-    {% set max_statut = statuts | map(attribute=1) | max if statuts else 1 %}
-    <table>
-        <thead><tr><th>Statut</th><th style="width: 55%">Expositions</th></tr></thead>
-        <tbody>
-        {% for libelle, n in statuts %}
-        <tr><td>{{ libelle }}</td><td><div class="jauge"><div class="piste"><div class="rempli" style="width: {{ (n / max_statut * 100) | round(0) }}%"></div></div><span class="num">{{ n }}</span></div></td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</section>
-
 {# =========================== DETAIL =========================== #}
 <section class="nouvelle-page">
     <h2>Détail des expositions <span class="precision">par criticité décroissante</span></h2>
@@ -378,7 +364,7 @@
         <tbody>
         {% for e in entites %}
         <tr>
-            <td class="entite">{{ e.nom }}<span class="secteur">{{ e.secteur }}</span></td>
+            <td class="entite">{{ e.nom }}</td>
             <td>{{ e.categories | join(', ') or '—' }}</td>
             <td><span class="niveau"><span class="marque c-{{ e.niveau_criticite }}"></span>{{ e.niveau_libelle }}<span class="n">{{ e.criticite }}</span></span></td>
             <td>{% for s in e.sources %}<span class="source">{{ s }}</span>{% if not loop.last %}<br>{% endif %}{% else %}<span class="discret">—</span>{% endfor %}</td>

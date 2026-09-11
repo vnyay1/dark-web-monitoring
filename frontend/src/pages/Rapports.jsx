@@ -127,16 +127,16 @@ export default function Rapports() {
               ton="crit"
             />
             <Tuile
-              label="Secteurs touchés"
-              valeur={Object.keys(donnees.repartition_secteur).length}
-              hint="secteurs distincts"
-              ton="info"
+              label="À qualifier"
+              valeur={donnees.nb_a_qualifier}
+              hint="nouvelles, sans analyse"
+              ton="warn"
             />
             <Tuile
               label="Catégories"
               valeur={Object.keys(donnees.repartition_categorie).length}
               hint="catégories représentées"
-              ton="warn"
+              ton="info"
             />
           </div>
 
@@ -163,7 +163,6 @@ export default function Rapports() {
                 <thead>
                   <tr>
                     <th>Entité</th>
-                    <th>Secteur</th>
                     <th>Catégories</th>
                     <th>Sources</th>
                     <th>Criticité</th>
@@ -174,7 +173,6 @@ export default function Rapports() {
                   {donnees.entites.map((e, index) => (
                     <tr key={`${e.nom}-${index}`}>
                       <td className="cell-entity">{e.nom}</td>
-                      <td className="cell-muted">{e.secteur}</td>
                       <td>
                         <ListeCategories categories={e.categories} />
                       </td>

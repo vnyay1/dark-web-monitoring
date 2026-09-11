@@ -2,6 +2,11 @@
 FR-25/FR-26 - Determination des canaux d'alerte selon la CRITICITE de
 l'exposition et la priorite sectorielle.
 
+La priorite sectorielle se lit sur les CATEGORIES de l'exposition (celles
+des selecteurs trouves, cf. Categorie.prioritaire) : le champ texte
+secteur_activite qu'on consultait auparavant n'etait jamais renseigne, si
+bien que seul le domaine .gov.cm declenchait les canaux renforces.
+
 La criticite (nombre de selecteurs distincts, cf. app.matching.criticite)
 remplace l'ancien score de confiance : le routage se fait desormais sur
 des paliers nommes plutot que sur des seuils flottants.
@@ -9,21 +14,15 @@ des paliers nommes plutot que sur des seuils flottants.
 
 from app.models import CanalAlerte, NiveauCriticite
 
-SECTEURS_PRIORITAIRES = [
-    "finance", "banque", "telecommunications", "telecom",
-    "administration publique", "gouvernement",
-]
-
-
-def est_secteur_prioritaire(exposition) -> bool:
-    """FR-26 - Determine si l'exposition concerne un secteur prioritaire."""
-    secteur = (exposition.secteur_activite or "").lower()
-    nom = (exposition.nom_entite or "").lower()
-
-    if ".gov.cm" in nom:
+def est_prioritaire(exposition) -> bool:
+    """
+    FR-26 - L'exposition concerne-t-elle un secteur prioritaire ? Oui si
+    l'une de ses categories est marquee prioritaire par l'administrateur,
+    ou si l'entite est un domaine gouvernemental.
+    """
+    if ".gov.cm" in (exposition.nom_entite or "").lower():
         return True
-
-    return any(mot in secteur for mot in SECTEURS_PRIORITAIRES)
+    return any(categorie.prioritaire for categorie in exposition.categories)
 
 
 def determiner_canaux(exposition) -> list:
@@ -37,7 +36,7 @@ def determiner_canaux(exposition) -> list:
     secteur prioritaire.
     """
     niveau = exposition.niveau_criticite
-    prioritaire = est_secteur_prioritaire(exposition)
+    prioritaire = est_prioritaire(exposition)
 
     canaux = [CanalAlerte.INTERFACE]
 
