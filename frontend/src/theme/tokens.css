@@ -120,7 +120,7 @@
   --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
   --border-glow: color-mix(in srgb, var(--accent) 45%, transparent);
 
-  --crit: #f87171;
+  --crit: #fb8c8c;   /* >= 4,9:1 en pastille, meme sur une ligne survolee */
   --high: #fb923c;
   --warn: #fbbf24;
   --ok: #34d399;

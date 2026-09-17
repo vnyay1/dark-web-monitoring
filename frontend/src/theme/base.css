@@ -600,10 +600,12 @@ a.stat:hover {
   cursor: pointer;
 }
 
+/* Case de 20 px dans une zone cliquable de 24 px minimum (WCAG 2.5.8),
+   le libelle entier restant cliquable. */
 .case-a-cocher input {
-  margin-top: 3px;
-  width: 16px;
-  height: 16px;
+  margin: 2px;
+  width: 20px;
+  height: 20px;
   accent-color: var(--accent);
   flex-shrink: 0;
 }
@@ -711,6 +713,7 @@ a.stat:hover {
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: var(--space-6);
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
 }
 
@@ -739,7 +742,7 @@ a.stat:hover {
   position: absolute;
   left: var(--space-2);
   right: var(--space-2);
-  bottom: -1px;
+  bottom: 0;
   height: 2px;
   border-radius: 2px;
   background: var(--accent);
@@ -890,12 +893,29 @@ table.data td.num-col {
     width: 100%;
   }
 
+  /* En-tetes masques visuellement mais conserves pour les lecteurs
+     d'ecran : un <thead> en display de table ignorerait le masquage. */
+  .tableau-cartes thead,
+  .tableau-cartes thead tr,
+  .tableau-cartes thead th {
+    display: block;
+  }
+
   .tableau-cartes thead {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .tableau-cartes .choix-statut.est-compact {
+    width: 100%;
+  }
+
+  .tableau-cartes .choix-statut.est-compact .select {
+    flex: 1 1 auto;
   }
 
   .tableau-cartes tr {
@@ -1452,8 +1472,24 @@ table.data td.num-col {
   color: var(--on-accent);
 }
 
-.etape.est-inactive {
-  opacity: 0.6;
+/* Etape pas encore accessible : seule la pastille numerotee est estompee.
+   Estomper tout le bloc ferait passer ses aides sous le contraste minimal. */
+.etape.est-inactive::before {
+  opacity: 0.55;
+}
+
+.etape > * {
+  min-width: 0;
+}
+
+/* Libelles d'action longs : retour a la ligne plutot que debordement. */
+.etape .btn {
+  white-space: normal;
+  text-align: left;
+  min-height: var(--control-h);
+  height: auto;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
 }
 
 .etape-titre {
@@ -1597,6 +1633,283 @@ table.data td.num-col {
     grid-template-columns: 1fr;
     gap: 0;
   }
+}
+
+/* --------------------------------------------------------------------
+   Formulaires d'administration et reglages
+   -------------------------------------------------------------------- */
+
+.panneau-onglet:focus-visible {
+  outline-offset: 4px;
+}
+
+.espace-texte {
+  margin-bottom: var(--space-4);
+}
+
+.espace-etiquettes {
+  margin-top: var(--space-1);
+}
+
+.facultatif {
+  font-weight: var(--weight-regular);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+.formulaire-ajout {
+  margin-bottom: var(--space-5);
+}
+
+.formulaire-ajout .section-title {
+  font-size: var(--text-base);
+}
+
+.formulaire-ligne {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.formulaire-ligne-action {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto;
+}
+
+.formulaire-ligne-action > .btn {
+  margin-top: calc(var(--text-xs) * 1.5 + var(--space-1));
+}
+
+@media (max-width: 720px) {
+  .formulaire-ligne-action {
+    grid-template-columns: 1fr;
+  }
+
+  .formulaire-ligne-action > .btn {
+    margin-top: 0;
+    justify-self: start;
+  }
+}
+
+.formulaire-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.formulaire-options > .btn {
+  margin-left: auto;
+}
+
+.est-inactif .cell-entity {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-default);
+}
+
+.reglages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.groupe-reglages .section-title {
+  margin-bottom: var(--space-1);
+}
+
+.groupe-description {
+  margin-bottom: var(--space-2);
+}
+
+.liste-reglages {
+  display: flex;
+  flex-direction: column;
+}
+
+.reglage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.liste-reglages .reglage:first-child {
+  border-top: none;
+}
+
+.reglage-textes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reglage-libelle {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.reglage-cle {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.reglage-saisie {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  text-align: right;
+}
+
+.reglage-controle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reglage-controle .input {
+  width: 96px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.reglage-controle .select {
+  width: 160px;
+}
+
+.reglage-unite {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .reglage {
+    grid-template-columns: 1fr;
+  }
+
+  .reglage-saisie {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* --------------------------------------------------------------------
+   Comptes, audit, rapports, conformite
+   -------------------------------------------------------------------- */
+
+.espace-gauche {
+  margin-left: var(--space-2);
+}
+
+.cellule-interrupteur {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.changement-role {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.changement-role .icone {
+  color: var(--text-muted);
+}
+
+.detail-audit {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 560px;
+}
+
+.barre-rapport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.barre-rapport > .texte-aide {
+  flex-basis: 100%;
+}
+
+.barre-rapport-periode {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.barre-rapport-periode .field {
+  min-width: 150px;
+}
+
+.barre-rapport-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.separateur-vertical {
+  width: 1px;
+  align-self: stretch;
+  margin: var(--space-1) var(--space-1);
+  background: var(--border-subtle);
+}
+
+@media (max-width: 720px) {
+  .barre-rapport-actions {
+    margin-left: 0;
+  }
+
+  .separateur-vertical {
+    display: none;
+  }
+}
+
+.repartition-niveaux {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.repartition-niveaux li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.repartition-nombre {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.titre-danger {
+  color: var(--crit);
+}
+
+.champ-etape {
+  max-width: 320px;
+  margin-bottom: var(--space-3);
 }
 
 /* --------------------------------------------------------------------
