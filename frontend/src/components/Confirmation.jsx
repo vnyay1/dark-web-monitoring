@@ -4,11 +4,17 @@
  *
  * En confirmation, le focus part sur "Annuler" et non sur l'action : un
  * Entree reflexe ne doit jamais declencher une suppression. En formulaire
- * (focusAnnuler=false), le focus est laisse au premier champ. Echap et un
- * clic hors de la fenetre annulent.
+ * (focusAnnuler=false), le focus va au premier champ.
+ *
+ * Accessibilite (cf. piegeFocus) : focus maintenu dans la fenetre, Echap et
+ * clic sur le voile annulent, retour du focus au bouton qui l'a ouverte,
+ * defilement de la page bloque. Sur petit ecran, la fenetre s'ancre en bas.
  */
 
-import { useEffect, useRef } from "react";
+import { useId, useRef } from "react";
+
+import { IconeAttention } from "./icones";
+import { usePiegeFocus } from "./piegeFocus";
 
 export default function Confirmation({
   titre,
@@ -23,22 +29,18 @@ export default function Confirmation({
   onAnnuler,
   actionSecondaire = null,
 }) {
+  const fenetre = useRef(null);
   const boutonAnnuler = useRef(null);
+  const idTitre = useId();
+  const idCorps = useId();
 
-  // A l'ouverture seulement : refocaliser a chaque rendu du parent volerait
-  // le focus a l'utilisateur en pleine navigation au clavier.
-  useEffect(() => {
-    if (focusAnnuler) boutonAnnuler.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  usePiegeFocus(true, fenetre, {
+    onEchap: onAnnuler,
+    bloquerEchap: enCours,
+    focusInitial: focusAnnuler ? boutonAnnuler : undefined,
+  });
 
-  useEffect(() => {
-    const surTouche = (evenement) => {
-      if (evenement.key === "Escape" && !enCours) onAnnuler();
-    };
-    document.addEventListener("keydown", surTouche);
-    return () => document.removeEventListener("keydown", surTouche);
-  }, [enCours, onAnnuler]);
+  const danger = variante === "danger";
 
   return (
     <div
@@ -48,19 +50,26 @@ export default function Confirmation({
       }}
     >
       <div
+        ref={fenetre}
         className="fenetre"
-        role={variante === "danger" ? "alertdialog" : "dialog"}
+        role={danger ? "alertdialog" : "dialog"}
         aria-modal="true"
-        aria-labelledby="fenetre-titre"
+        aria-labelledby={idTitre}
+        aria-describedby={idCorps}
+        aria-busy={enCours || undefined}
       >
-        <h2 id="fenetre-titre" className="fenetre-titre">
+        <h2 id={idTitre} className="fenetre-titre">
+          {danger && <IconeAttention taille={20} />}
           {titre}
         </h2>
-        <div className="fenetre-corps">{children}</div>
+        <div id={idCorps} className="fenetre-corps">
+          {children}
+        </div>
         <div className="fenetre-actions">
           <button
             ref={boutonAnnuler}
-            className="btn btn-ghost"
+            type="button"
+            className="btn btn-contour"
             onClick={onAnnuler}
             disabled={enCours}
           >
@@ -68,6 +77,7 @@ export default function Confirmation({
           </button>
           {actionSecondaire && (
             <button
+              type="button"
               className="btn"
               onClick={actionSecondaire.onClick}
               disabled={enCours}
@@ -76,10 +86,12 @@ export default function Confirmation({
             </button>
           )}
           <button
-            className={`btn ${variante === "danger" ? "btn-danger" : "btn-primary"}`}
+            type="button"
+            className={`btn ${danger ? "btn-danger" : "btn-primary"}`}
             onClick={onConfirmer}
             disabled={enCours || desactiverConfirmer}
           >
+            {enCours && <span className="spinner" aria-hidden="true" />}
             {enCours ? libelleEnCours : libelleConfirmer}
           </button>
         </div>
