@@ -50,6 +50,7 @@ const LIBELLE_STATUT = {
 
 const CLASSE_EVENEMENT = {
   circuit_renouvele: "ev-tor",
+  echeance_manquee: "ev-echeance",
   debut_cycle: "ev-cycle",
   fin_cycle: "ev-cycle",
   debut_source: "ev-source",
@@ -59,6 +60,7 @@ const CLASSE_EVENEMENT = {
 
 const PREFIXE_EVENEMENT = {
   circuit_renouvele: "TOR",
+  echeance_manquee: "ÉCHÉANCE",
   debut_cycle: "CYCLE",
   fin_cycle: "CYCLE",
   debut_source: "SOURCE",
@@ -283,15 +285,24 @@ export default function Scheduler() {
         <MetriqueSched
           label="Prochaine collecte"
           valeur={
-            etat?.prochaine_execution
-              ? formaterHeure(etat.prochaine_execution)
-              : "—"
+            etat?.echeance === "en_cours"
+              ? "En cours"
+              : etat?.prochaine_execution
+                ? formaterHeure(etat.prochaine_execution)
+                : "—"
           }
           hint={
-            etat?.prochaine_execution
-              ? `${formaterDateHeure(etat.prochaine_execution)} · heure tirée au hasard`
-              : "non planifiée"
+            // "echeance" est calculee par le serveur (supervision) : une
+            // date passee n'est jamais presentee comme la prochaine collecte.
+            etat?.echeance === "en_cours"
+              ? "la suivante sera tirée à la fin du cycle"
+              : etat?.echeance === "depassee"
+                ? `${formaterDateHeure(etat.prochaine_execution)} · échéance dépassée, reprogrammation en cours`
+                : etat?.prochaine_execution
+                  ? `${formaterDateHeure(etat.prochaine_execution)} · heure tirée au hasard`
+                  : "non planifiée"
           }
+          alerte={etat?.echeance === "depassee"}
         />
       </div>
 
@@ -434,9 +445,10 @@ function CarteTor({ etat, actif, maintenant, peutVerifier, enCours, onVerifier }
   );
 }
 
-function MetriqueSched({ label, valeur, hint, accent }) {
+function MetriqueSched({ label, valeur, hint, accent, alerte }) {
+  const ton = alerte ? " tone-warn" : accent ? " tone-ok" : "";
   return (
-    <div className={`stat${accent ? " tone-ok" : ""}`}>
+    <div className={`stat${ton}`}>
       <div className="stat-label">{label}</div>
       <div className="stat-value sched-metrique-valeur">{valeur}</div>
       {hint && <div className="stat-hint">{hint}</div>}

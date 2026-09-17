@@ -217,3 +217,11 @@
 .ev-tor .console-message {
   color: var(--accent-dark);
 }
+
+/* Echeance de collecte manquee (machine en veille ou eteinte) : une
+   anomalie de planification, a ne pas confondre avec une exposition. */
+.ev-echeance .console-type,
+.ev-echeance .console-message {
+  color: var(--warn);
+  font-weight: 600;
+}
