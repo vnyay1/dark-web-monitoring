@@ -1,10 +1,11 @@
 /**
- * Changement du statut d'une exposition, avec ENREGISTREMENT EXPLICITE.
+ * Liste de choix a ENREGISTREMENT EXPLICITE (statut d'une exposition, role
+ * d'un compte).
  *
- * WCAG 3.2.2 - l'ancien <select> enregistrait a chaque changement de valeur.
- * Or au clavier, les fleches d'une liste fermee changent la valeur : chaque
- * pression envoyait une requete et modifiait le statut. Ici, choisir une
- * valeur ne fait rien ; le bouton "Enregistrer" apparait et valide.
+ * WCAG 3.2.2 - un <select> qui enregistre a chaque changement de valeur est
+ * piegeux au clavier : les fleches d'une liste fermee changent la valeur, et
+ * chaque pression envoyait une requete. Ici, choisir ne fait rien ; les
+ * boutons Enregistrer / Annuler apparaissent et valident.
  */
 
 import { useEffect, useState } from "react";
@@ -12,22 +13,28 @@ import { useEffect, useState } from "react";
 import { LIBELLE_STATUT } from "./communs";
 import { IconeFermer, IconeValider } from "./icones";
 
-export default function ChoixStatut({ statut, statuts, libelle, onEnregistrer, compact = false }) {
-  const [valeur, setValeur] = useState(statut);
+/**
+ * options : [[valeur, libelle, desactivee?], ...]
+ * onEnregistrer(valeur) : async, renvoie false en cas d'echec (la valeur
+ * enregistree est alors restauree).
+ */
+export function ChoixEnregistre({ valeur: valeurEnregistree, options, libelle, onEnregistrer, compact = false, desactive = false }) {
+  const [valeur, setValeur] = useState(valeurEnregistree);
   const [enCours, setEnCours] = useState(false);
 
-  // Le statut enregistre peut changer ailleurs (rechargement de la liste).
+  // La valeur enregistree peut changer ailleurs (rechargement de la liste).
   useEffect(() => {
-    setValeur(statut);
-  }, [statut]);
+    setValeur(valeurEnregistree);
+  }, [valeurEnregistree]);
 
-  const modifie = valeur !== statut;
+  const modifie = valeur !== valeurEnregistree;
+  const libelleValeur = options.find(([v]) => v === valeur)?.[1] || valeur;
 
   async function enregistrer() {
     setEnCours(true);
     try {
       const ok = await onEnregistrer(valeur);
-      if (ok === false) setValeur(statut);
+      if (ok === false) setValeur(valeurEnregistree);
     } finally {
       setEnCours(false);
     }
@@ -40,11 +47,11 @@ export default function ChoixStatut({ statut, statuts, libelle, onEnregistrer, c
         value={valeur}
         onChange={(e) => setValeur(e.target.value)}
         aria-label={libelle}
-        disabled={enCours}
+        disabled={desactive || enCours}
       >
-        {statuts.map((s) => (
-          <option key={s} value={s}>
-            {LIBELLE_STATUT[s] || s}
+        {options.map(([v, l, optionDesactivee]) => (
+          <option key={v} value={v} disabled={optionDesactivee}>
+            {l}
           </option>
         ))}
       </select>
@@ -55,7 +62,7 @@ export default function ChoixStatut({ statut, statuts, libelle, onEnregistrer, c
             className="btn btn-primary btn-sm btn-icone"
             onClick={enregistrer}
             disabled={enCours}
-            aria-label={`Enregistrer le statut « ${LIBELLE_STATUT[valeur] || valeur} »`}
+            aria-label={`Enregistrer : ${libelleValeur}`}
             title="Enregistrer"
           >
             {enCours ? <span className="spinner" aria-hidden="true" /> : <IconeValider taille={16} />}
@@ -63,9 +70,9 @@ export default function ChoixStatut({ statut, statuts, libelle, onEnregistrer, c
           <button
             type="button"
             className="btn btn-ghost btn-sm btn-icone"
-            onClick={() => setValeur(statut)}
+            onClick={() => setValeur(valeurEnregistree)}
             disabled={enCours}
-            aria-label="Annuler le changement de statut"
+            aria-label="Annuler le changement"
             title="Annuler"
           >
             <IconeFermer taille={16} />
@@ -73,5 +80,17 @@ export default function ChoixStatut({ statut, statuts, libelle, onEnregistrer, c
         </>
       )}
     </div>
+  );
+}
+
+export default function ChoixStatut({ statut, statuts, libelle, onEnregistrer, compact = false }) {
+  return (
+    <ChoixEnregistre
+      valeur={statut}
+      options={statuts.map((s) => [s, LIBELLE_STATUT[s] || s])}
+      libelle={libelle}
+      onEnregistrer={onEnregistrer}
+      compact={compact}
+    />
   );
 }

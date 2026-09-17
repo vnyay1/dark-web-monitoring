@@ -11,17 +11,21 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { useChargement } from "../api/session";
 import {
+  Banniere,
   Chargement,
   EnTetePage,
   Erreur,
   formaterDateHeure,
+  IndicateurRechargement,
+  pluriel,
   Vide,
 } from "../components/communs";
+import { IconeAttention, IconeAudit, IconeSucces } from "../components/icones";
 
 export default function Audit() {
   const [filtres, setFiltres] = useState({ resultat: "", source_id: "" });
 
-  const { donnees, erreur, chargement } = useChargement(
+  const { donnees, erreur, chargement, rechargement, recharger } = useChargement(
     () => api.audit(filtres),
     [filtres.resultat, filtres.source_id],
   );
@@ -32,22 +36,15 @@ export default function Audit() {
 
   return (
     <>
-      <EnTetePage
-        titre="Journal d'audit"
-        sousTitre="Trace de chaque appel de connecteur, en écriture seule"
-      />
+      <IndicateurRechargement actif={rechargement} />
+      <EnTetePage titre="Journal d'audit" sousTitre="Trace de chaque appel de connecteur, en écriture seule" />
 
-      <div className="card filters">
+      <form className="card filters" role="search" aria-label="Filtrer le journal" onSubmit={(e) => e.preventDefault()}>
         <div className="field">
           <label className="field-label" htmlFor="a-res">
             Résultat
           </label>
-          <select
-            id="a-res"
-            className="select"
-            value={filtres.resultat}
-            onChange={(e) => modifier("resultat", e.target.value)}
-          >
+          <select id="a-res" className="select" value={filtres.resultat} onChange={(e) => modifier("resultat", e.target.value)}>
             <option value="">Tous</option>
             {(donnees?.resultats || []).map((r) => (
               <option key={r} value={r}>
@@ -61,12 +58,7 @@ export default function Audit() {
           <label className="field-label" htmlFor="a-src">
             Source
           </label>
-          <select
-            id="a-src"
-            className="select"
-            value={filtres.source_id}
-            onChange={(e) => modifier("source_id", e.target.value)}
-          >
+          <select id="a-src" className="select" value={filtres.source_id} onChange={(e) => modifier("source_id", e.target.value)}>
             <option value="">Toutes</option>
             {(donnees?.sources || []).map((s) => (
               <option key={s.id} value={s.id}>
@@ -75,54 +67,62 @@ export default function Audit() {
             ))}
           </select>
         </div>
-      </div>
+      </form>
 
-      <Erreur message={erreur} />
+      <Erreur message={erreur} onReessayer={recharger} />
 
       {chargement ? (
         <Chargement />
       ) : !donnees || donnees.entrees.length === 0 ? (
-        <Vide titre="Aucune entrée d'audit">
+        <Vide titre="Aucune entrée d'audit" icone={IconeAudit}>
           Le journal se remplit à chaque appel de connecteur.
         </Vide>
       ) : (
         <>
+          <p className="barre-recherche-compte espace-resultats" role="status">
+            {donnees.entrees.length} {pluriel("entrée", donnees.entrees.length)}
+          </p>
           {donnees.tronque && (
-            <div className="banner banner-info">
-              Affichage limité aux 500 entrées les plus récentes. Filtrez par
-              source ou par résultat pour remonter plus loin.
-            </div>
+            <Banniere ton="info">
+              <p>
+                Affichage limité aux 500 entrées les plus récentes. Filtrez par source ou par résultat pour
+                remonter plus loin.
+              </p>
+            </Banniere>
           )}
 
-          <div className="table-wrap">
+          <div className="table-wrap tableau-cartes">
             <table className="data">
+              <caption className="sr-only">Journal d'audit des connecteurs</caption>
               <thead>
                 <tr>
-                  <th style={{ width: 170 }}>Horodatage</th>
-                  <th style={{ width: 170 }}>Source</th>
-                  <th style={{ width: 110 }}>Résultat</th>
-                  <th>Détails</th>
+                  <th scope="col">Horodatage</th>
+                  <th scope="col">Source</th>
+                  <th scope="col">Résultat</th>
+                  <th scope="col">Détails</th>
                 </tr>
               </thead>
               <tbody>
                 {donnees.entrees.map((e) => (
                   <tr key={e.id}>
-                    <td className="cell-mono">
-                      {formaterDateHeure(e.horodatage)}
-                    </td>
-                    <td className="cell-entity">
+                    <td className="cell-mono cell-titre">{formaterDateHeure(e.horodatage)}</td>
+                    <td className="cell-entity" data-label="Source">
                       {e.source || <span className="cell-muted">—</span>}
                     </td>
-                    <td>
-                      <span
-                        className={`pill ${
-                          e.resultat === "succes" ? "pill-ok" : "pill-crit"
-                        }`}
-                      >
-                        {e.resultat === "succes" ? "Succès" : "Échec"}
-                      </span>
+                    <td data-label="Résultat">
+                      {e.resultat === "succes" ? (
+                        <span className="pill pill-ok">
+                          <IconeSucces taille={13} />
+                          Succès
+                        </span>
+                      ) : (
+                        <span className="pill pill-crit">
+                          <IconeAttention taille={13} />
+                          Échec
+                        </span>
+                      )}
                     </td>
-                    <td className="cell-mono detail-audit">
+                    <td className="cell-mono detail-audit" data-label="Détails">
                       {e.details || "—"}
                     </td>
                   </tr>
