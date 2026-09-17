@@ -100,29 +100,41 @@ export function useSession() {
 }
 
 /**
- * Charge des donnees depuis l'API en gerant les trois etats obligatoires :
- * chargement, erreur, donnees. Une expiration de session (401) renvoie
+ * Charge des donnees depuis l'API en gerant les etats : premier chargement,
+ * rechargement, erreur, donnees. Une expiration de session (401) renvoie
  * l'utilisateur a l'ecran de connexion plutot que d'afficher une erreur
  * incomprehensible.
+ *
+ * RECHARGEMENT - les donnees deja affichees sont CONSERVEES pendant qu'on
+ * les actualise : `chargement` ne vaut true qu'au premier chargement, et
+ * `rechargement` signale une actualisation en arriere-plan. Remplacer toute
+ * la page par un indicateur a chaque action faisait perdre a l'utilisateur
+ * sa position de defilement et son focus.
  */
 export function useChargement(fonction, dependances = []) {
   const { signalerDeconnexion } = useSession();
   const [donnees, setDonnees] = useState(null);
   const [erreur, setErreur] = useState(null);
   const [chargement, setChargement] = useState(true);
+  const [rechargement, setRechargement] = useState(false);
 
   // Conserve la fonction courante sans la mettre dans les dependances :
   // une fonction fleche redefinie a chaque rendu relancerait l'effet en
   // boucle.
   const fonctionRef = useRef(fonction);
   fonctionRef.current = fonction;
+  const dejaCharge = useRef(false);
 
   const [compteur, setCompteur] = useState(0);
   const recharger = useCallback(() => setCompteur((n) => n + 1), []);
 
   useEffect(() => {
     let annule = false;
-    setChargement(true);
+    if (dejaCharge.current) {
+      setRechargement(true);
+    } else {
+      setChargement(true);
+    }
 
     fonctionRef
       .current()
@@ -130,6 +142,7 @@ export function useChargement(fonction, dependances = []) {
         if (annule) return;
         setDonnees(resultat);
         setErreur(null);
+        dejaCharge.current = true;
       })
       .catch((e) => {
         if (annule) return;
@@ -140,7 +153,9 @@ export function useChargement(fonction, dependances = []) {
         setErreur(e.message);
       })
       .finally(() => {
-        if (!annule) setChargement(false);
+        if (annule) return;
+        setChargement(false);
+        setRechargement(false);
       });
 
     return () => {
@@ -149,20 +164,61 @@ export function useChargement(fonction, dependances = []) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compteur, ...dependances]);
 
-  return { donnees, erreur, chargement, recharger, setDonnees };
+  return { donnees, erreur, chargement, rechargement, recharger, setDonnees };
 }
 
-/** File de messages transitoires (succes / erreur). */
+/** Duree d'affichage d'un message de succes. Les erreurs restent affichees. */
+const DUREE_MESSAGE_MS = 6000;
+
+/**
+ * File de messages transitoires (succes / erreur).
+ *
+ * WCAG 2.2.1 - un message de SUCCES disparait seul, mais son minuteur se
+ * suspend au survol ou au focus ; un message d'ERREUR reste jusqu'a ce que
+ * l'utilisateur le ferme : il doit avoir le temps de le lire.
+ */
 export function useMessages() {
   const [messages, setMessages] = useState([]);
+  const minuteurs = useRef(new Map());
 
-  const ajouter = useCallback((texte, type = "success") => {
-    const id = Date.now() + Math.random();
-    setMessages((liste) => [...liste, { id, texte, type }]);
-    setTimeout(() => {
-      setMessages((liste) => liste.filter((m) => m.id !== id));
-    }, 5000);
+  const retirer = useCallback((id) => {
+    clearTimeout(minuteurs.current.get(id));
+    minuteurs.current.delete(id);
+    setMessages((liste) => liste.filter((m) => m.id !== id));
   }, []);
 
-  return { messages, ajouter };
+  const armer = useCallback(
+    (id) => {
+      clearTimeout(minuteurs.current.get(id));
+      minuteurs.current.set(id, setTimeout(() => retirer(id), DUREE_MESSAGE_MS));
+    },
+    [retirer],
+  );
+
+  useEffect(() => {
+    const actifs = minuteurs.current;
+    return () => actifs.forEach((minuteur) => clearTimeout(minuteur));
+  }, []);
+
+  const ajouter = useCallback(
+    (texte, type = "success") => {
+      const id = Date.now() + Math.random();
+      const persistant = type === "error";
+      setMessages((liste) => [
+        ...liste,
+        {
+          id,
+          texte,
+          type,
+          fermer: () => retirer(id),
+          suspendre: persistant ? undefined : () => clearTimeout(minuteurs.current.get(id)),
+          reprendre: persistant ? undefined : () => armer(id),
+        },
+      ]);
+      if (!persistant) armer(id);
+    },
+    [armer, retirer],
+  );
+
+  return { messages, ajouter, retirer };
 }

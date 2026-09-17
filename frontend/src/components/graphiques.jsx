@@ -8,19 +8,18 @@
  *     couleur par barre ferait croire a une signification qui n'existe pas.
  *
  *  2. STATUT (paliers de criticite) : la palette de severite du theme,
- *     rouge -> orange -> ambre -> gris. Elle est reservee a cet usage et
- *     n'est jamais reemployee comme "serie 3".
+ *     reservee a cet usage et jamais reemployee comme "serie 3".
  *
- * Note sur la severite : quatre paliers dans une gamme chaude ne peuvent pas
- * etre tous separes de maniere maximale - rouge et orange restent proches
- * (ΔE 10,4 en vision normale). C'est acceptable ICI, et seulement ici, parce
- * que la couleur n'est jamais le seul porteur d'information : chaque barre
- * porte son libelle en axe, chaque pastille porte son texte. Le contraste de
- * chacune des quatre teintes sur le fond sombre a ete verifie (>= 3:1).
- * C'est aussi la palette deja etablie dans le theme : la changer
- * desynchroniserait les listes, les alertes et les rapports.
+ * La couleur n'est jamais le seul porteur d'information : chaque barre porte
+ * son libelle en axe. Les couleurs sont LUES dans les variables du theme
+ * actif (tokens.css), ou leur contraste sur la surface est verifie (>= 3:1)
+ * dans les deux themes ; elles changent donc avec l'interrupteur.
+ *
+ * Alternative textuelle : chaque graphique est double d'un tableau reserve
+ * aux lecteurs d'ecran, et le SVG est masque pour eux.
  */
 
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -32,36 +31,45 @@ import {
   YAxis,
 } from "recharts";
 
-export const COULEUR_NIVEAU = {
-  critique: "#EF4444",
-  elevee: "#F97316",
-  moyenne: "#F59E0B",
-  faible: "#94A3B8",
+import { useTheme } from "../theme/theme";
+
+const VARIABLES = {
+  critique: "--niveau-critique",
+  elevee: "--niveau-elevee",
+  moyenne: "--niveau-moyenne",
+  faible: "--graphique-faible",
+  barre: "--graphique-barre",
+  grille: "--graphique-grille",
+  axe: "--graphique-axe",
+  libelle: "--graphique-libelle",
+  survol: "--bg-hover",
 };
 
-const ACCENT = "#00E5C0";
-const GRILLE = "#1E2D4A";
-const TEXTE_AXE = "#64748B";
+function lireCouleurs() {
+  const styles = getComputedStyle(document.documentElement);
+  return Object.fromEntries(
+    Object.entries(VARIABLES).map(([nom, variable]) => [nom, styles.getPropertyValue(variable).trim()]),
+  );
+}
 
-/** Infobulle sobre, aux couleurs des surfaces de l'application. */
+/** Couleurs du theme actif, relues a chaque bascule de theme. */
+export function useCouleursGraphique() {
+  const { theme } = useTheme();
+  const [couleurs, setCouleurs] = useState(lireCouleurs);
+  useEffect(() => {
+    setCouleurs(lireCouleurs());
+  }, [theme]);
+  return couleurs;
+}
+
+/** Infobulle aux couleurs des surfaces de l'application. */
 function Infobulle({ active, payload, label, suffixe = "" }) {
   if (!active || !payload || payload.length === 0) return null;
 
   return (
-    <div
-      style={{
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--r-sm)",
-        padding: "7px 11px",
-        boxShadow: "var(--shadow-md)",
-        fontSize: 12,
-      }}
-    >
-      <div style={{ color: "var(--text-secondary)", marginBottom: 2 }}>
-        {label}
-      </div>
-      <div style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+    <div className="infobulle-graphique">
+      <div className="infobulle-graphique-libelle">{label}</div>
+      <div className="infobulle-graphique-valeur">
         {payload[0].value} {suffixe}
       </div>
     </div>
@@ -70,68 +78,83 @@ function Infobulle({ active, payload, label, suffixe = "" }) {
 
 /**
  * Barres horizontales. L'horizontale est choisie parce que les libelles
- * ("Administration publique", "Données personnelles") sont longs : en
- * vertical ils seraient tronques ou inclines.
+ * ("Agence gouvernementale", "Télécommunications") sont longs : en vertical
+ * ils seraient tronques ou inclines.
+ *
+ * cleCouleur(ligne) : nom de couleur du theme (ex. "critique") ; par defaut
+ * la teinte unique de magnitude.
  */
 export function BarresHorizontales({
   donnees,
-  couleurParCle = null,
-  hauteurParBarre = 30,
+  cleCouleur = null,
+  hauteurParBarre = 32,
   suffixe = "élément(s)",
+  titre,
 }) {
+  const couleurs = useCouleursGraphique();
+
   if (!donnees || donnees.length === 0) {
-    return (
-      <div className="cell-muted" style={{ padding: "24px 0", fontSize: 12.5 }}>
-        Aucune donnée sur cette période.
-      </div>
-    );
+    return <p className="texte-aide graphique-vide">Aucune donnée sur cette période.</p>;
   }
 
   const hauteur = Math.max(140, donnees.length * hauteurParBarre + 24);
 
   return (
-    <ResponsiveContainer width="100%" height={hauteur}>
-      <BarChart
-        data={donnees}
-        layout="vertical"
-        margin={{ top: 4, right: 30, bottom: 4, left: 4 }}
-        barCategoryGap="22%"
-      >
-        {/* Grille discrete : elle sert a lire les valeurs, pas a se faire
-            remarquer. Uniquement verticale, l'axe des quantites. */}
-        <CartesianGrid
-          horizontal={false}
-          stroke={GRILLE}
-          strokeDasharray="2 4"
-        />
-        <XAxis
-          type="number"
-          allowDecimals={false}
-          tick={{ fill: TEXTE_AXE, fontSize: 11 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          type="category"
-          dataKey="libelle"
-          width={168}
-          tick={{ fill: "#A0AEC0", fontSize: 11.5 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          content={<Infobulle suffixe={suffixe} />}
-          cursor={{ fill: "rgba(28, 43, 73, 0.45)" }}
-        />
-        <Bar dataKey="valeur" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-          {donnees.map((ligne) => (
-            <Cell
-              key={ligne.libelle}
-              fill={couleurParCle ? couleurParCle(ligne) : ACCENT}
+    <>
+      <div aria-hidden="true">
+        <ResponsiveContainer width="100%" height={hauteur}>
+          <BarChart
+            data={donnees}
+            layout="vertical"
+            margin={{ top: 4, right: 30, bottom: 4, left: 4 }}
+            barCategoryGap="24%"
+          >
+            <CartesianGrid horizontal={false} stroke={couleurs.grille} strokeDasharray="2 4" />
+            <XAxis
+              type="number"
+              allowDecimals={false}
+              tick={{ fill: couleurs.axe, fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
             />
+            <YAxis
+              type="category"
+              dataKey="libelle"
+              width={172}
+              tick={{ fill: couleurs.libelle, fontSize: 13 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip content={<Infobulle suffixe={suffixe} />} cursor={{ fill: couleurs.survol }} />
+            <Bar dataKey="valeur" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+              {donnees.map((ligne) => (
+                <Cell
+                  key={ligne.libelle}
+                  fill={cleCouleur ? couleurs[cleCouleur(ligne)] : couleurs.barre}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <table className="sr-only">
+        {titre && <caption>{titre}</caption>}
+        <thead>
+          <tr>
+            <th scope="col">Libellé</th>
+            <th scope="col">Nombre</th>
+          </tr>
+        </thead>
+        <tbody>
+          {donnees.map((ligne) => (
+            <tr key={ligne.libelle}>
+              <th scope="row">{ligne.libelle}</th>
+              <td>{ligne.valeur}</td>
+            </tr>
           ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+        </tbody>
+      </table>
+    </>
   );
 }

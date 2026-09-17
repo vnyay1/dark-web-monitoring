@@ -1,102 +1,250 @@
 /* ==========================================================================
    SENTINEL - JETONS DE DESIGN
 
-   Repris a l'identique du systeme construit dans les gabarits Jinja
-   (app/web/templates/base.html) : l'identite visuelle ANTIC est conservee,
-   l'interface change de technologie, pas d'apparence.
+   Deux themes, clair et sombre, choisis par l'interrupteur de la barre
+   superieure (cf. theme.jsx). Le theme actif est porte par l'attribut
+   data-theme de <html> ; sans attribut, le sombre s'applique.
+
+   REGLE : les composants et les pages n'utilisent QUE ces variables. Une
+   couleur ecrite en dur ailleurs ne changerait pas avec le theme.
+
+   CONTRASTES - verifies par calcul (formule WCAG 2.x) sur chaque fond ou
+   ils apparaissent :
+     texte principal et secondaire  >= 7:1  (AAA)
+     texte attenue, liens, pastilles >= 4,5:1 (AA)
+     bordures de champs, anneau de focus, barres de graphique >= 3:1 (1.4.11)
+
+   Les anciens noms (--bg-card, --text-muted, --crit...) sont conserves :
+   ils portent desormais les valeurs du theme actif.
    ========================================================================== */
 
+/* --------------------------------------------------------------------
+   Echelles communes aux deux themes
+   -------------------------------------------------------------------- */
 :root {
-  /* Fonds et surfaces */
-  --bg-deep: #070b13;
-  --bg-base: #0b101d;
-  --bg-card: #10182a;
-  --bg-elevated: #162139;
-  --bg-hover: #1c2b49;
+  /* Espacements : grille de 4 px */
+  --space-1: 0.25rem;  /* 4 */
+  --space-2: 0.5rem;   /* 8 */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.25rem;  /* 20 */
+  --space-6: 1.5rem;   /* 24 */
+  --space-8: 2rem;     /* 32 */
+  --space-10: 2.5rem;  /* 40 */
+  --space-12: 3rem;    /* 48 */
 
-  /* Lignes et bordures */
-  --border-subtle: #1e2d4a;
-  --border-default: #2a3c62;
-  --border-strong: #3b5284;
-  --border-glow: rgba(0, 229, 192, 0.4);
+  /* Typographie : 12 px est le minimum absolu */
+  --text-xs: 0.75rem;    /* 12 - legendes, libelles en capitales */
+  --text-sm: 0.8125rem;  /* 13 - donnees de tableau, aides */
+  --text-base: 0.875rem; /* 14 - texte courant */
+  --text-md: 1rem;       /* 16 - titres de section */
+  --text-lg: 1.25rem;    /* 20 - titres de carte importants */
+  --text-xl: 1.5rem;     /* 24 - titre de page */
+  --text-2xl: 1.875rem;  /* 30 - chiffres cles */
 
-  /* Texte */
-  --text-primary: #f1f5f9;
-  --text-secondary: #a0aec0;
-  --text-muted: #64748b;
-  --text-dim: #475569;
+  --leading-tight: 1.25;
+  --leading: 1.5;
 
-  /* Accent */
-  --accent: #00e5c0;
-  --accent-hover: #1aeac6;
-  --accent-dark: #00bfa0;
-  --accent-dim: rgba(0, 229, 192, 0.12);
-  --accent-glow: rgba(0, 229, 192, 0.25);
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
 
-  /* Severite et statuts */
-  --crit: #ef4444;
-  --crit-bg: rgba(239, 68, 68, 0.12);
-  --crit-border: rgba(239, 68, 68, 0.3);
-
-  --high: #f97316;
-  --high-bg: rgba(249, 115, 22, 0.12);
-  --high-border: rgba(249, 115, 22, 0.3);
-
-  --warn: #f59e0b;
-  --warn-bg: rgba(245, 158, 11, 0.12);
-  --warn-border: rgba(245, 158, 11, 0.3);
-
-  --ok: #10b981;
-  --ok-bg: rgba(16, 185, 129, 0.12);
-  --ok-border: rgba(16, 185, 129, 0.3);
-
-  --info: #3b82f6;
-  --info-bg: rgba(59, 130, 246, 0.12);
-  --info-border: rgba(59, 130, 246, 0.3);
-
-  /* Roles */
-  --role-super-admin: #ef4444;
-  --role-admin: #f59e0b;
-  --role-supervisor: #00e5c0;
-  --role-user: #94a3b8;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
 
   /* Rayons */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-full: 9999px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
 
-  /* Ombres */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 20px -4px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 12px 36px -8px rgba(0, 0, 0, 0.8);
-  --shadow-glow: 0 0 20px rgba(0, 229, 192, 0.15);
+  /* Anciens noms de rayons, alignes sur la nouvelle echelle */
+  --r-xs: var(--radius-sm);
+  --r-sm: var(--radius-md);
+  --r-md: var(--radius-lg);
+  --r-lg: var(--radius-lg);
+  --r-full: var(--radius-full);
 
-  /* Polices */
-  --font-display: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-body: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, monospace;
+  /* Tailles de controles : >= 24 px partout (WCAG 2.5.8), 44 px au doigt */
+  --control-h: 2.25rem;     /* 36 */
+  --control-h-sm: 1.875rem; /* 30 */
+
+  /* Mouvement */
+  --duree-rapide: 120ms;
+  --duree: 180ms;
+  --courbe: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Mise en page */
+  --largeur-barre-laterale: 248px;
+  --largeur-contenu: 1360px;
 }
 
-/* Correspondance palier de criticite -> couleur, utilisee partout
-   (tableaux, graphiques, console). La definir une seule fois evite que le
-   rouge du dashboard et celui de la liste divergent. */
-:root {
+@media (pointer: coarse) {
+  :root {
+    --control-h: 2.75rem;    /* 44 */
+    --control-h-sm: 2.5rem;  /* 40 */
+  }
+}
+
+/* --------------------------------------------------------------------
+   Theme sombre (defaut)
+   -------------------------------------------------------------------- */
+:root,
+:root[data-theme="sombre"] {
+  color-scheme: dark;
+
+  --bg-deep: #0a0f1c;      /* fond de page */
+  --bg-base: #0a0f1c;
+  --bg-card: #101828;      /* surface : cartes, tableaux */
+  --bg-elevated: #162033;  /* surface 2 : en-tetes de tableau, barres */
+  --bg-hover: #1d2a40;     /* survol */
+  --bg-input: #0c1322;
+
+  --border-subtle: #233148;   /* decoratif : separateurs de cartes */
+  --border-default: #64748e;  /* controles : >= 3:1 sur toutes les surfaces */
+  --border-strong: #8e9aaf;
+
+  --text-primary: #eef2f7;
+  --text-secondary: #b8c2d3;
+  --text-muted: #8e9aaf;
+  --text-dim: var(--text-muted);
+
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --accent-dark: #5eead4;
+  --accent-text: #5eead4;   /* liens */
+  --on-accent: #04211e;     /* texte sur un fond accent */
+  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
+  --border-glow: color-mix(in srgb, var(--accent) 45%, transparent);
+
+  --crit: #f87171;
+  --high: #fb923c;
+  --warn: #fbbf24;
+  --ok: #34d399;
+  --info: #7ab2ff;
+  --neutre: #b8c2d3;
+
+  --teinte-fond: 14%;
+  --teinte-bordure: 38%;
+
+  --badge-fond: #dc2626;
+  --badge-texte: #ffffff;
+
+  --voile: rgb(3 6 12 / 0.72);
+  --barre-verre: rgb(10 15 28 / 0.88);
+
+  --shadow-sm: 0 0 0 1px var(--border-subtle);
+  --shadow-md: 0 8px 24px -8px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 16px 40px -12px rgb(0 0 0 / 0.7);
+  --shadow-glow: 0 0 0 1px var(--border-subtle);
+
+  /* Graphiques (>= 3:1 sur la surface) */
+  --graphique-grille: #233148;
+  --graphique-axe: #8e9aaf;
+  --graphique-libelle: #b8c2d3;
+  --graphique-barre: #2dd4bf;
+  --graphique-faible: #94a3b8;
+}
+
+/* --------------------------------------------------------------------
+   Theme clair
+   -------------------------------------------------------------------- */
+:root[data-theme="clair"] {
+  color-scheme: light;
+
+  --bg-deep: #f4f6f9;
+  --bg-base: #f4f6f9;
+  --bg-card: #ffffff;
+  --bg-elevated: #f1f4f8;
+  --bg-hover: #e7ecf3;
+  --bg-input: #ffffff;
+
+  --border-subtle: #dde3eb;
+  --border-default: #768499;
+  --border-strong: #5a687b;
+
+  --text-primary: #0f1b2a;
+  --text-secondary: #3a4a5e;
+  --text-muted: #5a687b;
+  --text-dim: var(--text-muted);
+
+  /* Teinte ANTIC du rapport PDF, assombrie pour 6,4:1 sur blanc */
+  --accent: #0a6b62;
+  --accent-hover: #085a52;
+  --accent-dark: #085a52;
+  --accent-text: #0a6b62;
+  --on-accent: #ffffff;
+  --accent-dim: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 22%, transparent);
+  --border-glow: color-mix(in srgb, var(--accent) 45%, transparent);
+
+  --crit: #b42318;
+  --high: #9a3d07;
+  --warn: #7a5100;
+  --ok: #05603a;
+  --info: #1d4ed8;
+  --neutre: #3a4a5e;
+
+  --teinte-fond: 10%;
+  --teinte-bordure: 32%;
+
+  --badge-fond: #b42318;
+  --badge-texte: #ffffff;
+
+  --voile: rgb(15 27 42 / 0.45);
+  --barre-verre: rgb(255 255 255 / 0.9);
+
+  --shadow-sm: 0 1px 2px rgb(15 27 42 / 0.06), 0 0 0 1px var(--border-subtle);
+  --shadow-md: 0 4px 16px -4px rgb(15 27 42 / 0.12);
+  --shadow-lg: 0 16px 40px -12px rgb(15 27 42 / 0.22);
+  --shadow-glow: var(--shadow-sm);
+
+  --graphique-grille: #dde3eb;
+  --graphique-axe: #5a687b;
+  --graphique-libelle: #3a4a5e;
+  --graphique-barre: #0a6b62;
+  --graphique-faible: #768499;
+}
+
+/* --------------------------------------------------------------------
+   Teintes derivees, calculees dans le theme actif
+   -------------------------------------------------------------------- */
+:root,
+:root[data-theme] {
+  --crit-bg: color-mix(in srgb, var(--crit) var(--teinte-fond), transparent);
+  --crit-border: color-mix(in srgb, var(--crit) var(--teinte-bordure), transparent);
+  --high-bg: color-mix(in srgb, var(--high) var(--teinte-fond), transparent);
+  --high-border: color-mix(in srgb, var(--high) var(--teinte-bordure), transparent);
+  --warn-bg: color-mix(in srgb, var(--warn) var(--teinte-fond), transparent);
+  --warn-border: color-mix(in srgb, var(--warn) var(--teinte-bordure), transparent);
+  --ok-bg: color-mix(in srgb, var(--ok) var(--teinte-fond), transparent);
+  --ok-border: color-mix(in srgb, var(--ok) var(--teinte-bordure), transparent);
+  --info-bg: color-mix(in srgb, var(--info) var(--teinte-fond), transparent);
+  --info-border: color-mix(in srgb, var(--info) var(--teinte-bordure), transparent);
+  --neutre-bg: color-mix(in srgb, var(--neutre) var(--teinte-fond), transparent);
+  --neutre-border: color-mix(in srgb, var(--neutre) var(--teinte-bordure), transparent);
+
+  /* Roles utilisateur */
+  --role-super-admin: var(--crit);
+  --role-admin: var(--warn);
+  --role-supervisor: var(--accent-text);
+  --role-user: var(--text-secondary);
+
+  /* Paliers de criticite, definis une seule fois : tableaux, graphiques,
+     console et alertes partagent exactement les memes couleurs. */
   --niveau-critique: var(--crit);
   --niveau-critique-bg: var(--crit-bg);
   --niveau-critique-border: var(--crit-border);
-
   --niveau-elevee: var(--high);
   --niveau-elevee-bg: var(--high-bg);
   --niveau-elevee-border: var(--high-border);
-
   --niveau-moyenne: var(--warn);
   --niveau-moyenne-bg: var(--warn-bg);
   --niveau-moyenne-border: var(--warn-border);
-
-  --niveau-faible: var(--text-secondary);
-  --niveau-faible-bg: rgba(148, 163, 184, 0.12);
-  --niveau-faible-border: var(--border-subtle);
+  --niveau-faible: var(--neutre);
+  --niveau-faible-bg: var(--neutre-bg);
+  --niveau-faible-border: var(--neutre-border);
 }

@@ -1,0 +1,49 @@
+/* ==========================================================================
+   IBM Plex, embarquee dans le build (aucune requete externe : la VM de
+   collecte est isolee, et un appel a un service de polices signalerait
+   l'usage de l'outil). Meme famille que le rapport mensuel PDF.
+
+   Sous-ensembles WOFF2 (latin, latin-1, latin etendu-A, ponctuation, euro)
+   generes par pyftsubset depuis app/web/static/fonts. Licence : OFL
+   (OFL-IBM-Plex.txt).
+   ========================================================================== */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./polices/IBMPlexSans-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./polices/IBMPlexSans-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./polices/IBMPlexSans-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./polices/IBMPlexMono-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./polices/IBMPlexMono-500.woff2") format("woff2");
+}

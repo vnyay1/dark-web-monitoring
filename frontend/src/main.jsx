@@ -3,6 +3,7 @@
 // retrouvaient en fin de bundle et ecrasaient ces surcharges a specificite
 // egale - c'est ce qui rendait le bouton Menu visible, et inoperant, sur
 // grand ecran.
+import "./theme/polices.css";
 import "./theme/tokens.css";
 import "./theme/base.css";
 
@@ -12,13 +13,16 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import { FournisseurSession } from "./api/session";
+import { FournisseurTheme } from "./theme/theme";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <FournisseurSession>
-        <App />
-      </FournisseurSession>
-    </BrowserRouter>
+    <FournisseurTheme>
+      <BrowserRouter>
+        <FournisseurSession>
+          <App />
+        </FournisseurSession>
+      </BrowserRouter>
+    </FournisseurTheme>
   </React.StrictMode>,
 );
