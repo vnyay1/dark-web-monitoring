@@ -31,3 +31,5 @@ logs/
 dumps/
 exports/
 raw_content/
+# Notes locales d'assistance au developpement (Claude Code) : jamais versionnees
+CLAUDE.md
