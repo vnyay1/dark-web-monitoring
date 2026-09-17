@@ -44,6 +44,12 @@ INTERVALLE_HEARTBEAT_SECONDES = 30
 # kill -9 ou une coupure brutale.
 PEREMPTION_VERROU_SECONDES = 90
 
+# Retard au-dela duquel une echeance de collecte est consideree comme
+# depassee, sans collecte en cours ni programmee (cf. app.scheduler). Le
+# cycle part normalement dans la seconde : la marge n'absorbe que la
+# latence de demarrage.
+MARGE_ECHEANCE_SECONDES = 300
+
 # Retention du fil d'activite. C'est un fil de supervision, pas une
 # archive : l'audit durable vit dans JournalAudit (FR-17).
 RETENTION_EVENEMENTS_JOURS = 7
@@ -187,6 +193,41 @@ def enregistrer_planification(prochaine_execution):
         session.commit()
     finally:
         session.close()
+
+
+def derniere_planification() -> dict:
+    """
+    Echeance enregistree et debut du dernier cycle. Le scheduler s'en sert
+    pour savoir si une echeance passee a ete executee ou manquee.
+    """
+    session = get_session()
+    try:
+        etat = _etat(session)
+        return {
+            "prochaine_execution": etat.prochaine_execution,
+            "debut_collecte": etat.debut_collecte,
+        }
+    finally:
+        session.close()
+
+
+def _etat_echeance(etat, vivant: bool):
+    """
+    Situation de la prochaine echeance, pour la console :
+    "a_venir", "en_cours" (le cycle de cette echeance tourne) ou "depassee"
+    (passee sans collecte ; le scheduler la reprogramme). None si aucun
+    scheduler ne tourne ou si rien n'est programme.
+    """
+    if not vivant or etat.prochaine_execution is None:
+        return None
+    maintenant = utc_now()
+    if etat.prochaine_execution > maintenant:
+        return "a_venir"
+    if etat.statut == StatutScheduler.COLLECTE_EN_COURS:
+        return "en_cours"
+    if etat.prochaine_execution < maintenant - timedelta(seconds=MARGE_ECHEANCE_SECONDES):
+        return "depassee"
+    return "en_cours"  # echeance a l'instant : le cycle demarre
 
 
 def marquer_debut_collecte():
@@ -524,6 +565,7 @@ def etat_courant() -> dict:
             "source_en_cours": etat.source_en_cours if vivant else None,
             "derniere_execution": horodater(etat.derniere_execution),
             "prochaine_execution": horodater(etat.prochaine_execution) if vivant else None,
+            "echeance": _etat_echeance(etat, vivant),
             "collecte_immediate_demandee": bool(etat.collecte_immediate_demandee),
             "derniere_stats": json.loads(etat.derniere_stats) if etat.derniere_stats else None,
             "debut_collecte": horodater(etat.debut_collecte),

@@ -486,6 +486,10 @@ class TypeEvenementCollecte(enum.Enum):
     NOUVELLE_EXPOSITION = "nouvelle_exposition"
     FIN_CYCLE = "fin_cycle"
     CIRCUIT_RENOUVELE = "circuit_renouvele"   # nouvelle IP de sortie Tor constatee
+    # Echeance de collecte passee sans declenchement (cf. app.scheduler).
+    # Aucune migration : colonne VARCHAR(19) sans contrainte, nom de 16
+    # caracteres - meme cas que CIRCUIT_RENOUVELE (revision c7d2a8e51f06).
+    ECHEANCE_MANQUEE = "echeance_manquee"
 
 
 class EtatScheduler(Base):
