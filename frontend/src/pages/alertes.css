@@ -1,54 +1,81 @@
+.alertes-jour {
+  margin-bottom: var(--space-6);
+}
+
+.alertes-jour-titre {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.alertes-jour-titre .count {
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+  text-transform: none;
+}
+
 .alertes-fil {
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--space-2);
 }
 
 .alerte-carte {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-left: 3px solid transparent;
-  border-radius: var(--r-md);
-  padding: 14px 17px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
 
-/* Une alerte non lue se distingue par une barre laterale ET par la
-   pastille explicite : jamais par la couleur seule. */
+/* Une alerte non lue se distingue par la barre laterale ET par la
+   mention "Non lue" : jamais par la couleur seule. */
 .alerte-carte.non-lue {
   border-left-color: var(--accent);
-  background: var(--bg-elevated);
+}
+
+.alerte-corps {
+  min-width: 0;
+  flex: 1 1 320px;
 }
 
 .alerte-titre {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-weight: 600;
-  font-size: 13.5px;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-base);
 }
 
-.alerte-titre a:hover {
-  color: var(--accent);
+.alerte-etat {
+  font-size: var(--text-xs);
 }
 
 .point-non-lu {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: currentColor;
   flex-shrink: 0;
 }
 
 .alerte-meta {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  margin-top: 6px;
-  font-size: 11.5px;
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
 }

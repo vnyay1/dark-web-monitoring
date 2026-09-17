@@ -6,176 +6,193 @@
  * differentes, ce que la liste ne pouvait pas montrer.
  */
 
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import { useChargement, useMessages, useSession } from "../api/session";
+import ChoixStatut from "../components/ChoixStatut";
 import {
   Chargement,
-  EnTetePage,
+  enDate,
   Erreur,
   formaterDate,
   formaterDateHeure,
-  ListeCategories,
   LIBELLE_STATUT,
   LIBELLE_TYPE_SOURCE,
+  ListeCategories,
   Messages,
   PastilleCriticite,
   PastilleStatut,
+  pluriel,
 } from "../components/communs";
+import { IconeRetour } from "../components/icones";
 
 export default function DetailExposition() {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const location = useLocation();
   const { aRole } = useSession();
   const { messages, ajouter } = useMessages();
 
-  const { donnees, erreur, chargement, setDonnees } = useChargement(
+  const { donnees, erreur, chargement, recharger, setDonnees } = useChargement(
     () => api.exposition(id),
     [id],
   );
+
+  // Retour a la liste AVEC les filtres d'ou l'on venait.
+  const retourListe = `/expositions${location.state?.retour || ""}`;
 
   async function changerStatut(statut) {
     try {
       await api.changerStatut(id, statut);
       setDonnees((precedent) => ({ ...precedent, statut }));
-      ajouter(`Statut mis à jour : ${LIBELLE_STATUT[statut] || statut}.`);
+      ajouter(`Statut « ${LIBELLE_STATUT[statut] || statut} » enregistré.`);
+      return true;
     } catch (e) {
       ajouter(e.message, "error");
+      return false;
     }
   }
 
   if (chargement) return <Chargement />;
-  if (erreur) return <Erreur message={erreur} />;
+  if (erreur && !donnees) return <Erreur message={erreur} onReessayer={recharger} />;
   if (!donnees) return null;
+
+  const jalons = [
+    { libelle: "Première détection", date: donnees.date_premiere_detection },
+    { libelle: "Publication la plus récente sur une source", date: donnees.date_publication_source },
+    { libelle: "Dernière détection", date: donnees.date_derniere_detection },
+  ]
+    .filter((j) => j.date)
+    .sort((a, b) => enDate(a.date) - enDate(b.date));
 
   return (
     <>
-      <EnTetePage titre={donnees.nom_entite}>
-        <button className="btn btn-ghost" onClick={() => navigate(-1)}>
-          Retour
-        </button>
-      </EnTetePage>
+      <Link to={retourListe} className="lien-retour">
+        <IconeRetour taille={16} />
+        Liste des expositions
+      </Link>
 
-      <div className="grid grid-stats" style={{ marginBottom: 22 }}>
-        <div className="stat">
-          <div className="stat-label">Criticité</div>
-          <div style={{ marginTop: 9 }}>
-            <PastilleCriticite
-              niveau={donnees.niveau_criticite}
-              criticite={donnees.criticite}
-            />
-          </div>
-          <div className="stat-hint" style={{ marginTop: 7 }}>
-            {donnees.criticite} sélecteur(s) camerounais distinct(s) trouvé(s)
-          </div>
-        </div>
-
-        <div className="stat">
-          <div className="stat-label">Statut</div>
-          <div style={{ marginTop: 9 }}>
-            {aRole("supervisor") ? (
-              <select
-                className="select"
-                value={donnees.statut}
-                onChange={(e) => changerStatut(e.target.value)}
-                aria-label="Statut de l'exposition"
-              >
-                {Object.keys(LIBELLE_STATUT).map((s) => (
-                  <option key={s} value={s}>
-                    {LIBELLE_STATUT[s]}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <PastilleStatut statut={donnees.statut} />
-            )}
-          </div>
-        </div>
-
-        <div className="stat">
-          <div className="stat-label">Catégories</div>
-          <div style={{ marginTop: 9 }}>
-            <ListeCategories categories={donnees.categories} />
-          </div>
-          <div className="stat-hint" style={{ marginTop: 7 }}>
-            celles des sélecteurs trouvés dans l'annonce
-          </div>
-        </div>
-
-        <div className="stat">
-          <div className="stat-label">Sources distinctes</div>
-          <div className="stat-value">{donnees.nb_sources}</div>
-          <div className="stat-hint">
-            {donnees.sources.join(", ") || "origine non identifiée"}
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{donnees.nom_entite}</h1>
+          <p className="page-subtitle">
+            Détectée le {formaterDateHeure(donnees.date_premiere_detection)} ·{" "}
+            {donnees.nb_sources} {pluriel("source", donnees.nb_sources)}
+          </p>
         </div>
       </div>
 
-      <section className="card card-pad" style={{ marginBottom: 22 }}>
-        <h2 className="section-title">Chronologie</h2>
-        <dl className="detail-liste">
-          <Ligne
-            terme="Première détection"
-            valeur={formaterDateHeure(donnees.date_premiere_detection)}
-          />
-          <Ligne
-            terme="Dernière détection"
-            valeur={formaterDateHeure(donnees.date_derniere_detection)}
-          />
-          <Ligne
-            terme="Publication la plus récente"
-            valeur={
-              donnees.date_publication_source
-                ? formaterDateHeure(donnees.date_publication_source)
-                : "non datée par la source"
-            }
-          />
-        </dl>
+      <div className="grid grid-stats espace-bas">
+        <div className="stat">
+          <span className="stat-label">Criticité</span>
+          <span className="stat-contenu">
+            <PastilleCriticite niveau={donnees.niveau_criticite} />
+          </span>
+          <span className="stat-hint">
+            {donnees.criticite} {pluriel("sélecteur", donnees.criticite)} camerounais{" "}
+            {pluriel("distinct", donnees.criticite)} {pluriel("trouvé", donnees.criticite)}
+          </span>
+        </div>
+
+        <div className="stat">
+          <span className="stat-label" id="libelle-statut">
+            Statut
+          </span>
+          <span className="stat-contenu">
+            {aRole("supervisor") ? (
+              <ChoixStatut
+                statut={donnees.statut}
+                statuts={Object.keys(LIBELLE_STATUT)}
+                libelle="Statut de l'exposition"
+                onEnregistrer={changerStatut}
+              />
+            ) : (
+              <PastilleStatut statut={donnees.statut} />
+            )}
+          </span>
+        </div>
+
+        <div className="stat">
+          <span className="stat-label">Catégories</span>
+          <span className="stat-contenu">
+            <ListeCategories categories={donnees.categories} />
+          </span>
+          <span className="stat-hint">celles des sélecteurs trouvés dans l'annonce</span>
+        </div>
+
+        <div className="stat">
+          <span className="stat-label">Sources distinctes</span>
+          <span className="stat-value">{donnees.nb_sources}</span>
+          <span className="stat-hint">{donnees.sources.join(", ") || "origine non identifiée"}</span>
+        </div>
+      </div>
+
+      <section className="card card-pad espace-bas" aria-labelledby="titre-chronologie">
+        <h2 className="section-title" id="titre-chronologie">
+          Chronologie
+        </h2>
+        <ol className="chronologie">
+          {jalons.map((j) => (
+            <li key={j.libelle}>
+              <span className="chronologie-date">{formaterDateHeure(j.date)}</span>
+              <span className="chronologie-libelle">{j.libelle}</span>
+            </li>
+          ))}
+          {!donnees.date_publication_source && (
+            <li className="est-absent">
+              <span className="chronologie-date">—</span>
+              <span className="chronologie-libelle">Publication non datée par la source</span>
+            </li>
+          )}
+        </ol>
       </section>
 
-      <section>
-        <h2 className="section-title">
+      <section aria-labelledby="titre-signalements">
+        <h2 className="section-title" id="titre-signalements">
           Signalements
           <span className="count">
-            {donnees.signalements.length} occurrence(s) recensée(s)
+            {donnees.signalements.length}{" "}
+            {pluriel("occurrence recensée", donnees.signalements.length, "occurrences recensées")}
           </span>
         </h2>
 
-        <div className="table-wrap">
+        <div className="table-wrap tableau-cartes">
           <table className="data">
+            <caption className="sr-only">Signalements de l'exposition par source</caption>
             <thead>
               <tr>
-                <th>Source</th>
-                <th>Type</th>
-                <th>Publication</th>
-                <th>Signalé le</th>
-                <th>Référence</th>
+                <th scope="col">Source</th>
+                <th scope="col">Type</th>
+                <th scope="col">Publication</th>
+                <th scope="col">Signalé le</th>
+                <th scope="col">Référence</th>
               </tr>
             </thead>
             <tbody>
               {donnees.signalements.map((s) => (
                 <tr key={s.id}>
-                  <td className="cell-entity">
-                    {s.nom_source || (
-                      <span className="cell-muted">non identifiée</span>
-                    )}
+                  <td className="cell-entity cell-titre">
+                    {s.nom_source || <span className="cell-muted">Source non identifiée</span>}
                   </td>
-                  <td className="cell-muted">
+                  <td className="cell-muted" data-label="Type">
                     {LIBELLE_TYPE_SOURCE[s.type_source] || s.type_source}
                   </td>
-                  <td className="cell-mono">
-                    {s.date_publication ? formaterDate(s.date_publication) : "—"}
+                  <td className="cell-mono" data-label="Publication">
+                    {s.date_publication ? formaterDate(s.date_publication) : "non datée"}
                   </td>
-                  <td className="cell-mono">
+                  <td className="cell-mono" data-label="Signalé le">
                     {formaterDateHeure(s.date_signalement)}
                   </td>
                   {/* La reference est affichee en clair mais JAMAIS
                       transformee en lien : ouvrir une adresse .onion depuis
                       le poste d'un analyste sortirait du cadre de collecte
-                      passive et isolee (CN-07, CN-09). */}
-                  <td className="cell-mono reference-source" title={s.reference_source}>
-                    {s.reference_source}
+                      passive et isolee (CN-07, CN-09). Tronquee a l'ecran,
+                      elle se deploie au focus clavier ; les lecteurs d'ecran
+                      la lisent en entier. */}
+                  <td data-label="Référence">
+                    <span className="cell-mono reference-source" tabIndex={0} title={s.reference_source}>
+                      {s.reference_source}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -183,28 +200,13 @@ export default function DetailExposition() {
           </table>
         </div>
 
-        <p className="page-subtitle" style={{ marginTop: 11 }}>
-          Les références ne sont pas cliquables : la consultation d'une source
-          se fait exclusivement depuis l'environnement de collecte isolé.
+        <p className="texte-aide espace-haut">
+          Les références ne sont pas cliquables : la consultation d'une source se fait exclusivement
+          depuis l'environnement de collecte isolé.
         </p>
       </section>
 
-      <p style={{ marginTop: 22 }}>
-        <Link to="/expositions" style={{ color: "var(--accent)", fontSize: 12.5 }}>
-          ← Retour à la liste des expositions
-        </Link>
-      </p>
-
       <Messages messages={messages} />
-    </>
-  );
-}
-
-function Ligne({ terme, valeur }) {
-  return (
-    <>
-      <dt>{terme}</dt>
-      <dd>{valeur}</dd>
     </>
   );
 }

@@ -8,19 +8,28 @@
  * Le fil d'activite est obtenu par sondage a curseur
  * (/scheduler/evenements?depuis=<id>) plutot que par flux SSE : voir
  * app/web/api/scheduler.py pour le raisonnement.
+ *
+ * Defilement : seul le conteneur de la console defile, et seulement si
+ * l'operateur est deja en bas du fil. S'il remonte pour lire, rien ne bouge
+ * et un bouton "Revenir au direct" apparait. (scrollIntoView faisait defiler
+ * TOUTE la page a chaque evenement.)
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../api/client";
 import { useSession } from "../api/session";
+import Confirmation from "../components/Confirmation";
 import {
+  Banniere,
   dureeDepuis,
   dureeEntre,
   EnTetePage,
   formaterDateHeure,
   formaterHeure,
+  pluriel,
 } from "../components/communs";
+import { IconeActualiser, IconeArret, IconeBas, IconeLecture, IconeReseau } from "../components/icones";
 import "./scheduler.css";
 
 /** Cadence de sondage pendant une collecte, puis au repos. */
@@ -29,6 +38,9 @@ const SONDAGE_REPOS_MS = 8000;
 
 /** Au-dela, les lignes les plus anciennes sont oubliees (memoire du navigateur). */
 const MAX_LIGNES = 400;
+
+/** Tolerance (px) pour considerer que la console est "en bas". */
+const SEUIL_BAS_PX = 24;
 
 /** Motif d'arret du parcours des pages d'une source (cf. BaseConnector). */
 const LIBELLE_ARRET = {
@@ -68,6 +80,9 @@ const PREFIXE_EVENEMENT = {
   nouvelle_exposition: "EXPOSITION",
 };
 
+/** Evenements annonces aux lecteurs d'ecran (les autres sont du detail). */
+const EVENEMENTS_ANNONCES = new Set(["nouvelle_exposition", "echeance_manquee"]);
+
 export default function Scheduler() {
   const { aRole } = useSession();
   const peutPiloter = aRole("admin");
@@ -77,11 +92,15 @@ export default function Scheduler() {
   const [historiqueTronque, setHistoriqueTronque] = useState(false);
   const [message, setMessage] = useState(null);
   const [action, setAction] = useState(null);
-  const [autoDefilement, setAutoDefilement] = useState(true);
+  const [confirmerArret, setConfirmerArret] = useState(false);
   const [maintenant, setMaintenant] = useState(Date.now());
+  const [suitDirect, setSuitDirect] = useState(true);
+  const [nonVues, setNonVues] = useState(0);
+  const [annonce, setAnnonce] = useState("");
 
   const curseur = useRef(null);
-  const finDuFil = useRef(null);
+  const console_ = useRef(null);
+  const suitDirectRef = useRef(true);
 
   // Horloge locale : le temps ecoule doit avancer chaque seconde sans
   // dependre du rythme des sondages reseau.
@@ -98,7 +117,6 @@ export default function Scheduler() {
       // Premier passage (ouverture de la page, ou retour depuis une autre
       // page) : on recharge le cycle en cours ou le dernier cycle, puis le
       // sondage enchaine sur le direct a partir de son dernier evenement.
-      // Le fil vit en base : changer de page ne perd rien.
       if (curseur.current === null) {
         const historique = await api.schedulerHistorique();
         curseur.current = historique.dernier_id;
@@ -110,9 +128,13 @@ export default function Scheduler() {
       const suite = await api.schedulerEvenements(curseur.current);
       if (suite.evenements.length > 0) {
         curseur.current = suite.dernier_id;
-        setLignes((precedentes) =>
-          [...precedentes, ...suite.evenements].slice(-MAX_LIGNES),
-        );
+        setLignes((precedentes) => [...precedentes, ...suite.evenements].slice(-MAX_LIGNES));
+        if (!suitDirectRef.current) setNonVues((n) => n + suite.evenements.length);
+
+        const importants = suite.evenements.filter((e) => EVENEMENTS_ANNONCES.has(e.type));
+        if (importants.length > 0) {
+          setAnnonce(importants.map((e) => e.message).join(". "));
+        }
       }
     } catch (e) {
       setMessage({ type: "error", texte: e.message });
@@ -123,21 +145,39 @@ export default function Scheduler() {
     sonder();
   }, [sonder]);
 
-  // Le sondage s'accelere pendant une collecte et se calme au repos :
-  // inutile d'interroger le serveur toutes les deux secondes pour un
-  // scheduler arrete.
+  // Le sondage s'accelere pendant une collecte et se calme au repos.
   useEffect(() => {
-    const periode =
-      etat?.statut === "collecte_en_cours" ? SONDAGE_ACTIF_MS : SONDAGE_REPOS_MS;
+    const periode = etat?.statut === "collecte_en_cours" ? SONDAGE_ACTIF_MS : SONDAGE_REPOS_MS;
     const t = setInterval(sonder, periode);
     return () => clearInterval(t);
   }, [etat?.statut, sonder]);
 
+  // Nouvelles lignes : on ne fait defiler QUE la console, et seulement si
+  // l'operateur suit le direct.
   useEffect(() => {
-    if (autoDefilement) {
-      finDuFil.current?.scrollIntoView({ block: "end" });
+    const conteneur = console_.current;
+    if (conteneur && suitDirectRef.current) {
+      conteneur.scrollTop = conteneur.scrollHeight;
     }
-  }, [lignes, autoDefilement]);
+  }, [lignes]);
+
+  function surDefilementConsole() {
+    const c = console_.current;
+    if (!c) return;
+    const enBas = c.scrollHeight - c.scrollTop - c.clientHeight <= SEUIL_BAS_PX;
+    suitDirectRef.current = enBas;
+    setSuitDirect(enBas);
+    if (enBas) setNonVues(0);
+  }
+
+  function revenirAuDirect() {
+    const c = console_.current;
+    if (!c) return;
+    c.scrollTop = c.scrollHeight;
+    suitDirectRef.current = true;
+    setSuitDirect(true);
+    setNonVues(0);
+  }
 
   async function executer(nom, appel) {
     setAction(nom);
@@ -146,8 +186,7 @@ export default function Scheduler() {
       const reponse = await appel();
       setMessage({ type: "success", texte: reponse.message });
       // Le processus met un instant a publier son etat : on laisse passer
-      // ce delai avant de rafraichir, sinon l'affichage semblerait ignorer
-      // l'action qui vient d'etre demandee.
+      // ce delai avant de rafraichir.
       setTimeout(sonder, 900);
     } catch (e) {
       setMessage({ type: "error", texte: e.message });
@@ -167,79 +206,87 @@ export default function Scheduler() {
         sousTitre="Pilotage du planificateur et suivi en direct du pipeline"
       />
 
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {annonce}
+      </div>
+
       {message && (
-        <div className={`banner banner-${message.type}`} role="status">
-          {message.texte}
-        </div>
+        <Banniere ton={message.type === "error" ? "error" : "success"} role={message.type === "error" ? "alert" : "status"}>
+          <p>{message.texte}</p>
+        </Banniere>
       )}
 
       {!peutPiloter && (
-        <div className="banner banner-info">
-          Consultation seule : le pilotage du planificateur est réservé aux
-          administrateurs.
-        </div>
+        <Banniere ton="info">
+          <p>Consultation seule : le pilotage du planificateur est réservé aux administrateurs.</p>
+        </Banniere>
       )}
 
-      <div className="sched-etat card card-pad">
+      <section className="sched-etat card card-pad" aria-labelledby="titre-statut">
         <div className="sched-statut">
-          <span
-            className={`voyant voyant-${etat?.statut || "arrete"}`}
-            aria-hidden="true"
-          />
+          <span className={`voyant voyant-${etat?.statut || "arrete"}`} aria-hidden="true" />
           <div>
-            <div className="sched-statut-libelle">
-              {LIBELLE_STATUT[etat?.statut] || "—"}
-            </div>
-            <div className="sched-statut-detail">
+            <h2 className="sched-statut-libelle" id="titre-statut">
+              {etat ? LIBELLE_STATUT[etat.statut] || "—" : "Chargement…"}
+            </h2>
+            <p className="sched-statut-detail">
               {actif
                 ? `Processus ${etat.pid} sur ${etat.hostname}, lancé il y a ${dureeDepuis(etat.demarre_le, maintenant)}`
                 : "Aucun processus de collecte en cours d'exécution"}
-            </div>
+            </p>
           </div>
         </div>
 
         {peutPiloter && (
-          <div className="btn-row">
-            <button
-              className="btn btn-primary"
-              disabled={actif || action !== null}
-              onClick={() => executer("demarrer", api.schedulerDemarrer)}
-            >
-              {action === "demarrer" ? "Démarrage…" : "Démarrer"}
-            </button>
-            <button
-              className="btn"
-              disabled={!actif || enCollecte || action !== null}
-              onClick={() =>
-                executer("collecte", api.schedulerCollecteImmediate)
-              }
-              title={
-                enCollecte
-                  ? "Une collecte est déjà en cours"
-                  : "Lancer un cycle sans attendre l'échéance"
-              }
-            >
-              {action === "collecte" ? "Demande…" : "Collecte immédiate"}
-            </button>
-            <button
-              className="btn btn-danger"
-              disabled={!actif || action !== null}
-              onClick={() => executer("arreter", api.schedulerArreter)}
-            >
-              {action === "arreter" ? "Arrêt…" : "Arrêter"}
-            </button>
+          <div className="sched-actions">
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={actif || action !== null}
+                onClick={() => executer("demarrer", api.schedulerDemarrer)}
+              >
+                {action === "demarrer" ? <span className="spinner" aria-hidden="true" /> : <IconeLecture taille={16} />}
+                {action === "demarrer" ? "Démarrage…" : "Démarrer"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={!actif || enCollecte || action !== null}
+                onClick={() => executer("collecte", api.schedulerCollecteImmediate)}
+                aria-describedby="aide-collecte"
+              >
+                {action === "collecte" ? <span className="spinner" aria-hidden="true" /> : <IconeActualiser taille={16} />}
+                {action === "collecte" ? "Demande…" : "Collecte immédiate"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={!actif || action !== null}
+                onClick={() => setConfirmerArret(true)}
+              >
+                <IconeArret taille={16} />
+                {action === "arreter" ? "Arrêt…" : "Arrêter"}
+              </button>
+            </div>
+            <p className="sched-aide" id="aide-collecte">
+              {!actif
+                ? "Démarrez le planificateur pour lancer une collecte."
+                : enCollecte
+                  ? "Une collecte est déjà en cours."
+                  : "Lance un cycle sans attendre l'échéance."}
+            </p>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Le verrou d'instance unique est le point le moins evident du
           systeme : on l'explique la ou l'operateur pourrait etre surpris
           qu'un second demarrage soit refuse. */}
       {actif && (
         <p className="sched-note">
-          Un seul planificateur peut fonctionner à la fois. Toute tentative de
-          démarrage supplémentaire, depuis cette interface comme en ligne de
-          commande, sera refusée tant que celui-ci est actif.
+          Un seul planificateur peut fonctionner à la fois : tout démarrage supplémentaire, depuis
+          cette interface comme en ligne de commande, est refusé tant que celui-ci est actif.
         </p>
       )}
 
@@ -251,8 +298,7 @@ export default function Scheduler() {
           accent={enCollecte}
         />
         {/* Duree du CYCLE : avance pendant une collecte, se fige a sa fin
-            (on lit alors la duree du dernier cycle) et repart de zero au
-            cycle suivant. L'age du processus reste sur la carte de statut. */}
+            et repart de zero au cycle suivant. */}
         <MetriqueSched
           label={enCollecte ? "Temps écoulé" : "Durée du dernier cycle"}
           valeur={
@@ -263,24 +309,16 @@ export default function Scheduler() {
           hint={
             etat?.debut_collecte
               ? enCollecte
-                ? `cycle lancé à ${formaterHeure(etat.debut_collecte)} UTC`
-                : `${formaterHeure(etat.debut_collecte)} → ${formaterHeure(etat.fin_collecte)} UTC`
+                ? `cycle lancé à ${formaterHeure(etat.debut_collecte)}`
+                : `de ${formaterHeure(etat.debut_collecte)} à ${formaterHeure(etat.fin_collecte)}`
               : "aucun cycle effectué"
           }
           accent={enCollecte}
         />
         <MetriqueSched
           label="Dernière collecte"
-          valeur={
-            etat?.derniere_execution
-              ? formaterHeure(etat.derniere_execution)
-              : "—"
-          }
-          hint={
-            etat?.derniere_execution
-              ? formaterDateHeure(etat.derniere_execution)
-              : "aucun cycle terminé"
-          }
+          valeur={etat?.derniere_execution ? formaterHeure(etat.derniere_execution) : "—"}
+          hint={etat?.derniere_execution ? formaterDateHeure(etat.derniere_execution) : "aucun cycle terminé"}
         />
         <MetriqueSched
           label="Prochaine collecte"
@@ -315,77 +353,100 @@ export default function Scheduler() {
         onVerifier={() => executer("ip", api.schedulerVerifierIp)}
       />
 
-      {etat?.derniere_stats && (
-        <ResumeCycle stats={etat.derniere_stats} />
-      )}
+      {etat?.derniere_stats && <ResumeCycle stats={etat.derniere_stats} />}
 
-      <section className="sched-console">
+      <section className="sched-console" aria-labelledby="titre-console">
         <div className="console-barre">
-          <h2 className="section-title" style={{ margin: 0 }}>
+          <h2 className="section-title" id="titre-console">
             Activité du pipeline
-            <span className="count">
+            <span className={`pill ${enCollecte ? "pill-accent" : "pill-neutral"}`}>
               {enCollecte ? "en direct" : "en veille"}
             </span>
           </h2>
           <div className="btn-row">
-            <label className="console-option">
-              <input
-                type="checkbox"
-                checked={autoDefilement}
-                onChange={(e) => setAutoDefilement(e.target.checked)}
-              />
-              Défilement automatique
-            </label>
+            {!suitDirect && (
+              <button type="button" className="btn btn-sm" onClick={revenirAuDirect}>
+                <IconeBas taille={14} />
+                {nonVues > 0
+                  ? `${nonVues} ${pluriel("nouvelle ligne", nonVues, "nouvelles lignes")}`
+                  : "Revenir au direct"}
+              </button>
+            )}
             <button
+              type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 setLignes([]);
                 setHistoriqueTronque(false);
               }}
-              title="Vide seulement l'affichage : le fil reste enregistré et réapparaît au prochain chargement de la page"
+              aria-describedby="aide-vider"
             >
               Vider l'affichage
             </button>
           </div>
         </div>
 
-        <div className="console" role="log" aria-live="polite">
+        {/* aria-live coupe sur la console : chaque ligne serait lue a voix
+            haute toutes les deux secondes. Seuls les evenements importants
+            sont annonces (region live separee ci-dessus). */}
+        <div
+          className="console"
+          ref={console_}
+          onScroll={surDefilementConsole}
+          tabIndex={0}
+          role="log"
+          aria-live="off"
+          aria-label="Journal d'activité du pipeline"
+        >
           {lignes.length === 0 ? (
             <div className="console-vide">
-              En attente d'activité. Les événements du pipeline s'afficheront
-              ici dès le prochain cycle de collecte.
-              <br />
-              <span className="console-vide-note">
-                Les erreurs de collecte ne sont pas reprises ici : elles sont
-                consultables dans le journal d'audit.
-              </span>
+              <p>En attente d'activité. Les événements du pipeline s'afficheront ici dès le prochain cycle de collecte.</p>
+              <p className="console-vide-note">
+                Les erreurs de collecte ne sont pas reprises ici : elles sont consultables dans le
+                journal d'audit.
+              </p>
             </div>
           ) : (
             <>
-            {historiqueTronque && (
-              <div className="console-vide-note" style={{ marginBottom: 6 }}>
-                … début du cycle non affiché (seules les lignes les plus récentes sont rechargées)
-              </div>
-            )}
-            {lignes.map((ligne) => (
-              <div
-                key={ligne.id}
-                className={`console-ligne ${CLASSE_EVENEMENT[ligne.type] || ""}`}
-              >
-                <span className="console-heure">
-                  {formaterHeure(ligne.horodatage)}
-                </span>
-                <span className="console-type">
-                  {PREFIXE_EVENEMENT[ligne.type] || ligne.type}
-                </span>
-                <span className="console-message">{ligne.message}</span>
-              </div>
-            ))}
+              {historiqueTronque && (
+                <p className="console-vide-note console-tronque">
+                  … début du cycle non affiché (seules les lignes les plus récentes sont rechargées)
+                </p>
+              )}
+              {lignes.map((ligne) => (
+                <div key={ligne.id} className={`console-ligne ${CLASSE_EVENEMENT[ligne.type] || ""}`}>
+                  <span className="console-heure">{formaterHeure(ligne.horodatage)}</span>
+                  <span className="console-type">{PREFIXE_EVENEMENT[ligne.type] || ligne.type}</span>
+                  <span className="console-message">{ligne.message}</span>
+                </div>
+              ))}
             </>
           )}
-          <div ref={finDuFil} />
         </div>
+        <p className="texte-aide espace-haut" id="aide-vider">
+          « Vider l'affichage » n'efface que l'écran : le fil reste enregistré et réapparaît au
+          prochain chargement de la page.
+        </p>
       </section>
+
+      {confirmerArret && (
+        <Confirmation
+          titre="Arrêter le planificateur ?"
+          libelleConfirmer="Arrêter"
+          libelleEnCours="Arrêt…"
+          enCours={action === "arreter"}
+          onAnnuler={() => setConfirmerArret(false)}
+          onConfirmer={async () => {
+            await executer("arreter", api.schedulerArreter);
+            setConfirmerArret(false);
+          }}
+        >
+          <p>
+            Plus aucune collecte n'aura lieu tant qu'il ne sera pas redémarré.
+            {enCollecte && <strong> La collecte en cours sera interrompue.</strong>}
+          </p>
+        </Confirmation>
+      )}
     </>
   );
 }
@@ -400,46 +461,52 @@ function CarteTor({ etat, actif, maintenant, peutVerifier, enCours, onVerifier }
   const enAttente = etat?.verification_ip_demandee;
 
   return (
-    <section className={`card card-pad carte-tor${actif ? "" : " inactive"}`}>
+    <section className={`card card-pad carte-tor${actif ? "" : " inactive"}`} aria-labelledby="titre-tor">
       <div className="carte-tor-corps">
-        <div>
-          <div className="stat-label">Nœud de sortie Tor</div>
-          <div className="carte-tor-ip">{ip || "—"}</div>
-          <div className="stat-hint">
+        <div className="carte-tor-infos">
+          <h2 className="stat-label carte-tor-titre" id="titre-tor">
+            <IconeReseau taille={14} />
+            Nœud de sortie Tor
+          </h2>
+          <p className="carte-tor-ip">{ip || "—"}</p>
+          <p className="stat-hint">
             {!ip
               ? "aucune IP constatée pour l'instant"
               : actif
                 ? `vérifiée il y a ${dureeDepuis(etat.ip_verifiee_le, maintenant)}`
                 : `dernière IP connue, vérifiée le ${formaterDateHeure(etat.ip_verifiee_le)}`}
-          </div>
+          </p>
           {etat?.ip_sortie_precedente && (
-            <div className="stat-hint">
-              précédente : {etat.ip_sortie_precedente} · changement à{" "}
-              {formaterHeure(etat.ip_changee_le)} UTC
-            </div>
+            <p className="stat-hint">
+              précédente : {etat.ip_sortie_precedente} · changement à {formaterHeure(etat.ip_changee_le)}
+            </p>
           )}
         </div>
 
         {peutVerifier && (
-          <button
-            className="btn btn-sm"
-            disabled={!actif || enCours || enAttente}
-            onClick={onVerifier}
-            title={
-              actif
-                ? "Demande au planificateur de vérifier l'IP de sortie du circuit courant"
-                : "Démarrez le planificateur : c'est lui qui interroge Tor"
-            }
-          >
-            {enCours || enAttente ? "Vérification…" : "Vérifier maintenant"}
-          </button>
+          <div className="carte-tor-action">
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={!actif || enCours || enAttente}
+              onClick={onVerifier}
+              aria-describedby="aide-tor"
+            >
+              {enCours || enAttente ? <span className="spinner" aria-hidden="true" /> : <IconeActualiser taille={14} />}
+              {enCours || enAttente ? "Vérification…" : "Vérifier maintenant"}
+            </button>
+            <p className="sched-aide" id="aide-tor">
+              {actif
+                ? "Le planificateur interroge Tor sous quelques secondes."
+                : "Démarrez le planificateur : c'est lui qui interroge Tor."}
+            </p>
+          </div>
         )}
       </div>
 
       <p className="carte-tor-note">
-        L'IP change à chaque renouvellement de circuit. Tor peut réattribuer la
-        même sortie de temps à autre ; une IP qui ne change jamais signale en
-        revanche un renouvellement défaillant.
+        L'IP change à chaque renouvellement de circuit. Tor peut réattribuer la même sortie de temps à
+        autre ; une IP qui ne change jamais signale en revanche un renouvellement défaillant.
       </p>
     </section>
   );
@@ -449,9 +516,9 @@ function MetriqueSched({ label, valeur, hint, accent, alerte }) {
   const ton = alerte ? " tone-warn" : accent ? " tone-ok" : "";
   return (
     <div className={`stat${ton}`}>
-      <div className="stat-label">{label}</div>
-      <div className="stat-value sched-metrique-valeur">{valeur}</div>
-      {hint && <div className="stat-hint">{hint}</div>}
+      <span className="stat-label">{label}</span>
+      <span className="stat-value sched-metrique-valeur">{valeur}</span>
+      {hint && <span className="stat-hint">{hint}</span>}
     </div>
   );
 }
@@ -461,55 +528,54 @@ function ResumeCycle({ stats }) {
   if (!Array.isArray(stats) || stats.length === 0) return null;
 
   return (
-    <section style={{ marginBottom: 20 }}>
-      <h2 className="section-title">Résultat du dernier cycle</h2>
-      <div className="table-wrap">
+    <section className="espace-bas" aria-labelledby="titre-resume">
+      <h2 className="section-title" id="titre-resume">
+        Résultat du dernier cycle
+      </h2>
+      <div className="table-wrap tableau-cartes">
         <table className="data">
+          <caption className="sr-only">Résultat du dernier cycle, par source</caption>
           <thead>
             <tr>
-              <th>Source</th>
-              <th>Collecte</th>
-              <th title="Pages de listing parcourues, et motif de l'arrêt">Pages</th>
-              <th>Entrées</th>
-              <th title="Entrées dont la source ne publie pas de date, ou dans un format non reconnu">
-                Sans date
-              </th>
-              <th>Hors période</th>
-              <th>Faux positifs</th>
-              <th>Expositions</th>
+              <th scope="col">Source</th>
+              <th scope="col">Collecte</th>
+              <th scope="col">Pages</th>
+              <th scope="col" className="num-col">Entrées</th>
+              <th scope="col" className="num-col">Sans date</th>
+              <th scope="col" className="num-col">Hors période</th>
+              <th scope="col" className="num-col">Faux positifs</th>
+              <th scope="col" className="num-col">Expositions</th>
             </tr>
           </thead>
           <tbody>
             {stats.map((s, index) => (
               <tr key={`${s.source}-${index}`}>
-                <td className="cell-entity">{s.source}</td>
-                <td>
-                  <span
-                    className={`pill ${
-                      s.collecte_reussie ? "pill-ok" : "pill-crit"
-                    }`}
-                  >
+                <td className="cell-entity cell-titre">{s.source}</td>
+                <td data-label="Collecte">
+                  <span className={`pill ${s.collecte_reussie ? "pill-ok" : "pill-crit"}`}>
                     {s.collecte_reussie ? "Réussie" : "Échec"}
                   </span>
                 </td>
-                <td className="cell-mono" title={LIBELLE_ARRET[s.arret] || s.arret || ""}>
+                <td className="cell-mono" data-label="Pages">
                   {s.pages_listing ?? 0}
                   {s.arret && s.arret !== "page_unique" && (
                     <span className="cell-muted"> · {LIBELLE_ARRET[s.arret] || s.arret}</span>
                   )}
                 </td>
-                <td className="cell-mono">{s.nb_entries_brutes ?? 0}</td>
-                <td className="cell-mono">{s.nb_sans_date ?? 0}</td>
-                <td className="cell-mono">{s.nb_hors_periode ?? 0}</td>
-                <td className="cell-mono">{s.nb_rejetees_faux_positif ?? 0}</td>
-                <td className="cell-mono">
-                  {s.nb_expositions_creees_ou_maj ?? 0}
-                </td>
+                <td className="cell-mono num-col" data-label="Entrées">{s.nb_entries_brutes ?? 0}</td>
+                <td className="cell-mono num-col" data-label="Sans date">{s.nb_sans_date ?? 0}</td>
+                <td className="cell-mono num-col" data-label="Hors période">{s.nb_hors_periode ?? 0}</td>
+                <td className="cell-mono num-col" data-label="Faux positifs">{s.nb_rejetees_faux_positif ?? 0}</td>
+                <td className="cell-mono num-col" data-label="Expositions">{s.nb_expositions_creees_ou_maj ?? 0}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="texte-aide espace-haut">
+        <strong>Pages</strong> : pages de listing parcourues et motif d'arrêt. <strong>Sans date</strong>{" "}
+        : entrées dont la source ne publie pas de date, ou dans un format non reconnu.
+      </p>
     </section>
   );
 }
