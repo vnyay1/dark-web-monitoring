@@ -1,54 +1,88 @@
 .ecran-connexion {
+  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6) var(--space-4);
+}
+
+.connexion-theme {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }
 
 .carte-connexion {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
-  padding: 30px 28px;
+  padding: var(--space-8) var(--space-8) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--space-6);
+}
+
+@media (max-width: 480px) {
+  .carte-connexion {
+    padding: var(--space-6) var(--space-5) var(--space-5);
+  }
 }
 
 .connexion-entete {
   text-align: center;
-  margin-bottom: 4px;
 }
 
 .connexion-logo {
-  width: 76px;
-  height: 76px;
+  width: 72px;
+  height: 72px;
   object-fit: contain;
-  margin: 0 auto 12px;
-  display: block;
+  margin: 0 auto var(--space-3);
 }
 
 .connexion-entete h1 {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.18em;
 }
 
 .connexion-entete p {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: var(--space-1) auto 0;
+}
+
+.connexion-formulaire {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.connexion-formulaire .banner {
+  margin-bottom: 0;
+}
+
+.connexion-formulaire .btn-primary {
+  min-height: 2.75rem;
+  margin-top: var(--space-1);
+  font-size: var(--text-base);
+}
+
+.connexion-majuscules {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--warn);
+  font-weight: var(--weight-medium);
 }
 
 .connexion-note {
-  color: var(--text-dim);
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
   text-align: center;
-  line-height: 1.5;
-  margin-top: 6px;
+  line-height: var(--leading);
+  margin: 0 auto;
 }

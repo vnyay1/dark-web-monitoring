@@ -2,41 +2,60 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--space-5);
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
 }
 
 .sched-statut {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: var(--space-3);
 }
 
 .sched-statut-libelle {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
 }
 
 .sched-statut-detail {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  margin-top: 1px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-top: 2px;
 }
 
-/* Le voyant double la couleur d'un libelle textuel juste a cote : la
-   couleur seule ne porte jamais l'information d'etat. */
+.sched-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.sched-aide {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 640px) {
+  .sched-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
+/* Le voyant double un libelle textuel juste a cote : la couleur seule ne
+   porte jamais l'information d'etat. */
 .voyant {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--text-dim);
+  background: var(--text-muted);
 }
 
 .voyant-arrete {
-  background: var(--text-dim);
+  background: transparent;
+  border: 2px solid var(--text-muted);
 }
 
 .voyant-en_attente {
@@ -52,97 +71,96 @@
 
 @keyframes pulsation {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  50% { opacity: 0.4; }
 }
 
 .sched-note {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  line-height: 1.5;
-  margin: 0 0 16px;
-  padding-left: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-4);
+  max-width: none;
 }
 
 .sched-metriques {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 /* Un nom de source est plus long qu'un nombre : la valeur doit pouvoir
    retrecir sans deborder de sa tuile. */
 .sched-metrique-valeur {
-  font-size: 19px;
+  font-size: var(--text-lg);
   overflow-wrap: anywhere;
-}
-
-.sched-console {
-  margin-top: 4px;
 }
 
 .console-barre {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  margin-bottom: 11px;
+  margin-bottom: var(--space-3);
 }
 
-.console-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  cursor: pointer;
+.console-barre .section-title {
+  margin-bottom: 0;
 }
 
 .console {
-  background: var(--bg-deep);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg);
-  padding: 13px 15px;
-  height: 400px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  height: 420px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.75;
+  font-size: var(--text-xs);
+  line-height: 1.8;
 }
 
 .console-vide {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   text-align: center;
-  padding: 60px 20px;
-  line-height: 1.6;
+  padding: var(--space-12) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .console-vide-note {
-  color: var(--text-dim);
-  font-size: 11.5px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.console-tronque {
+  font-family: var(--font-body);
+  margin-bottom: var(--space-2);
 }
 
 .console-ligne {
   display: grid;
-  grid-template-columns: 68px 92px 1fr;
-  gap: 10px;
+  grid-template-columns: 72px 96px 1fr;
+  gap: var(--space-3);
   padding: 1px 0;
   align-items: baseline;
 }
 
 .console-heure {
-  color: var(--text-dim);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .console-type {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
 }
 
 .console-message {
-  color: var(--text-secondary);
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 
@@ -152,38 +170,51 @@
 }
 
 .ev-source .console-type {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ev-source-fin .console-type {
   color: var(--text-muted);
 }
 
-/* Une nouvelle exposition est l'evenement qui compte : c'est la seule
-   ligne mise en avant. */
+.ev-source-fin .console-message {
+  color: var(--text-secondary);
+}
+
+/* Une nouvelle exposition est l'evenement qui compte. */
 .ev-exposition .console-type,
 .ev-exposition .console-message {
   color: var(--crit);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
+}
+
+.ev-tor .console-type,
+.ev-tor .console-message {
+  color: var(--accent-text);
+}
+
+/* Echeance de collecte manquee : anomalie de planification. */
+.ev-echeance .console-type,
+.ev-echeance .console-message {
+  color: var(--warn);
+  font-weight: var(--weight-medium);
 }
 
 @media (max-width: 700px) {
   .console-ligne {
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 64px 1fr;
+    gap: 0 var(--space-2);
   }
 
-  .console-type {
-    grid-column: 2;
-  }
-
+  .console-type,
   .console-message {
     grid-column: 2;
   }
 }
 
-/* Noeud de sortie Tor. */
+/* Noeud de sortie Tor */
 .carte-tor {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .carte-tor.inactive .carte-tor-ip {
@@ -194,34 +225,35 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.carte-tor-titre {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .carte-tor-ip {
   font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 600;
-  margin: 5px 0 2px;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  margin: var(--space-1) 0;
   overflow-wrap: anywhere;
 }
 
+.carte-tor-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  max-width: 280px;
+  text-align: right;
+}
+
 .carte-tor-note {
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.5;
-  margin-top: 11px;
-}
-
-.ev-tor .console-type,
-.ev-tor .console-message {
-  color: var(--accent-dark);
-}
-
-/* Echeance de collecte manquee (machine en veille ou eteinte) : une
-   anomalie de planification, a ne pas confondre avec une exposition. */
-.ev-echeance .console-type,
-.ev-echeance .console-message {
-  color: var(--warn);
-  font-weight: 600;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin-top: var(--space-3);
 }

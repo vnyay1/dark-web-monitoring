@@ -32,25 +32,27 @@ export function useTri(lignes, accesseurs, initial = null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lignes, tri]);
 
-  function trierPar(cle) {
+  // Premier clic : decroissant pour les nombres et les dates (le plus grave,
+  // le plus recent d'abord), croissant pour un texte (ordre alphabetique).
+  function trierPar(cle, sensInitial = "desc") {
     setTri((actuel) =>
       actuel?.cle === cle
         ? { cle, sens: actuel.sens === "asc" ? "desc" : "asc" }
-        : { cle, sens: "desc" },
+        : { cle, sens: sensInitial },
     );
   }
 
   return { triees, tri, trierPar };
 }
 
-export function EnTeteTri({ cle, tri, trierPar, children, className }) {
+export function EnTeteTri({ cle, tri, trierPar, children, className, sensInitial = "desc" }) {
   const actif = tri?.cle === cle;
   const sens = actif ? (tri.sens === "asc" ? "ascending" : "descending") : "none";
   const Icone = !actif ? IconeTri : tri.sens === "asc" ? IconeHaut : IconeBas;
 
   return (
     <th scope="col" aria-sort={sens} className={className}>
-      <button type="button" className="tri" onClick={() => trierPar(cle)}>
+      <button type="button" className="tri" onClick={() => trierPar(cle, sensInitial)}>
         {children}
         <Icone taille={14} />
       </button>
