@@ -21,25 +21,25 @@ Cette contrainte est non négociable et prévaut sur toute exigence fonctionnell
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    VM isolée (Kali Linux)                 │
-│                                                             │
-│  Scheduler (APScheduler, 1×/jour à heure aléatoire)        │
+┌──────────────────────────────────────────────────────────────┐
+│                    VM isolée (Kali Linux)                    │
+│                                                              │
+│  Scheduler (APScheduler, 1×/jour à heure aléatoire)          │
 │         │  verrou d'instance unique en base                  │
-│         ▼                                                   │
+│         ▼                                                    │
 │  Connecteurs (8 sources réelles) ──► app/tor (Tor centralisé)│
 │         │  crawl incrémental : listing puis pages de détail  │
-│         ▼  texte en mémoire uniquement (CN-05)              │
+│         ▼  texte en mémoire uniquement (CN-05)               │
 │  Fenêtre temporelle ─► Matching ─► Filtrage faux positifs    │
-│         │            ─► Criticité ─► Catégories               │
-│         │            ─► Déduplication multi-source            │
-│         ▼                                                   │
-│  SQLAlchemy / SQLite                                        │
-│         │                                                   │
-│         ├──► Alerting (email / SMS / WhatsApp / interface)  │
+│         │            ─► Criticité ─► Catégories              │
+│         │            ─► Déduplication multi-source           │
+│         ▼                                                    │
+│  SQLAlchemy / SQLite                                         │
+│         │                                                    │
+│         ├──► Alerting (email / SMS / WhatsApp / interface)   │ 
 │         ├──► API JSON Flask (4 rôles)                        │
 │         └──► Interface React (SPA, servie par Flask)         │
-└─────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
