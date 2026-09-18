@@ -4,7 +4,8 @@ from flask import jsonify
 from flask_login import login_required
 
 from app.db import get_session
-from app.models import Alerte, CanalAlerte
+from app.models import Alerte, CanalAlerte, RoleUtilisateur
+from app.web.permissions import role_requis
 
 
 LIMITE_ALERTES = 200
@@ -49,8 +50,14 @@ def enregistrer(api_bp):
         finally:
             session.close()
 
+    # Marquer une alerte lue est un acte de TRAITEMENT, au meme titre que le
+    # changement de statut d'une exposition (expositions.py, SUPERVISOR) :
+    # une alerte lue disparait de ce qui reste a traiter. Le laisser au role
+    # `user` permettait au compte le moins privilegie de masquer une
+    # detection a toute l'equipe - d'un seul appel pour tout-marquer-lu.
     @api_bp.route("/alertes/<alerte_id>/marquer-lue", methods=["POST"])
     @login_required
+    @role_requis(RoleUtilisateur.SUPERVISOR)
     def marquer_lue(alerte_id):
         session = get_session()
         try:
@@ -69,6 +76,7 @@ def enregistrer(api_bp):
 
     @api_bp.route("/alertes/tout-marquer-lu", methods=["POST"])
     @login_required
+    @role_requis(RoleUtilisateur.SUPERVISOR)
     def tout_marquer_lu():
         session = get_session()
         try:

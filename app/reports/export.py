@@ -13,6 +13,24 @@ from app.models import Exposition
 
 logger = logging.getLogger(__name__)
 
+# Un tableur (Excel, LibreOffice, Google Sheets) interprete comme FORMULE
+# toute cellule commencant par l'un de ces caracteres. Or nom_entite provient
+# du HTML scrape : c'est une chaine choisie par l'operateur du site de fuite.
+# Une "victime" nommee =cmd|'/c calc'!A1 s'executerait donc a l'ouverture du
+# CSV sur le poste de l'analyste.
+CARACTERES_FORMULE = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _neutraliser_formule(valeur):
+    """
+    Prefixe d'une apostrophe une valeur que le tableur prendrait pour une
+    formule. L'apostrophe n'est pas affichee dans la cellule : la lecture
+    reste identique, seule l'evaluation est desamorcee.
+    """
+    if isinstance(valeur, str) and valeur.startswith(CARACTERES_FORMULE):
+        return "'" + valeur
+    return valeur
+
 
 def _exposition_vers_dict(exposition) -> dict:
     """Convertit une Exposition en dictionnaire exportable (CN-03/CN-04 compatible)."""
@@ -41,37 +59,45 @@ def _exposition_vers_dict(exposition) -> dict:
 def exporter_json() -> str:
     """FR-28 - Exporte toutes les expositions au format JSON (chaine)."""
     session = get_session()
-    expositions = session.query(Exposition).all()
+    try:
+        expositions = session.query(Exposition).all()
+        data = [_exposition_vers_dict(e) for e in expositions]
+    finally:
+        # try/finally : une exception pendant la lecture des relations
+        # laisserait autrement la session - donc la connexion - ouverte.
+        session.close()
 
-    data = [_exposition_vers_dict(e) for e in expositions]
-
-    session.close()
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
 def exporter_csv() -> str:
     """FR-28 - Exporte toutes les expositions au format CSV (chaine)."""
     session = get_session()
-    expositions = session.query(Exposition).all()
+    try:
+        expositions = session.query(Exposition).all()
 
-    output = io.StringIO()
+        if not expositions:
+            return ""
 
-    if not expositions:
+        output = io.StringIO()
+        fieldnames = list(_exposition_vers_dict(expositions[0]).keys())
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        # Le CSV s'ouvre dans un tableur, devant un lecteur humain : libelles
+        # francais. Le JSON, format d'echange entre outils, garde les
+        # identifiants techniques, stables et sans ambiguite.
+        for e in expositions:
+            ligne = _exposition_vers_dict(e)
+            ligne["statut"] = libelles.libelle(libelles.STATUT, ligne["statut"])
+            ligne["niveau_criticite"] = libelles.libelle(libelles.NIVEAU, ligne["niveau_criticite"])
+
+            # Assainissement applique a TOUTES les colonnes, pas seulement a
+            # nom_entite : les libelles de categories et de sources sont eux
+            # aussi saisis a la main, et le champ le plus expose aujourd'hui
+            # n'est pas forcement celui de demain.
+            writer.writerow({c: _neutraliser_formule(v) for c, v in ligne.items()})
+
+        return output.getvalue()
+    finally:
         session.close()
-        return ""
-
-    fieldnames = list(_exposition_vers_dict(expositions[0]).keys())
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
-
-    # Le CSV s'ouvre dans un tableur, devant un lecteur humain : libelles
-    # francais. Le JSON, format d'echange entre outils, garde les
-    # identifiants techniques, stables et sans ambiguite.
-    for e in expositions:
-        ligne = _exposition_vers_dict(e)
-        ligne["statut"] = libelles.libelle(libelles.STATUT, ligne["statut"])
-        ligne["niveau_criticite"] = libelles.libelle(libelles.NIVEAU, ligne["niveau_criticite"])
-        writer.writerow(ligne)
-
-    session.close()
-    return output.getvalue()

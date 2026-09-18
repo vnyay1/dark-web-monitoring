@@ -7,6 +7,7 @@ ouvert, et perdrait les evenements emis pendant une reconnexion. Le curseur
 reprend exactement la ou il s'etait arrete.
 """
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,8 @@ from flask_login import login_required
 from app import supervision
 from app.models import RoleUtilisateur
 from app.web.permissions import role_requis
+
+logger = logging.getLogger(__name__)
 
 # Racine du depot : le sous-processus doit demarrer la ou "app" est
 # importable, quel que soit le repertoire courant du serveur web.
@@ -113,10 +116,17 @@ def enregistrer(api_bp):
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        except Exception as erreur:
+        except Exception:
+            # Le message d'exception de Popen porte le chemin de
+            # l'interpreteur et la ligne de commande complete : utile dans le
+            # journal serveur, pas dans une reponse HTTP.
+            logger.exception("[scheduler] Echec du lancement du processus.")
             return jsonify({
                 "succes": False,
-                "message": f"Impossible de lancer le scheduler : {erreur}",
+                "message": (
+                    "Impossible de lancer le scheduler. Consultez le journal "
+                    "du serveur pour le detail."
+                ),
             }), 500
 
         return jsonify({
@@ -134,26 +144,29 @@ def enregistrer(api_bp):
         if not etat["actif"]:
             return jsonify({"succes": False, "message": "Aucun scheduler actif."}), 409
 
-        erreur_signal = None
+        arret_echoue = False
         if etat["pid"]:
             try:
                 _terminer_processus(etat["pid"])
             except ProcessLookupError:
                 pass  # deja disparu : reste a liberer le verrou
-            except Exception as erreur:
-                erreur_signal = str(erreur)
+            except Exception:
+                logger.exception("[scheduler] Echec de l'arret du processus.")
+                arret_echoue = True
 
         # Le verrou est libere quoi qu'il arrive : un processus injoignable
         # ne doit pas bloquer le systeme jusqu'a la peremption.
         supervision.liberer_verrou()
 
-        if erreur_signal:
+        if arret_echoue:
+            # pid et hostname restent affiches : ce sont les informations dont
+            # l'administrateur a besoin pour terminer le processus a la main.
+            # Seul le message d'exception brut disparait.
             return jsonify({
                 "succes": True,
                 "message": (
-                    f"Verrou libere, mais l'arret du processus a echoue "
-                    f"({erreur_signal}). Verifiez le pid {etat['pid']} sur "
-                    f"{etat['hostname']}."
+                    f"Verrou libere, mais l'arret du processus a echoue. "
+                    f"Verifiez le pid {etat['pid']} sur {etat['hostname']}."
                 ),
             })
 
