@@ -198,11 +198,10 @@ export function PastilleCriticite({ niveau, criticite }) {
       </span>
       {criticite !== undefined && (
         <span className="criticite-compte">
-          {criticite} <abbr title="sélecteurs distincts">sél.</abbr>
+          {criticite} <abbr title="points : sélecteurs distincts, chacun compté pour son poids">pts</abbr>
           <span className="sr-only">
             {" "}
-            : {criticite} {pluriel("sélecteur", criticite)} camerounais{" "}
-            {pluriel("distinct", criticite)}
+            : score de {criticite} {pluriel("point", criticite)}
           </span>
         </span>
       )}

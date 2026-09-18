@@ -13,8 +13,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.models import (
-    Categorie, ConfigurationSysteme, RoleUtilisateur, Selecteur,
-    exposition_categories,
+    POIDS_MAXIMAL, POIDS_NORMAL, Categorie, ConfigurationSysteme, RoleUtilisateur,
+    Selecteur, exposition_categories,
 )
 from app.web.permissions import role_requis
 
@@ -252,8 +252,11 @@ def enregistrer(api_bp):
             valeur, categorie, erreur = _valider_selecteur(session, donnees)
             if erreur:
                 return erreur
+            poids, erreur = _valider_poids(donnees, defaut=POIDS_NORMAL)
+            if erreur:
+                return erreur
 
-            selecteur = Selecteur(valeur=valeur, categorie=categorie, actif=True)
+            selecteur = Selecteur(valeur=valeur, categorie=categorie, actif=True, poids=poids)
             session.add(selecteur)
             session.commit()
 
@@ -266,9 +269,9 @@ def enregistrer(api_bp):
     @role_requis(RoleUtilisateur.ADMIN)
     def modifier_selecteur(selecteur_id):
         """
-        Modification de la valeur et/ou de la categorie d'un selecteur. Les
-        expositions deja detectees gardent leurs categories : la
-        modification vaut pour les collectes a venir.
+        Modification de la valeur, de la categorie et/ou du poids d'un
+        selecteur. Les expositions deja detectees gardent leurs categories
+        et leur criticite : la modification vaut pour les collectes a venir.
         """
         donnees = request.get_json(silent=True) or {}
         session = get_session()
@@ -280,15 +283,20 @@ def enregistrer(api_bp):
             valeur, categorie, erreur = _valider_selecteur(session, donnees, exclure_id=selecteur.id)
             if erreur:
                 return erreur
+            # Poids absent de la requete : il est conserve.
+            poids, erreur = _valider_poids(donnees, defaut=selecteur.poids)
+            if erreur:
+                return erreur
 
-            ancien = selecteur.valeur
+            ancien, ancien_poids = selecteur.valeur, selecteur.poids
             selecteur.valeur = valeur
             selecteur.categorie = categorie
+            selecteur.poids = poids
             session.commit()
 
             logger.info(
                 f"[catalogue] Selecteur modifie par '{current_user.nom_utilisateur}' : "
-                f"{ancien!r} -> {valeur!r} ({categorie.nom})"
+                f"{ancien!r} -> {valeur!r} ({categorie.nom}), poids {ancien_poids} -> {poids}"
             )
             return jsonify({"succes": True, "selecteur": _serialiser_selecteur(selecteur)})
         finally:
@@ -371,6 +379,7 @@ def _serialiser_selecteur(selecteur) -> dict:
         "valeur": selecteur.valeur,
         "categorie": {"id": selecteur.categorie.id, "nom": selecteur.categorie.nom},
         "actif": selecteur.actif,
+        "poids": selecteur.poids,
     }
 
 
@@ -431,3 +440,23 @@ def _valider_selecteur(session, donnees, exclure_id=None):
         }), 409)
 
     return valeur, categorie, None
+
+
+def _valider_poids(donnees, defaut):
+    """Retourne (poids, erreur) ; erreur est None si tout va bien."""
+    brut = donnees.get("poids")
+    if brut is None or brut == "":
+        return defaut, None
+    # bool est un int en Python : true ne doit pas passer pour un poids 1.
+    if isinstance(brut, bool):
+        brut = None
+    try:
+        poids = int(brut)
+    except (TypeError, ValueError):
+        poids = None
+    if poids is None or not POIDS_NORMAL <= poids <= POIDS_MAXIMAL:
+        return None, (jsonify({
+            "succes": False,
+            "message": f"Le poids est un entier de {POIDS_NORMAL} a {POIDS_MAXIMAL}.",
+        }), 400)
+    return poids, None

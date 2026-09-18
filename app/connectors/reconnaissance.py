@@ -811,8 +811,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
         retenus = []
         for m in trouves:
             info = par_valeur.setdefault(m.selecteur_valeur, {
-                "categorie": m.selecteur_categorie, "niveaux": {}, "motifs": {},
-                "retenues": 0, "apres": None,
+                "categorie": m.selecteur_categorie, "poids": m.selecteur_poids,
+                "niveaux": {}, "motifs": {}, "retenues": 0, "apres": None,
             })
             info["niveaux"][m.type_correspondance] = info["niveaux"].get(m.type_correspondance, 0) + 1
             motif = motif_rejet_structurel(texte_analyse, m)
@@ -825,8 +825,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
             if m.selecteur_valeur in par_valeur and par_valeur[m.selecteur_valeur]["apres"] is None:
                 continue
             info = par_valeur.setdefault(m.selecteur_valeur, {
-                "categorie": m.selecteur_categorie, "niveaux": {}, "motifs": {},
-                "retenues": 0, "apres": m.position,
+                "categorie": m.selecteur_categorie, "poids": m.selecteur_poids,
+                "niveaux": {}, "motifs": {}, "retenues": 0, "apres": m.position,
             })
             info["apres"] = min(info["apres"], m.position)
 
@@ -835,12 +835,14 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
         detail = calculer_criticite(retenus)
 
         print()
-        print(f"SELECTEURS DU CATALOGUE TROUVES ({len(actifs)} actifs)")
+        print(f"SELECTEURS DU CATALOGUE TROUVES ({len(actifs)} actifs ; xN = poids)")
         print("-" * 64)
         if not par_valeur:
             print("  aucun")
         for valeur, info in par_valeur.items():
-            categorie = noms_categories.get(info["categorie"], "?")[:22]
+            categorie = noms_categories.get(info["categorie"], "?")[:18]
+            if info["poids"] > 1:
+                categorie += f" x{info['poids']}"
             niveaux = ", ".join(f"{n} x{c}" for n, c in info["niveaux"].items()) or "-"
             if info["apres"] is not None:
                 verdict = f"APRES LA COUPURE (1re position {info['apres']})"
@@ -984,10 +986,10 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
             print("  exposition       : aucune au nom proche")
 
         for exposition in liees:
-            if not hors_periode and detail.nb_selecteurs > exposition.criticite:
+            if not hors_periode and detail.score > exposition.criticite:
                 causes.append(
-                    f"L'analyse actuelle retiendrait {detail.nb_selecteurs} selecteur(s), contre "
-                    f"{exposition.criticite} enregistre(s) : remettre l'entree en file "
+                    f"L'analyse actuelle donnerait une criticite de {detail.score}, contre "
+                    f"{exposition.criticite} enregistree : remettre l'entree en file "
                     f"(python3 -m app.crawl.registre --source {connecteur.SOURCE_NAME} "
                     f"--identifiant {normalisee['identifiant_entree']})."
                 )
@@ -1002,8 +1004,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
     for cause in dict.fromkeys(causes):
         print(f"  - {cause}")
     if not causes:
-        print(f"  Aucune cause detectee : la chaine actuelle retient {detail.nb_selecteurs} "
-              f"selecteur(s) pour cette entree.")
+        print(f"  Aucune cause detectee : la chaine actuelle donne {detail.resume()} "
+              f"pour cette entree.")
 
 
 def _analyser_arguments():

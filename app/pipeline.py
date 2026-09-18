@@ -173,10 +173,10 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         stats["nb_rejetees_faux_positif"] += 1
         return False
 
-    # FR-10 : criticite (nombre de selecteurs distincts)
+    # FR-10 : criticite (selecteurs distincts, ponderes par leur poids)
     detail = calculer_criticite(matches_filtres)
 
-    if detail.nb_selecteurs < seuils["criticite_minimum"]:
+    if detail.score < seuils["criticite_minimum"]:
         stats["nb_rejetees_criticite_faible"] += 1
         return False
 
@@ -191,7 +191,7 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         categorie_ids=detail.categories,
         type_source=source.type_source,
         reference_source=entry["reference_source"],
-        criticite=detail.nb_selecteurs,
+        criticite=detail.score,
         niveau_criticite=detail.niveau,
         source_id=source.id,
         date_publication=date_publication,

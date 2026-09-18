@@ -21,6 +21,13 @@ surement une exposition camerounaise qu'une annonce n'en citant qu'un.
 Les paliers sont regles par l'administrateur (app.config_system), pas
 figes ici : le bon reglage depend du bruit reel des sources, qui ne se
 connait qu'a l'usage.
+
+POIDS - tous les selecteurs ne se valent pas : "Cameroun" dans une annonce
+en dit plus qu'un acronyme de trois lettres. L'administrateur peut donc
+donner a un selecteur un poids superieur a 1 (Selecteur.poids, il est
+alors "prioritaire"). La criticite enregistree est le SCORE : la somme des
+poids des selecteurs distincts. Tant que tous les poids valent 1, le score
+est exactement le nombre de selecteurs distincts d'avant.
 """
 
 import logging
@@ -38,9 +45,14 @@ class CriticiteDetail:
 
     nb_selecteurs: int
     niveau: NiveauCriticite
+    # Somme des poids des selecteurs distincts : c'est la criticite
+    # enregistree et comparee aux paliers.
+    score: int = 0
     # Valeurs des selecteurs distincts trouves. Sert au log et a la console
     # de supervision ; n'est JAMAIS persistee (CN-03).
     selecteurs: list = field(default_factory=list)
+    # Ceux d'entre eux dont le poids depasse 1.
+    prioritaires: list = field(default_factory=list)
     # Identifiants des categories de ces selecteurs : elles deviennent les
     # categories de l'exposition (FR-13).
     categories: list = field(default_factory=list)
@@ -48,7 +60,11 @@ class CriticiteDetail:
     def resume(self) -> str:
         """Libelle court destine aux logs et aux messages d'alerte."""
         pluriel = "s" if self.nb_selecteurs > 1 else ""
-        return f"{self.niveau.value.upper()} ({self.nb_selecteurs} selecteur{pluriel})"
+        compte = f"{self.nb_selecteurs} selecteur{pluriel}"
+        if self.prioritaires:
+            nb = len(self.prioritaires)
+            compte = f"score {self.score} : {compte} dont {nb} prioritaire{'s' if nb > 1 else ''}"
+        return f"{self.niveau.value.upper()} ({compte})"
 
 
 def _paliers() -> tuple:
@@ -65,15 +81,15 @@ def _paliers() -> tuple:
     return tuple(sorted((moyenne, elevee, critique)))
 
 
-def niveau_pour(nb_selecteurs: int) -> NiveauCriticite:
-    """Traduit un nombre de selecteurs distincts en palier."""
+def niveau_pour(score: int) -> NiveauCriticite:
+    """Traduit un score (selecteurs distincts ponderes) en palier."""
     moyenne, elevee, critique = _paliers()
 
-    if nb_selecteurs >= critique:
+    if score >= critique:
         return NiveauCriticite.CRITIQUE
-    if nb_selecteurs >= elevee:
+    if score >= elevee:
         return NiveauCriticite.ELEVEE
-    if nb_selecteurs >= moyenne:
+    if score >= moyenne:
         return NiveauCriticite.MOYENNE
     return NiveauCriticite.FAIBLE
 
@@ -88,18 +104,28 @@ def calculer_criticite(matches: list) -> CriticiteDetail:
     trois resultats. On deduplique donc sur selecteur_valeur, sinon une
     annonce repetant un seul nom paraitrait aussi critique qu'une annonce
     en citant trois differents.
+
+    Chaque selecteur distinct compte pour son poids. Une meme valeur peut
+    figurer dans deux categories ("Republic of Cameroon") : elle ne compte
+    qu'une fois, pour le plus grand de ses poids.
     """
     if not matches:
         return CriticiteDetail(nb_selecteurs=0, niveau=NiveauCriticite.FAIBLE)
 
-    # dict.fromkeys plutot que set() : conserve l'ordre de decouverte,
-    # ce qui rend les logs reproductibles et lisibles.
-    distincts = list(dict.fromkeys(m.selecteur_valeur for m in matches))
+    # Dictionnaire plutot que set() : conserve l'ordre de decouverte, ce
+    # qui rend les logs reproductibles et lisibles.
+    poids = {}
+    for m in matches:
+        poids[m.selecteur_valeur] = max(poids.get(m.selecteur_valeur, 0), m.selecteur_poids or 1)
+    distincts = list(poids)
+    score = sum(poids.values())
 
     return CriticiteDetail(
         nb_selecteurs=len(distincts),
-        niveau=niveau_pour(len(distincts)),
+        niveau=niveau_pour(score),
+        score=score,
         selecteurs=distincts,
+        prioritaires=[valeur for valeur in distincts if poids[valeur] > 1],
         categories=list(dict.fromkeys(
             m.selecteur_categorie for m in matches if m.selecteur_categorie
         )),

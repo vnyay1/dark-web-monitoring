@@ -118,11 +118,11 @@ export const api = {
   modifierConfiguration: (cle, valeur) =>
     requete(`/configuration/${cle}`, corpsJson({ valeur })),
   selecteurs: () => requete("/selecteurs"),
-  ajouterSelecteur: (valeur, categorie_id) =>
-    requete("/selecteurs", corpsJson({ valeur, categorie_id })),
-  modifierSelecteur: (id, valeur, categorie_id) =>
+  ajouterSelecteur: (valeur, categorie_id, poids) =>
+    requete("/selecteurs", corpsJson({ valeur, categorie_id, poids })),
+  modifierSelecteur: (id, valeur, categorie_id, poids) =>
     requete(`/selecteurs/${id}`, {
-      ...corpsJson({ valeur, categorie_id }),
+      ...corpsJson({ valeur, categorie_id, poids }),
       method: "PUT",
     }),
 

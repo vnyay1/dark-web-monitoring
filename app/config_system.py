@@ -18,18 +18,18 @@ logger = logging.getLogger(__name__)
 # rejetait desormais des reglages legitimes comme
 # niveau_alerte_minimum = "moyenne".
 VALEURS_PAR_DEFAUT = {
-    # --- FR-10 : paliers de criticite (nombre de selecteurs distincts) ---
+    # --- FR-10 : paliers de criticite (score : selecteurs distincts ponderes par leur poids) ---
     "seuil_criticite_moyenne": (
-        "2", "Nombre de selecteurs distincts a partir duquel la criticite est MOYENNE", "int",
+        "2", "Score (selecteurs distincts ponderes par leur poids) a partir duquel la criticite est MOYENNE", "int",
     ),
     "seuil_criticite_elevee": (
-        "3", "Nombre de selecteurs distincts a partir duquel la criticite est ELEVEE", "int",
+        "3", "Score (selecteurs distincts ponderes par leur poids) a partir duquel la criticite est ELEVEE", "int",
     ),
     "seuil_criticite_critique": (
-        "4", "Nombre de selecteurs distincts a partir duquel la criticite est CRITIQUE", "int",
+        "4", "Score (selecteurs distincts ponderes par leur poids) a partir duquel la criticite est CRITIQUE", "int",
     ),
     "criticite_minimum_enregistrement": (
-        "1", "Nombre de selecteurs en dessous duquel une entree n'est meme pas enregistree en base", "int",
+        "1", "Score en dessous duquel une entree n'est meme pas enregistree en base", "int",
     ),
 
     # --- FR-25/FR-26 : alertes ---
