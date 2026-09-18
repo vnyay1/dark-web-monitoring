@@ -275,6 +275,28 @@ def match_text_against_selecteur(texte: str, selecteur_valeur: str, selecteur_ca
     return all_matches
 
 
+# Ponctuation collee a un mot par texte.split() ("Cameroon," "(Cameroon)").
+PONCTUATION_SEGMENT = " \t\n.,;:!?()[]{}\"'«»"
+
+
+def _sans_fuzzy_sur_un_selecteur(resultats: list, selecteurs: list) -> list:
+    """
+    Ecarte une correspondance APPROCHEE dont le segment trouve est lui-meme
+    un selecteur du catalogue : le texte dit "Cameroon", il ne cite pas
+    "Cameroun" avec une faute de frappe. Sans cela, un seul mot comptait
+    pour deux selecteurs distincts (Cameroon exact, Cameroun approche), et
+    le poids d'un selecteur prioritaire etait compte deux fois.
+    """
+    valeurs = {
+        (s.valeur if hasattr(s, "valeur") else s[0]).lower() for s in selecteurs
+    }
+    return [
+        m for m in resultats
+        if m.type_correspondance != "fuzzy"
+        or m.segment_trouve.strip(PONCTUATION_SEGMENT).lower() not in valeurs
+    ]
+
+
 def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: bool = True) -> list[MatchResult]:
     """
     Applique le matching pour l'ensemble du catalogue de selecteurs actifs.
@@ -304,6 +326,8 @@ def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: boo
             contexte=contexte, poids=poids,
         )
         all_results.extend(matches)
+
+    all_results = _sans_fuzzy_sur_un_selecteur(all_results, selecteurs)
 
     # Une ligne par annonce analysee : niveau DEBUG, sinon elle noie le
     # journal d'un cycle de plusieurs centaines d'annonces.
