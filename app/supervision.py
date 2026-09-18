@@ -25,6 +25,7 @@ from datetime import timedelta
 from sqlalchemy import or_, update
 
 from app.db import get_session
+from app.version import VERSION_AU_DEMARRAGE
 from app.models import (
     EtatScheduler,
     EvenementCollecte,
@@ -118,6 +119,7 @@ def reclamer_verrou() -> tuple:
                 hostname=socket.gethostname(),
                 demarre_le=maintenant,
                 heartbeat=maintenant,
+                version_code=VERSION_AU_DEMARRAGE,
                 source_en_cours=None,
                 collecte_immediate_demandee=False,
                 verification_ip_demandee=False,
@@ -575,6 +577,8 @@ def etat_courant() -> dict:
             "ip_verifiee_le": horodater(etat.ip_verifiee_le),
             "ip_changee_le": horodater(etat.ip_changee_le),
             "verification_ip_demandee": bool(etat.verification_ip_demandee),
+            # Version du code chargee par le scheduler EN MARCHE (cf. app.version).
+            "version_code": etat.version_code if vivant else None,
         }
     finally:
         session.close()

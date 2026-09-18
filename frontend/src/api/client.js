@@ -87,6 +87,7 @@ export const api = {
     requete("/auth/connexion", corpsJson({ nom_utilisateur, mot_de_passe })),
   deconnexion: () => requete("/auth/deconnexion", corpsJson()),
   moi: () => requete("/auth/moi"),
+  versionSysteme: () => requete("/systeme/version"),
 
   // --- Tableau de bord ---
   dashboard: () => requete("/dashboard"),

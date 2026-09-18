@@ -21,7 +21,7 @@ import { api } from "../api/client";
 import { useSession } from "../api/session";
 import logoAntic from "../assets/logo-antic.png";
 import { InterrupteurTheme } from "../theme/theme";
-import { Chargement, fuseauLocal, LIBELLE_ROLE } from "./communs";
+import { Banniere, Chargement, fuseauLocal, LIBELLE_ROLE } from "./communs";
 import {
   IconeAlertes,
   IconeAudit,
@@ -154,6 +154,65 @@ function PuceUtilisateur({ utilisateur }) {
   );
 }
 
+// Frequence de la verification de version : un redemarrage oublie se voit
+// sans recharger la page, sans solliciter le serveur pour rien.
+const INTERVALLE_VERIFICATION_VERSION_MS = 5 * 60 * 1000;
+
+/**
+ * Previent l'administrateur quand le serveur web ou le planificateur
+ * executent une version du code anterieure a celle installee : apres un
+ * git pull, tant qu'ils ne sont pas redemarres, les modifications ne sont
+ * pas actives (cf. app/version.py).
+ */
+function BandeauVersion({ actif }) {
+  const [version, setVersion] = useState(null);
+
+  useEffect(() => {
+    if (!actif) return undefined;
+    let annule = false;
+    const verifier = () =>
+      api
+        .versionSysteme()
+        .then((v) => {
+          if (!annule) setVersion(v);
+        })
+        .catch(() => {});
+
+    verifier();
+    const minuterie = setInterval(verifier, INTERVALLE_VERIFICATION_VERSION_MS);
+    return () => {
+      annule = true;
+      clearInterval(minuterie);
+    };
+  }, [actif]);
+
+  if (!version?.installee) return null;
+  const webAncien = version.web && version.web !== version.installee;
+  const planificateurAncien = version.scheduler_actif && version.scheduler !== version.installee;
+  if (!webAncien && !planificateurAncien) return null;
+
+  return (
+    <div className="espace-bas">
+      <Banniere ton="warn" role="status">
+        {webAncien && (
+          <p>
+            Le serveur web exécute une ancienne version du code ({version.web}, installée : {version.installee}) :
+            les dernières modifications ne sont pas actives. Redémarrez-le (arrêter puis relancer{" "}
+            <code>python3 run.py</code>).
+          </p>
+        )}
+        {planificateurAncien && (
+          <p>
+            Le planificateur exécute une ancienne version du code
+            {version.scheduler ? ` (${version.scheduler}, installée : ${version.installee})` : ""} : la collecte
+            suit l'ancienne logique. Arrêtez-le puis redémarrez-le depuis la page Collecte.
+          </p>
+        )}
+      </Banniere>
+    </div>
+  );
+}
+
 export default function Layout() {
   const { utilisateur, deconnexion, aRole } = useSession();
   const navigate = useNavigate();
@@ -259,6 +318,7 @@ export default function Layout() {
         </header>
 
         <main id="contenu" className="page" tabIndex={-1} ref={contenu}>
+          <BandeauVersion actif={aRole("admin")} />
           {/* Pages chargees a la demande (cf. App.jsx) : seul le contenu
               attend, la navigation reste en place. */}
           <Suspense fallback={<Chargement />}>
