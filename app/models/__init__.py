@@ -7,6 +7,11 @@ en faveur de la liste restreinte de CN-03 (voir ambiguite 3 du rapport de suivi)
 Respecte CN-04 : aucun champ ne doit jamais contenir de nom de personne,
 numero CNI, telephone, email, mot de passe, hash, information financiere,
 ou extrait d'un enregistrement divulgue.
+
+SEULE EXCEPTION, par derogation decidee le 2026-09-18 :
+SourceReference.texte_brut, le texte de l'annonce d'une entree qui a
+produit une exposition, masque et a duree de conservation limitee (cf.
+app/conservation.py).
 """
 
 import uuid
@@ -26,7 +31,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, deferred, relationship
 
 Base = declarative_base()
 
@@ -225,6 +230,16 @@ class SourceReference(Base):
     date_publication = Column(DateTime(timezone=True), nullable=True)
 
     date_signalement = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    # DEROGATION CN-04/CN-05 (2026-09-18) : texte analyse de l'entree,
+    # masque par app.conservation.preparer_texte_conserve() et purge apres
+    # retention_texte_brut_jours. Jamais le HTML de la page, jamais le texte
+    # d'une entree sans exposition. deferred : charge seulement quand on le
+    # lit (endpoint dedie), jamais par les listes ni les exports.
+    # date_texte_brut est posee et effacee en meme temps que lui : c'est elle
+    # qu'on teste pour savoir si un texte existe, sans le charger.
+    texte_brut = deferred(Column(Text, nullable=True))
+    date_texte_brut = Column(DateTime(timezone=True), nullable=True)
 
     exposition = relationship("Exposition", back_populates="sources")
     source = relationship("Source")
