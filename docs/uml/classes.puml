@@ -30,6 +30,7 @@ package "Expositions" {
     +date_signalement : datetime
     +texte_brut : str
     +date_texte_brut : datetime
+    +selecteurs_trouves : json
   }
 
   class Categorie {

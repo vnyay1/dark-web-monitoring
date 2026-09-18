@@ -325,12 +325,12 @@ def enregistrer(api_bp):
         """
         Suppression DEFINITIVE d'un selecteur du catalogue.
 
-        Aucune table ne reference les selecteurs : la criticite n'enregistre
-        pas les selecteurs trouves (CN-03), et les categories d'une
-        exposition lui sont attachees directement. Les expositions deja
-        detectees ne sont donc pas affectees ; seules les collectes futures
-        ne rechercheront plus ce terme. La desactivation reste l'alternative
-        reversible.
+        Aucune table ne reference les selecteurs : les selecteurs trouves
+        sont enregistres sur les signalements comme des VALEURS figees a la
+        detection, et les categories d'une exposition lui sont attachees
+        directement. Les expositions deja detectees ne sont donc pas
+        affectees ; seules les collectes futures ne rechercheront plus ce
+        terme. La desactivation reste l'alternative reversible.
         """
         session = get_session()
         try:

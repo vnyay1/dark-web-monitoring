@@ -1,16 +1,17 @@
 """
-Rattrapage du texte des annonces (derogation CN-04/CN-05, cf. app.conservation).
+Rattrapage du texte des annonces et de leurs selecteurs (cf. app.conservation).
 
-Un signalement n'a pas de texte conserve quand son annonce a ete analysee
-avant la conservation des textes. La collecte ne le rattrape pas d'elle-meme
-pour une source a pages de detail : une annonce deja traitee n'y est plus
-relue que sur son titre, qui n'est pas le texte de l'annonce. Cet outil
-relit ces annonces sur leur source, exactement comme une collecte
+Un signalement n'a ni texte conserve ni selecteurs enregistres quand son
+annonce a ete analysee avant ces fonctions. La collecte le complete
+d'elle-meme, dans le budget de pages de detail de chaque cycle et tant que
+l'annonce figure dans les pages de listing parcourues. Cet outil fait la
+meme chose A LA DEMANDE, sans budget ni arret de pagination sur la
+periode : il relit ces annonces sur leur source comme une collecte
 (BaseConnector.collect : listing puis page de detail, delai FR-06, journal
 d'audit).
 
 Pour chaque annonce retrouvee, il :
-  - conserve son texte complet, masque, sur le signalement ;
+  - conserve son texte complet, masque, et ses selecteurs sur le signalement ;
   - relance la chaine d'analyse (matching, faux positifs, criticite) et
     remonte la criticite et les categories de l'exposition si elles ont
     augmente - jamais a la baisse, comme en collecte - avec l'alerte de
@@ -50,13 +51,17 @@ from app import supervision
 from app.alerting.dispatcher import declencher_alertes
 from app.config_system import get_config_int
 from app.connectors import connecteurs_actifs
-from app.conservation import conserver_texte, preparer_texte_conserve, texte_complet
+from app.conservation import (
+    identifiants_des_references, preparer_texte_conserve, signalements_a_completer,
+    texte_complet,
+)
 from app.crawl.registre import marquer_traitee
 from app.db import get_session, init_db
 from app.matching.criticite import calculer_criticite
+from app.matching.deduplication import completer_signalements
 from app.matching.engine import match_text_against_catalogue
 from app.matching.exclusion import filtrer_faux_positifs
-from app.models import Categorie, Selecteur, Source, SourceReference
+from app.models import Selecteur, Source
 from app.pipeline import _normaliser_entry
 
 logger = logging.getLogger(__name__)
@@ -84,23 +89,6 @@ class _ToutSaufCibles:
         return True
 
 
-def _reference_exploitable(connecteur, reference) -> bool:
-    """
-    Une reference designe-t-elle UNE annonce ? Pas quand la collecte s'est
-    rabattue sur l'URL du listing, faute de lien propre a l'annonce.
-    """
-    return bool(reference) and reference not in ("unknown", connecteur.TARGET_URL)
-
-
-def _signalements_a_relire(session, source, tous) -> list:
-    requete = session.query(SourceReference).options(
-        joinedload(SourceReference.exposition)
-    ).filter(SourceReference.source_id == source.id)
-    if not tous:
-        requete = requete.filter(SourceReference.date_texte_brut.is_(None))
-    return requete.all()
-
-
 def _inventaire(session, tous) -> list:
     """(connecteur, source, {reference: [signalements]}, ecartes) par source concernee."""
     plan = []
@@ -109,12 +97,7 @@ def _inventaire(session, tous) -> list:
         if source is None:
             continue
         connecteur = classe(db_session=session, source_id=source.id)
-        par_reference, ecartes = {}, 0
-        for signalement in _signalements_a_relire(session, source, tous):
-            if _reference_exploitable(connecteur, signalement.reference_source):
-                par_reference.setdefault(signalement.reference_source, []).append(signalement)
-            else:
-                ecartes += 1
+        par_reference, ecartes = signalements_a_completer(session, source, connecteur, tous)
         if par_reference or ecartes:
             plan.append((connecteur, source, par_reference, ecartes))
     return plan
@@ -126,59 +109,41 @@ def _estimation(connecteur, nb_cibles) -> str:
     return f"{requetes} requete(s) au plus, environ {requetes * SECONDES_PAR_REQUETE // 60 + 1} min"
 
 
-def _completer(session, connecteur, source, entree, signalements, selecteurs) -> list:
-    """Conserve le texte d'une annonce relue et complete ses expositions."""
+def _completer(session, source, entree, signalements, selecteurs) -> list:
+    """Complete les expositions d'une annonce relue (meme regle qu'en collecte)."""
     texte = entree["texte_brut"]
-    masque = preparer_texte_conserve(texte)
     detail = calculer_criticite(filtrer_faux_positifs(
         texte, match_text_against_catalogue(texte, selecteurs), session=session,
     ))
 
-    categories = (
-        session.query(Categorie).filter(Categorie.id.in_(detail.categories)).all()
-        if detail.categories else []
+    completees = completer_signalements(
+        session, signalements,
+        categorie_ids=detail.categories,
+        criticite=detail.score,
+        niveau_criticite=detail.niveau,
+        date_publication=entree.get("date_publication"),
+        texte_brut=preparer_texte_conserve(texte),
+        selecteurs=detail.details,
     )
-
-    hausses, lignes = [], []
-    for signalement in signalements:
-        exposition = signalement.exposition
-        conserve = conserver_texte(signalement, masque)
-
-        ancienne = exposition.criticite
-        if detail.score > ancienne:
-            exposition.criticite = detail.score
-            exposition.niveau_criticite = detail.niveau
-            hausses.append((exposition, ancienne))
-        # Categories : union, jamais de retrait (cf. deduplication).
-        for categorie in categories:
-            if categorie not in exposition.categories:
-                exposition.categories.append(categorie)
-
-        lignes.append(
-            f"  {exposition.nom_entite!r} : "
-            f"{'texte conserve (' + str(len(masque)) + ' car.)' if conserve else 'texte deja aussi complet'}"
-            f", criticite {ancienne} -> {exposition.criticite}"
-        )
-
     if entree["niveau_detail"] == "detail":
         marquer_traitee(session, source.id, entree["identifiant_entree"], a_produit_exposition=True)
-    session.commit()
+        session.commit()
 
-    # Meme regle qu'en collecte : une hausse significative de criticite sur
-    # une exposition connue declenche l'alerte de confirmation (FR-25/FR-26).
-    for exposition, ancienne in hausses:
+    lignes = []
+    for exposition, ancienne in completees:
+        # Meme regle qu'en collecte : une hausse significative de criticite
+        # sur une exposition connue declenche l'alerte de confirmation.
         declencher_alertes(session, exposition, est_nouvelle=False, ancienne_criticite=ancienne)
+        lignes.append(
+            f"  {exposition.nom_entite!r} : texte {len(texte)} car., "
+            f"{detail.nb_selecteurs} selecteur(s), criticite {ancienne} -> {exposition.criticite}"
+        )
     return lignes
 
 
 def _relire_source(session, connecteur, source, par_reference, selecteurs):
     """Relit les annonces d'une source ; retourne les references non retrouvees."""
-    cibles = set()
-    for reference in par_reference:
-        cibles.add(reference)
-        chemin = connecteur._chemin_interne(reference)
-        if chemin:
-            cibles.add(chemin)
+    cibles = identifiants_des_references(connecteur, par_reference)
 
     resultat = connecteur.collect(
         entrees_connues=_ToutSaufCibles(cibles),
@@ -206,7 +171,7 @@ def _relire_source(session, connecteur, source, par_reference, selecteurs):
             print(f"  {entree['reference_source']} : page de detail en echec "
                   f"({entree.get('echec_detail') or 'non servie'}), a relancer plus tard")
             continue
-        for ligne in _completer(session, connecteur, source, entree, signalements, selecteurs):
+        for ligne in _completer(session, source, entree, signalements, selecteurs):
             print(ligne)
 
     return [reference for reference in par_reference if reference not in retrouvees]
@@ -265,14 +230,14 @@ def executer(nom_source=None, tous=False, confirmer=False):
 
 def _analyser_arguments():
     parseur = argparse.ArgumentParser(
-        description="Recupere le texte des annonces des signalements qui n'en ont pas "
-                    "(simulation sans --confirmer)."
+        description="Recupere le texte des annonces et leurs selecteurs pour les "
+                    "signalements qui n'en ont pas (simulation sans --confirmer)."
     )
     parseur.add_argument("--source", help="SOURCE_NAME a traiter (defaut : toutes)")
     parseur.add_argument(
         "--tous", action="store_true",
-        help="Relire aussi les signalements qui ont deja un texte (il n'est remplace que "
-             "par un texte plus long)",
+        help="Relire aussi les signalements deja complets (texte et selecteurs ne sont "
+             "remplaces que par plus complet)",
     )
     parseur.add_argument("--confirmer", action="store_true",
                          help="Lancer reellement la relecture (sinon : simulation)")

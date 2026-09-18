@@ -171,9 +171,8 @@ class Exposition(Base):
 
     # FR-10 - criticite = score de l'entree : selecteurs DISTINCTS trouves,
     # chacun compte pour son poids (Selecteur.poids, 1 par defaut) ;
-    # niveau_criticite en est le palier lisible. On ne stocke PAS la liste
-    # des selecteurs eux-memes : CN-03 enumere les metadonnees autorisees
-    # et n'en fait pas partie.
+    # niveau_criticite en est le palier lisible. Les selecteurs eux-memes
+    # sont enregistres par signalement (SourceReference.selecteurs_trouves).
     criticite = Column(Integer, nullable=False, default=0)
     niveau_criticite = Column(SAEnum(NiveauCriticite), nullable=False,
                                default=NiveauCriticite.FAIBLE)
@@ -240,6 +239,14 @@ class SourceReference(Base):
     # existe, sans le charger.
     texte_brut = deferred(Column(Text, nullable=True))
     date_texte_brut = Column(DateTime(timezone=True), nullable=True)
+
+    # Selecteurs du catalogue trouves dans l'annonce, liste JSON de
+    # {valeur, categorie_id, categorie, poids, occurrences, correspondances}
+    # issue de l'analyse au score le plus eleve (cf.
+    # app.conservation.conserver_selecteurs). Des termes du CATALOGUE, fige
+    # a la detection : ce n'est pas une cle etrangere, supprimer ou renommer
+    # un selecteur ne le modifie pas. NULL : signalement anterieur.
+    selecteurs_trouves = Column(Text, nullable=True)
 
     exposition = relationship("Exposition", back_populates="sources")
     source = relationship("Source")

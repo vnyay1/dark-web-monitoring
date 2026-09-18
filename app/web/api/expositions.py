@@ -6,6 +6,7 @@ from flask import jsonify, request
 from flask_login import login_required
 
 from app.config_system import get_config_int
+from app.conservation import lire_selecteurs
 from app.db import get_session
 from app.models import (
     Categorie, Exposition, NiveauCriticite, RoleUtilisateur,
@@ -58,6 +59,56 @@ def _sources_de(exposition) -> list:
     ]
 
 
+def _selecteurs_de(exposition) -> dict:
+    """
+    Selecteurs du catalogue trouves dans les annonces de l'exposition,
+    reunis sur tous ses signalements : un selecteur vu sur deux sources
+    n'apparait qu'une fois, avec ses sources. Ce sont eux qui justifient la
+    criticite (somme de leurs poids sur l'annonce la plus complete).
+
+    liste vaut None si aucun signalement n'en porte encore (exposition
+    detectee avant leur enregistrement, pas encore relue).
+    """
+    # Nom ACTUEL de la categorie quand elle est toujours rattachee a
+    # l'exposition (elle a pu etre renommee), sinon celui fige a la detection.
+    noms_actuels = {c.id: c.nom for c in exposition.categories}
+    par_valeur = {}
+    enregistres, manquants = 0, 0
+
+    for signalement in exposition.sources:
+        selecteurs = lire_selecteurs(signalement)
+        if selecteurs is None:
+            manquants += 1
+            continue
+        enregistres += 1
+        nom_source = signalement.source.nom if signalement.source else None
+
+        for trouve in selecteurs:
+            ligne = par_valeur.setdefault(trouve["valeur"], {
+                "valeur": trouve["valeur"],
+                "categorie": noms_actuels.get(trouve.get("categorie_id")) or trouve.get("categorie"),
+                "poids": 0,
+                "occurrences": 0,
+                "correspondances": [],
+                "sources": [],
+            })
+            ligne["poids"] = max(ligne["poids"], trouve.get("poids", 1))
+            ligne["occurrences"] = max(ligne["occurrences"], trouve.get("occurrences", 0))
+            for niveau in trouve.get("correspondances", {}):
+                if niveau not in ligne["correspondances"]:
+                    ligne["correspondances"].append(niveau)
+            if nom_source and nom_source not in ligne["sources"]:
+                ligne["sources"].append(nom_source)
+
+    return {
+        "liste": sorted(
+            par_valeur.values(),
+            key=lambda ligne: (-ligne["poids"], -ligne["occurrences"], ligne["valeur"].lower()),
+        ) if enregistres else None,
+        "signalements_non_relus": manquants,
+    }
+
+
 def serialiser(exposition, detaille: bool = False) -> dict:
     donnees = {
         "id": exposition.id,
@@ -81,6 +132,7 @@ def serialiser(exposition, detaille: bool = False) -> dict:
 
     if detaille:
         donnees["signalements"] = _sources_de(exposition)
+        donnees["selecteurs_trouves"] = _selecteurs_de(exposition)
 
     return donnees
 

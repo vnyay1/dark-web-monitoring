@@ -26,13 +26,24 @@ Ce module est le POINT D'AUDIT UNIQUE de la derogation. Perimetre :
    (Cache-Control: no-store), et n'apparait dans aucune liste, aucun
    export ni aucun rapport.
 
-Les signalements anterieurs a cette fonction, ou dont la page de detail n'a
-pas encore ete relue, se rattrapent avec app.maintenance.recuperer_textes.
+Avec le texte sont enregistres les SELECTEURS trouves dans l'annonce
+(termes du catalogue, poids, occurrences), qui justifient la criticite dans
+le detail de l'exposition (SourceReference.selecteurs_trouves).
+
+COMPLETION - un signalement sans texte ou sans selecteurs (annonce analysee
+avant ces fonctions, ou lue sur son seul titre) est "a completer"
+(signalements_a_completer). La collecte le complete d'elle-meme : elle
+relit son annonce, page de detail comprise, sans lui appliquer la fenetre
+d'analyse (cf. app.pipeline). app.maintenance.recuperer_textes fait la
+meme chose a la demande, sans attendre le cycle ni son budget.
 """
 
+import json
 import re
 
-from app.models import utc_now
+from sqlalchemy.orm import joinedload
+
+from app.models import SourceReference, utc_now
 
 
 # Ordre d'application significatif : l'email avant les suites de chiffres
@@ -92,3 +103,90 @@ def conserver_texte(signalement, texte_masque):
     signalement.texte_brut = texte_masque
     signalement.date_texte_brut = utc_now()
     return True
+
+
+def lire_selecteurs(signalement):
+    """Selecteurs enregistres sur le signalement (liste), ou None."""
+    if not signalement.selecteurs_trouves:
+        return None
+    try:
+        return json.loads(signalement.selecteurs_trouves)
+    except ValueError:
+        return None
+
+
+def score_de(selecteurs) -> int:
+    """Score d'une liste de selecteurs enregistree : la somme de leurs poids."""
+    return sum(s.get("poids", 1) for s in selecteurs or [])
+
+
+def conserver_selecteurs(signalement, details, noms_categories):
+    """
+    Enregistre les selecteurs trouves (CriticiteDetail.details) sur le
+    signalement, SEULEMENT si leur score depasse celui de la liste deja
+    enregistree : comme la criticite, elle ne redescend jamais. Le titre
+    d'une annonce connue, re-analyse a chaque cycle, n'ecrase donc pas les
+    selecteurs trouves dans son texte complet.
+
+    noms_categories : {categorie_id: nom}, fige avec la liste.
+    """
+    if details is None:
+        return False
+    actuels = lire_selecteurs(signalement)
+    if actuels is not None and score_de(details) <= score_de(actuels):
+        return False
+    signalement.selecteurs_trouves = json.dumps([
+        {**detail, "categorie": noms_categories.get(detail.get("categorie_id"))}
+        for detail in details
+    ], ensure_ascii=False)
+    return True
+
+
+def reference_exploitable(connecteur, reference) -> bool:
+    """
+    Une reference designe-t-elle UNE annonce ? Pas quand la collecte s'est
+    rabattue sur l'URL du listing, faute de lien propre a l'annonce
+    (orion_leaks, cmd_organization).
+    """
+    return bool(reference) and reference not in ("unknown", connecteur.TARGET_URL)
+
+
+def signalements_a_completer(session, source, connecteur, tous=False) -> tuple:
+    """
+    Signalements de la source auxquels il manque le texte de l'annonce ou
+    ses selecteurs, groupes par reference : ({reference: [signalements]},
+    nombre de signalements ecartes faute de reference exploitable).
+
+    tous : tous les signalements de la source, complets ou non.
+    """
+    requete = session.query(SourceReference).options(
+        joinedload(SourceReference.exposition)
+    ).filter(SourceReference.source_id == source.id)
+    if not tous:
+        requete = requete.filter(
+            (SourceReference.date_texte_brut.is_(None))
+            | (SourceReference.selecteurs_trouves.is_(None))
+        )
+
+    par_reference, ecartes = {}, 0
+    for signalement in requete.all():
+        if reference_exploitable(connecteur, signalement.reference_source):
+            par_reference.setdefault(signalement.reference_source, []).append(signalement)
+        else:
+            ecartes += 1
+    return par_reference, ecartes
+
+
+def identifiants_des_references(connecteur, references) -> set:
+    """
+    Identifiants de crawl possibles de ces references : la reference
+    elle-meme et son chemin interne (identifiant_entree d'une annonce dont
+    le lien est une URL absolue du domaine surveille).
+    """
+    identifiants = set()
+    for reference in references:
+        identifiants.add(reference)
+        chemin = connecteur._chemin_interne(reference)
+        if chemin:
+            identifiants.add(chemin)
+    return identifiants
