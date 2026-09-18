@@ -21,6 +21,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 import requests
 import random
 from stem import Signal
@@ -29,6 +30,22 @@ from stem.control import Controller
 from app.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+class ReponseTropVolumineuse(Exception):
+    """
+    Corps de reponse depassant TAILLE_MAX_REPONSE.
+
+    Traitee comme un echec de collecte ordinaire par le pipeline : elle est
+    journalisee dans JournalAudit par le connecteur, sans entree dediee dans
+    le flux d'evenements de la console de supervision.
+    """
+
+
+# 10 Mo : trois ordres de grandeur au-dessus d'une page de listing de site de
+# fuite (quelques dizaines de Ko), donc aucune collecte legitime n'est
+# tronquee, et le processus ne peut plus etre sature par une reponse geante.
+TAILLE_MAX_REPONSE = 10 * 1024 * 1024
 
 # Lus une seule fois, par app.config (.env), comme le reste de la
 # configuration.
@@ -175,12 +192,51 @@ def _renouvellement_proactif_si_necessaire():
         renew_tor_circuit()
 
 
+def _lire_avec_limite(response: requests.Response) -> requests.Response:
+    """
+    Lit le corps de la reponse par blocs, en s'arretant net au-dela de
+    TAILLE_MAX_REPONSE.
+
+    Les serveurs interroges sont operes par des acteurs malveillants : rien
+    ne les empeche de repondre un corps de plusieurs Go, que `response.text`
+    chargerait integralement en memoire. Le connecteur consomme ensuite
+    `.text` (base_connector.fetch), donc on renseigne `_content` nous-memes
+    plutot que de renvoyer un flux : l'appelant garde une Response normale.
+    """
+    annonce = response.headers.get("Content-Length")
+    if annonce and annonce.isdigit() and int(annonce) > TAILLE_MAX_REPONSE:
+        response.close()
+        raise ReponseTropVolumineuse(
+            f"Content-Length annonce ({annonce} octets) au-dela de la limite "
+            f"de {TAILLE_MAX_REPONSE} octets."
+        )
+
+    morceaux = []
+    total = 0
+    for morceau in response.iter_content(chunk_size=65536):
+        total += len(morceau)
+        if total > TAILLE_MAX_REPONSE:
+            response.close()
+            raise ReponseTropVolumineuse(
+                f"Corps de reponse au-dela de la limite de "
+                f"{TAILLE_MAX_REPONSE} octets."
+            )
+        morceaux.append(morceau)
+
+    # _content / _content_consumed : ce que requests renseigne lui-meme quand
+    # il lit une reponse non streamee. `.text` decode ensuite normalement.
+    response._content = b"".join(morceaux)
+    response._content_consumed = True
+    return response
+
+
 def get_via_tor(url: str, timeout: int = 30, max_retries: int = 3,
                  retry_delay_seconds: int = 5, headers: dict = None) -> requests.Response:
     """
     Effectue une requete GET via le proxy SOCKS Tor, avec :
     - renouvellement REACTIF du circuit en cas d'echec (FR-01)
     - renouvellement PROACTIF du circuit periodiquement, meme sans echec
+    - corps de reponse BORNE a TAILLE_MAX_REPONSE (voir _lire_avec_limite)
     """
     _renouvellement_proactif_si_necessaire()
 
@@ -190,16 +246,33 @@ def get_via_tor(url: str, timeout: int = 30, max_retries: int = 3,
     }
     request_headers = headers or DEFAULT_HEADERS
 
+    # CN-03 : l'URL complete d'un site de fuite ne doit jamais atterrir dans
+    # un journal. base_connector fait deja cet effort de son cote ; le faire
+    # ici aussi evite que le domaine .onion ressorte par la porte de derriere
+    # a chaque echec reseau.
+    chemin = urlparse(url).path or "/"
+
     derniere_exception = None
 
     for attempt in range(1, max_retries + 1):
         try:
-            response = requests.get(url, proxies=proxies, headers=request_headers, timeout=timeout)
+            response = requests.get(
+                url,
+                proxies=proxies,
+                headers=request_headers,
+                timeout=timeout,
+                stream=True,
+            )
             response.raise_for_status()
-            return response
+            return _lire_avec_limite(response)
+        except ReponseTropVolumineuse as e:
+            # Inutile de renouveler le circuit et de reessayer : la reponse
+            # serait la meme, en plus couteux. On abandonne cette cible.
+            logger.warning(f"[tor] Reponse rejetee pour {chemin} : {e}")
+            raise
         except requests.exceptions.RequestException as e:
             derniere_exception = e
-            logger.warning(f"[tor] Tentative {attempt}/{max_retries} echouee pour {url} : {e}")
+            logger.warning(f"[tor] Tentative {attempt}/{max_retries} echouee pour {chemin} : {e}")
             if attempt < max_retries:
                 renew_tor_circuit()
                 time.sleep(retry_delay_seconds)

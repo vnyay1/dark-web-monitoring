@@ -62,6 +62,23 @@ VALEURS_PAR_DEFAUT = {
 # (ordre de declaration de NiveauCriticite).
 NIVEAUX_ORDONNES = tuple(niveau.value for niveau in NiveauCriticite)
 
+# Borne SUPERIEURE par cle "int". Seule la negativite etait refusee, si bien
+# qu'un seuil de criticite fixe a 100000 desactivait silencieusement toute
+# alerte, et pages_listing_max=100000 transformait un cycle de collecte en
+# parcours interminable de la source. Ces valeurs pilotent le comportement
+# operationnel : elles meritent un plafond, pas seulement un plancher.
+BORNES_MAXIMALES = {
+    "seuil_criticite_moyenne": 100,
+    "seuil_criticite_elevee": 100,
+    "seuil_criticite_critique": 100,
+    "criticite_minimum_enregistrement": 100,
+    "hausse_criticite_confirmation": 100,
+    "periode_collecte_jours": 3650,
+    "pages_listing_max": 500,
+    "collecte_heure_min": 23,
+    "collecte_heure_max": 23,
+}
+
 
 def type_de_cle(cle: str) -> str:
     """Type declare d'une cle de configuration ("int" ou "niveau")."""
@@ -85,6 +102,19 @@ def valider_valeur(cle: str, valeur: str) -> str:
             raise ValueError("Cette valeur doit etre un nombre entier.")
         if entier < 0:
             raise ValueError("Cette valeur ne peut pas etre negative.")
+
+        maximum = BORNES_MAXIMALES.get(cle)
+        if maximum is not None and entier > maximum:
+            raise ValueError(f"Cette valeur ne peut pas depasser {maximum}.")
+
+        # Coherence croisee : une fenetre de collecte inversee ne leve aucune
+        # erreur a l'enregistrement, mais fait echouer le tirage de l'heure
+        # au moment de la planification, loin d'ici.
+        if cle == "collecte_heure_min" and entier > int(get_config("collecte_heure_max")):
+            raise ValueError("L'heure de debut ne peut pas etre posterieure a l'heure de fin.")
+        if cle == "collecte_heure_max" and entier < int(get_config("collecte_heure_min")):
+            raise ValueError("L'heure de fin ne peut pas etre anterieure a l'heure de debut.")
+
         return str(entier)
 
     if attendu == "niveau":

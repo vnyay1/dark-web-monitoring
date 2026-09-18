@@ -115,9 +115,14 @@ def enregistrer(api_bp):
                     pass
 
             periode = request.args.get("periode", "").strip()
-            if periode.isdigit():
+            # isdigit() seul acceptait une chaine de 300 chiffres, que
+            # timedelta refuse par un OverflowError -> 500. 3650 jours (10
+            # ans) depassent largement l'historique que le systeme peut
+            # detenir.
+            if periode.isdigit() and 1 <= len(periode) <= 4:
+                jours = min(int(periode), 3650)
                 query = query.filter(
-                    Exposition.date_premiere_detection >= utc_now() - timedelta(days=int(periode))
+                    Exposition.date_premiere_detection >= utc_now() - timedelta(days=jours)
                 )
 
             recherche = request.args.get("q", "").strip()

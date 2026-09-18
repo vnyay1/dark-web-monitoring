@@ -9,15 +9,20 @@ pour l'API et pour la creation de compte en ligne de commande
 import re
 
 CARACTERES_SPECIAUX = r"!@#$%^&*()_+\-=\[\]{};':\"\|,.<>\/?~`"
-LONGUEUR_MINIMALE = 8
+# 12 caracteres plutot que 8 : a classe de caracteres egale, 8 reste a portee
+# d'une attaque hors ligne si la base venait a etre copiee. La politique ne
+# s'applique qu'a la CREATION d'un compte - les comptes existants ne sont pas
+# invalides par ce changement.
+LONGUEUR_MINIMALE = 12
 
 
 def valider_mot_de_passe(mot_de_passe: str) -> tuple:
     """
     Verifie qu'un mot de passe respecte la politique de robustesse :
-    - au moins 8 caracteres
+    - au moins 12 caracteres
     - au moins une majuscule
     - au moins une minuscule
+    - au moins un chiffre
     - au moins un caractere special
 
     Retourne un tuple (valide: bool, message: str). Le message est vide si
@@ -32,6 +37,9 @@ def valider_mot_de_passe(mot_de_passe: str) -> tuple:
 
     if not re.search(r"[a-z]", mot_de_passe):
         return False, "Le mot de passe doit contenir au moins une minuscule."
+
+    if not re.search(r"[0-9]", mot_de_passe):
+        return False, "Le mot de passe doit contenir au moins un chiffre."
 
     if not re.search(f"[{re.escape(CARACTERES_SPECIAUX)}]", mot_de_passe):
         return False, "Le mot de passe doit contenir au moins un caractere special."

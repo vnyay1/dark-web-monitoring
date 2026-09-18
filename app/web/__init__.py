@@ -11,6 +11,10 @@ Seul gabarit Jinja subsistant : rapport_mensuel.html, qui n'est pas une
 page d'interface mais un document d'impression mis en page pour WeasyPrint.
 """
 
+import base64
+import hashlib
+import re
+from datetime import timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -27,6 +31,70 @@ RACINE_BUILD = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 # monopage ne doit jamais les intercepter.
 PREFIXES_SERVEUR = ("api", "reports", "compliance", "assets", "static")
 
+# Duree de validite d'une session d'analyste. Une session sans expiration
+# reste exploitable indefiniment sur une VM laissee ouverte ; 8 heures
+# couvrent une journee de travail sans reconnexion intempestive.
+DUREE_SESSION = timedelta(hours=8)
+
+# Scripts inline autorises par la CSP. index.html en contient un : le
+# bootstrap de theme, qui doit s'executer avant le premier affichage pour ne
+# pas montrer la page dans le mauvais theme.
+#
+# Son empreinte est CALCULEE AU DEMARRAGE a partir du build reel, et non
+# recopiee en dur : un `npm run build` qui modifie ce bloc invaliderait
+# silencieusement une empreinte figee, et le theme cesserait de s'appliquer
+# sans que rien ne le signale.
+def _empreintes_scripts_inline() -> list:
+    index = RACINE_BUILD / "index.html"
+    if not index.is_file():
+        return []
+
+    html = index.read_text(encoding="utf-8")
+    empreintes = []
+    for corps in re.findall(r"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", html, re.DOTALL):
+        condense = hashlib.sha256(corps.encode("utf-8")).digest()
+        empreintes.append(f"'sha256-{base64.b64encode(condense).decode()}'")
+    return empreintes
+
+
+def _entetes_securite() -> dict:
+    """
+    En-tetes de securite poses sur TOUTE reponse.
+
+    La CSP est la protection de fond contre le XSS : meme si un script
+    etranger parvenait dans la page, le navigateur refuserait de l'executer.
+    Deux assouplissements necessaires et assumes :
+      - 'unsafe-inline' sur style-src : React et Recharts posent des attributs
+        style= en ligne, et le gabarit d'impression a un bloc <style>. Il
+        n'existe pas d'equivalent des empreintes pour les attributs style.
+      - data: sur img-src : les graphiques utilisent des URI data:.
+    script-src, lui, reste strict : 'self' plus les empreintes exactes des
+    scripts inline du build, jamais 'unsafe-inline'.
+    """
+    script_src = " ".join(["'self'"] + _empreintes_scripts_inline())
+
+    return {
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            f"script-src {script_src}; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "frame-ancestors 'none'"
+        ),
+        # Empeche le navigateur de "deviner" un type MIME : un export CSV ne
+        # doit jamais etre reinterprete comme du HTML executable.
+        "X-Content-Type-Options": "nosniff",
+        # Double de frame-ancestors, pour les navigateurs anciens (clickjacking).
+        "X-Frame-Options": "DENY",
+        # Aucune URL de l'application ne doit fuiter vers un site tiers.
+        "Referrer-Policy": "no-referrer",
+    }
+
 
 def create_app():
     app = Flask(__name__)
@@ -38,8 +106,24 @@ def create_app():
     # la couche API.
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Pilote par .env : le deploiement actuel est en HTTP sur la VM, ou
+    # marquer le cookie Secure couperait la connexion (cf. app/config.py).
+    app.config["SESSION_COOKIE_SECURE"] = Config.SESSION_COOKIE_SECURE
+    app.config["PERMANENT_SESSION_LIFETIME"] = DUREE_SESSION
 
     init_db()
+
+    # Calcule une fois au demarrage : lire index.html a chaque reponse
+    # couterait un acces disque par requete.
+    entetes_securite = _entetes_securite()
+
+    @app.after_request
+    def poser_entetes_securite(reponse):
+        # setdefault : une route qui aurait une raison de definir son propre
+        # en-tete garde la main.
+        for entete, valeur in entetes_securite.items():
+            reponse.headers.setdefault(entete, valeur)
+        return reponse
 
     from app.web.auth import login_manager
     from app.web.compliance import compliance_bp
