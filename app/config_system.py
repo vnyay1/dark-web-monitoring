@@ -49,12 +49,6 @@ VALEURS_PAR_DEFAUT = {
         "10", "Nombre maximum de pages parcourues par source et par cycle (sources paginees)", "int",
     ),
 
-    # --- Derogation CN-04/CN-05 : texte conserve des signalements ---
-    "retention_texte_brut_jours": (
-        "90", "Duree de conservation (en jours) du texte des annonces ayant produit une "
-              "exposition ; 0 = aucun texte conserve, et ceux deja conserves sont effaces", "int",
-    ),
-
     # --- FR-07 : planification ---
     "collecte_heure_min": (
         "0", "Heure la plus tot a laquelle la collecte quotidienne peut se declencher (0-23, UTC)", "int",
@@ -81,7 +75,6 @@ BORNES_MAXIMALES = {
     "hausse_criticite_confirmation": 100,
     "periode_collecte_jours": 3650,
     "pages_listing_max": 500,
-    "retention_texte_brut_jours": 3650,
     "collecte_heure_min": 23,
     "collecte_heure_max": 23,
 }

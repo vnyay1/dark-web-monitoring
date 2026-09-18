@@ -1,39 +1,38 @@
 """
 Conservation du texte des annonces : DEROGATION a CN-04/CN-05.
 
-DECISION (2026-09-18, porteur du projet) - l'analyste doit pouvoir relire,
-depuis le detail d'une exposition, le texte de l'annonce qui l'a
-declenchee ; sans lui, il ne peut ni qualifier l'exposition ni verifier le
-travail du moteur de correspondance. Ce texte etait jusqu'ici detruit en
-fin de cycle (CN-05). L'accord ecrit de l'encadrant est a consigner.
+DECISION (2026-09-18) - a la demande de l'encadrant, qui l'a validee, le
+texte INTEGRAL de l'annonce qui a declenche une exposition est conserve :
+l'analyste doit pouvoir la relire depuis le detail de l'exposition pour la
+qualifier et verifier le travail du moteur de correspondance. Ce texte
+etait jusqu'ici detruit en fin de cycle (CN-05).
 
 Ce module est le POINT D'AUDIT UNIQUE de la derogation. Perimetre :
 
-1. Seul le texte DEJA EXTRAIT et analyse d'une entree qui a PRODUIT une
-   exposition est conserve (SourceReference.texte_brut). Jamais le HTML
-   brut d'une page, jamais le texte d'une entree sans correspondance : le
-   registre du crawl reste sans aucun contenu.
+1. Seul le texte COMPLET (listing + page de detail quand l'annonce en a
+   une) d'une entree qui a PRODUIT une exposition est conserve
+   (SourceReference.texte_brut). Jamais le HTML brut d'une page, jamais le
+   texte d'une entree sans correspondance : le registre du crawl reste sans
+   aucun contenu. Un titre de listing re-analyse seul n'est pas le texte de
+   l'annonce : il n'est pas conserve (cf. texte_complet()).
 2. Il est masque avant stockage (preparer_texte_conserve) : URL (deja
    retirees par BaseConnector.nettoyer_urls), adresses email, empreintes,
    mots de passe annonces, numeros de telephone et longues suites de
    chiffres. LIMITE CONNUE : les noms de personnes ne peuvent pas etre
    detectes de facon fiable et restent en clair.
-3. Il est purge apres retention_texte_brut_jours (purger_textes_bruts, en
-   fin de cycle). 0 desactive la conservation ET efface les textes deja
-   conserves : c'est l'interrupteur si la derogation est retiree.
+3. Il est conserve sans limite de duree (decision de l'encadrant) ; la
+   purge de conformite (super_admin) l'efface avec son exposition.
 4. Il n'est lisible que par un superviseur ou plus, par un endpoint dedie
    (Cache-Control: no-store), et n'apparait dans aucune liste, aucun
    export ni aucun rapport.
+
+Les signalements anterieurs a cette fonction, ou dont la page de detail n'a
+pas encore ete relue, se rattrapent avec app.maintenance.recuperer_textes.
 """
 
-import logging
 import re
-from datetime import timedelta
 
-from app.config_system import get_config_int
-from app.models import SourceReference, utc_now
-
-logger = logging.getLogger(__name__)
+from app.models import utc_now
 
 
 # Ordre d'application significatif : l'email avant les suites de chiffres
@@ -68,30 +67,28 @@ def preparer_texte_conserve(texte):
     return texte
 
 
-def duree_conservation_jours() -> int:
-    """Retention reglee par l'administrateur ; 0 = aucun texte conserve."""
-    return get_config_int("retention_texte_brut_jours")
-
-
-def purger_textes_bruts(session, jours=None) -> int:
+def texte_complet(entree) -> bool:
     """
-    Efface les textes conserves depuis plus de 'jours' (tous si 0). Le
-    signalement lui-meme est garde : seul son texte disparait.
+    L'entree normalisee porte-t-elle le texte COMPLET de l'annonce ? Oui si
+    sa page de detail a ete lue, ou si elle n'en a pas (source listing-only).
+
+    Une entree deja connue est re-analysee a chaque cycle sur son seul
+    titre de listing : conserver ce titre afficherait "CCA Bank" en guise de
+    texte de l'annonce, et masquerait qu'il reste a recuperer le vrai texte.
     """
-    jours = duree_conservation_jours() if jours is None else jours
+    return entree.get("niveau_detail") == "detail" or not entree.get("a_page_detail")
 
-    requete = session.query(SourceReference).filter(SourceReference.date_texte_brut.isnot(None))
-    if jours > 0:
-        requete = requete.filter(
-            SourceReference.date_texte_brut < utc_now() - timedelta(days=jours)
-        )
 
-    effaces = requete.update(
-        {SourceReference.texte_brut: None, SourceReference.date_texte_brut: None},
-        synchronize_session=False,
-    )
-    session.commit()
-
-    if effaces:
-        logger.info(f"[conservation] {effaces} texte(s) d'annonce efface(s) (retention {jours} j).")
-    return effaces
+def conserver_texte(signalement, texte_masque):
+    """
+    Pose le texte conserve d'un signalement, SEULEMENT s'il est plus long
+    que celui deja conserve : une nouvelle lecture partielle (page de detail
+    en echec, par exemple) ne doit jamais ecraser un texte complet.
+    """
+    if not texte_masque:
+        return False
+    if signalement.date_texte_brut is not None and len(texte_masque) <= len(signalement.texte_brut or ""):
+        return False
+    signalement.texte_brut = texte_masque
+    signalement.date_texte_brut = utc_now()
+    return True

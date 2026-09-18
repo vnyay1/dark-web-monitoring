@@ -989,9 +989,10 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
             if not hors_periode and detail.score > exposition.criticite:
                 causes.append(
                     f"L'analyse actuelle donnerait une criticite de {detail.score}, contre "
-                    f"{exposition.criticite} enregistree : remettre l'entree en file "
-                    f"(python3 -m app.crawl.registre --source {connecteur.SOURCE_NAME} "
-                    f"--identifiant {normalisee['identifiant_entree']})."
+                    f"{exposition.criticite} enregistree : completer l'exposition, scheduler "
+                    f"arrete (python3 -m app.maintenance.recuperer_textes --source "
+                    f"{connecteur.SOURCE_NAME} --tous --confirmer). Une remise en file ne suffit "
+                    f"pas si l'annonce sort de la periode avant le prochain cycle."
                 )
                 break
     finally:
