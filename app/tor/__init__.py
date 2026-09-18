@@ -6,8 +6,16 @@ et une fonction utilitaire de requete HTTP via Tor - utilisee par tous
 les connecteurs .onion.
 
 Renouvellement PROACTIF a intervalle ALEATOIRE (entre 10 et 120s, tire
-a chaque cycle) pendant une session de collecte prolongee, en plus du
-renouvellement reactif en cas d'echec.
+apres chaque renouvellement) pendant une session de collecte prolongee, en
+plus du renouvellement reactif en cas d'echec.
+
+COLLECTE PARALLELE - plusieurs sources passent par ce module en meme temps,
+depuis des fils differents. L'etat du renouvellement est donc protege par
+un verrou, et l'echeance proactive est tiree UNE fois par renouvellement :
+la tirer a chaque requete, comme avant, multipliait les occasions de
+renouveler par le nombre de sources en parallele. Chaque NEWNYM force la
+reconstruction des circuits vers les services .onion : la cadence reste
+celle de la collecte sequentielle, quel que soit le nombre de sources.
 
 Chaque renouvellement journalise l'IP de sortie effective (via
 check.torproject.org), permettant de verifier que le circuit change
@@ -65,7 +73,13 @@ DEFAULT_HEADERS = {
 # reactifs confondus - garde-fou anti-rafale/anti-collision.
 INTERVALLE_MINIMUM_ENTRE_RENOUVELLEMENTS = 10
 
+# Borne haute de l'intervalle aleatoire du renouvellement proactif.
+INTERVALLE_MAXIMUM_PROACTIF = 120
+
 _dernier_renouvellement = None
+# Echeance du prochain renouvellement proactif (time.time()), tiree au
+# hasard apres chaque renouvellement.
+_prochain_renouvellement = None
 _verrou_renouvellement = threading.Lock()
 
 # Derniere IP de sortie reellement constatee, et quand. Une verification
@@ -126,13 +140,22 @@ def derniere_ip_sortie() -> tuple:
         return _derniere_ip_sortie, _derniere_ip_constatee_le
 
 
+def _planifier_prochain_renouvellement(depuis: float):
+    """Tire l'echeance du prochain renouvellement proactif. Sous le verrou."""
+    global _prochain_renouvellement
+    _prochain_renouvellement = depuis + random.randint(
+        INTERVALLE_MINIMUM_ENTRE_RENOUVELLEMENTS, INTERVALLE_MAXIMUM_PROACTIF
+    )
+
+
 def renew_tor_circuit():
     """
     Demande a Tor un nouveau circuit (nouvelle IP de sortie) - FR-01.
 
     Protege par un verrou pour eviter les collisions entre appels
-    rapproches. Journalise l'IP de sortie apres renouvellement pour
-    permettre de verifier que le circuit change reellement.
+    rapproches, y compris depuis plusieurs fils de collecte. Journalise
+    l'IP de sortie apres renouvellement pour permettre de verifier que le
+    circuit change reellement.
     """
     global _dernier_renouvellement
 
@@ -154,42 +177,61 @@ def renew_tor_circuit():
                 controller.signal(Signal.NEWNYM)
                 _dernier_renouvellement = time.time()
                 logger.info("[tor] Nouveau circuit Tor demande.")
-
-            ip_sortie = _obtenir_ip_sortie_actuelle()
-            if ip_sortie == "inconnue":
-                # Le circuit a bien ete renouvele ; c'est seulement sa
-                # verification qui n'a pas abouti (check.torproject.org lent
-                # ou injoignable sur ce circuit). Rien n'est "confirme".
-                logger.warning("[tor] Circuit renouvele, IP de sortie non verifiee.")
-            else:
-                logger.info(f"[tor] Nouvelle IP de sortie confirmee : {ip_sortie}")
         except Exception as e:
             logger.error(f"[tor] Impossible de renouveler le circuit Tor : {e}")
+            # Echeance reportee malgre l'echec : sinon chaque requete de
+            # chaque fil retenterait aussitot le port de controle.
+            _planifier_prochain_renouvellement(time.time())
+            return
         finally:
             stem_logger.setLevel(niveau_original)
+
+        _planifier_prochain_renouvellement(_dernier_renouvellement)
+
+    # Verification HORS verrou : jusqu'a 15 s vers check.torproject.org,
+    # pendant lesquelles les autres fils de collecte doivent pouvoir
+    # continuer leurs requetes.
+    ip_sortie = _obtenir_ip_sortie_actuelle()
+    if ip_sortie == "inconnue":
+        # Le circuit a bien ete renouvele ; c'est seulement sa
+        # verification qui n'a pas abouti (check.torproject.org lent
+        # ou injoignable sur ce circuit). Rien n'est "confirme".
+        logger.warning("[tor] Circuit renouvele, IP de sortie non verifiee.")
+    else:
+        logger.info(f"[tor] Nouvelle IP de sortie confirmee : {ip_sortie}")
 
 
 def _renouvellement_proactif_si_necessaire():
     """
-    Verifie si le delai de renouvellement proactif est ecoule et, le cas
-    echeant, force un nouveau circuit AVANT meme qu'un echec ne survienne.
-    Le seuil est retire aleatoirement (10-120s) a chaque appel.
+    Force un nouveau circuit, AVANT meme qu'un echec ne survienne, quand
+    l'echeance proactive est atteinte. L'echeance est tiree au hasard
+    (10-120 s) apres chaque renouvellement, pas a chaque appel : avec
+    plusieurs sources en parallele, les appels sont plus frequents, la
+    cadence des renouvellements ne doit pas l'etre.
     """
     global _dernier_renouvellement
 
-    maintenant = time.time()
+    with _verrou_renouvellement:
+        maintenant = time.time()
 
-    if _dernier_renouvellement is None:
-        _dernier_renouvellement = maintenant
-        return
+        if _prochain_renouvellement is None:
+            # Premier appel du processus : l'horloge demarre, le circuit
+            # courant est neuf pour cette session.
+            if _dernier_renouvellement is None:
+                _dernier_renouvellement = maintenant
+            _planifier_prochain_renouvellement(_dernier_renouvellement)
+            return
 
-    interval_renouvellement_proactif = random.randint(INTERVALLE_MINIMUM_ENTRE_RENOUVELLEMENTS, 120)
-    if maintenant - _dernier_renouvellement >= interval_renouvellement_proactif:
-        logger.info(
-            f"[tor] Renouvellement proactif du circuit "
-            f"(intervalle de {interval_renouvellement_proactif}s atteint)."
-        )
-        renew_tor_circuit()
+        if maintenant < _prochain_renouvellement:
+            return
+
+        intervalle = int(_prochain_renouvellement - (_dernier_renouvellement or maintenant))
+
+    logger.info(
+        f"[tor] Renouvellement proactif du circuit "
+        f"(intervalle de {intervalle}s atteint)."
+    )
+    renew_tor_circuit()
 
 
 def _lire_avec_limite(response: requests.Response) -> requests.Response:

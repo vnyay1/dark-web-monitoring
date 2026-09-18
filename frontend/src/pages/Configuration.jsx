@@ -109,6 +109,11 @@ const GROUPES_REGLAGES = [
         unite: "pages par source",
         aide: "Plafond par source et par cycle, pour les sources paginées.",
       },
+      sources_en_parallele: {
+        libelle: "Sources collectées en parallèle",
+        unite: "sources",
+        aide: "1 : une source après l'autre. Chaque source garde son délai d'au moins 30 s entre deux requêtes.",
+      },
     },
   },
   {

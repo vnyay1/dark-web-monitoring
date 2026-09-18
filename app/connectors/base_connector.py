@@ -676,6 +676,8 @@ class BaseConnector:
         if self.db_session is None:
             return
 
+        # Import local : la reconnaissance, sans base, n'en depend pas.
+        from app.db import verrou_base
         from app.models import JournalAudit, ResultatAudit
 
         lignes = [JournalAudit(
@@ -696,8 +698,11 @@ class BaseConnector:
                 )[:500],
             ))
 
-        self.db_session.add_all(lignes)
-        self.db_session.commit()
+        # Collecte parallele : les autres sources ecrivent peut-etre en ce
+        # moment (cf. app.db.verrou_base).
+        with verrou_base:
+            self.db_session.add_all(lignes)
+            self.db_session.commit()
 
     @staticmethod
     def _libelle_erreur(exception):

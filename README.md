@@ -302,11 +302,19 @@ python3 -m app.scheduler --sans-collecte-initiale   # démarrer en veille
 seconde instance est refusée qu'elle vienne de l'interface ou du terminal, et
 le verrou expire de lui-même si le processus disparaît sans arrêt propre.
 
+**Les sources sont collectées en parallèle** : `sources_en_parallele` à la fois
+(4 par défaut, réglable dans *Configuration*, 1 = l'une après l'autre). Seules
+les requêtes réseau se chevauchent. Chaque source garde son délai d'au moins 30 s
+entre deux requêtes (FR-06), et l'analyse puis l'enregistrement en base se font
+une source à la fois : deux sources qui publient la même victime n'en font qu'une
+exposition.
+
 ### Collecte manuelle (test / debug)
 
 ```bash
 python3 -m app.pipeline                        # toutes les sources
 python3 -m app.pipeline --source payload       # une seule source
+python3 -m app.pipeline --paralleles 1         # sans parallélisme, pour ce run seulement
 ```
 
 Arrêter le scheduler avant une collecte manuelle : deux processus ne partagent pas leur délai FR-06.
