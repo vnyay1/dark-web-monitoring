@@ -56,6 +56,10 @@ function pourRecherche(texte) {
 
 const NIVEAUX = ["faible", "moyenne", "elevee", "critique"];
 
+// Poids d'un selecteur dans la criticite, aligne sur app.models.POIDS_MAXIMAL
+// (l'API le verifie aussi).
+const POIDS_MAXIMAL = 5;
+
 /**
  * Presentation des reglages : libelle clair, unite et aide en francais. La
  * cle technique reste affichee, discrete. Une cle inconnue (ajoutee cote
@@ -64,14 +68,16 @@ const NIVEAUX = ["faible", "moyenne", "elevee", "critique"];
 const GROUPES_REGLAGES = [
   {
     titre: "Criticité",
-    description: "Paliers exprimés en nombre de sélecteurs camerounais distincts trouvés dans une annonce.",
+    description:
+      "Paliers exprimés en points : chaque sélecteur camerounais distinct trouvé dans une annonce " +
+      "compte pour son poids (1, davantage pour un sélecteur prioritaire).",
     reglages: {
-      seuil_criticite_moyenne: { libelle: "Seuil « Moyenne »", unite: "sélecteurs" },
-      seuil_criticite_elevee: { libelle: "Seuil « Élevée »", unite: "sélecteurs" },
-      seuil_criticite_critique: { libelle: "Seuil « Critique »", unite: "sélecteurs" },
+      seuil_criticite_moyenne: { libelle: "Seuil « Moyenne »", unite: "points" },
+      seuil_criticite_elevee: { libelle: "Seuil « Élevée »", unite: "points" },
+      seuil_criticite_critique: { libelle: "Seuil « Critique »", unite: "points" },
       criticite_minimum_enregistrement: {
         libelle: "Minimum pour enregistrer",
-        unite: "sélecteurs",
+        unite: "points",
         aide: "En dessous, une entrée n'est pas enregistrée comme exposition.",
       },
     },
@@ -85,7 +91,7 @@ const GROUPES_REGLAGES = [
       },
       hausse_criticite_confirmation: {
         libelle: "Hausse déclenchant une confirmation",
-        unite: "sélecteurs",
+        unite: "points",
         aide: "Nouvelle alerte quand la criticité d'une exposition connue augmente d'au moins cette valeur.",
       },
     },
@@ -692,7 +698,7 @@ function CasePrioritaire({ id, coche, onChange }) {
 /* ================================================================== */
 
 function SectionCatalogue({ selecteurs, categories, agir }) {
-  const [nouveau, setNouveau] = useState({ valeur: "", categorie_id: "" });
+  const [nouveau, setNouveau] = useState({ valeur: "", categorie_id: "", poids: 1 });
   const [recherche, setRecherche] = useState("");
   const [filtreCategorie, setFiltreCategorie] = useState("");
   const [enEdition, setEnEdition] = useState(null);
@@ -712,8 +718,11 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
   async function ajouterSelecteur(evenement) {
     evenement.preventDefault();
     const valeur = nouveau.valeur.trim();
-    const ok = await agir(() => api.ajouterSelecteur(valeur, nouveau.categorie_id), `Sélecteur « ${valeur} » ajouté.`);
-    if (ok) setNouveau((n) => ({ ...n, valeur: "" }));
+    const ok = await agir(
+      () => api.ajouterSelecteur(valeur, nouveau.categorie_id, nouveau.poids),
+      `Sélecteur « ${valeur} » ajouté.`,
+    );
+    if (ok) setNouveau((n) => ({ ...n, valeur: "", poids: 1 }));
   }
 
   async function basculer(selecteur) {
@@ -728,7 +737,7 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
   async function enregistrerEdition() {
     setEnCours(true);
     const ok = await agir(
-      () => api.modifierSelecteur(enEdition.id, enEdition.valeur.trim(), enEdition.categorie_id),
+      () => api.modifierSelecteur(enEdition.id, enEdition.valeur.trim(), enEdition.categorie_id, enEdition.poids),
       "Sélecteur modifié.",
     );
     setEnCours(false);
@@ -752,7 +761,8 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
     <>
       <p className="texte-aide espace-texte">
         {actifs} {pluriel("sélecteur actif", actifs, "sélecteurs actifs")} sur {selecteurs.length}. Un
-        sélecteur inactif n'est plus recherché lors des collectes.
+        sélecteur inactif n'est plus recherché lors des collectes. Un sélecteur prioritaire (poids 2 à{" "}
+        {POIDS_MAXIMAL}) compte autant de fois dans la criticité d'une annonce où il est trouvé.
       </p>
 
       <form className="card card-pad formulaire-ajout" onSubmit={ajouterSelecteur} aria-labelledby="titre-nouveau-selecteur">
@@ -787,6 +797,16 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
               valeur={nouveau.categorie_id}
               onChange={(v) => setNouveau((n) => ({ ...n, categorie_id: v }))}
               required
+            />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="sel-poids">
+              Poids
+            </label>
+            <SelectPoids
+              id="sel-poids"
+              valeur={nouveau.poids}
+              onChange={(v) => setNouveau((n) => ({ ...n, poids: v }))}
             />
           </div>
           <button className="btn btn-primary" type="submit">
@@ -866,6 +886,12 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
                 <tr key={s.id}>
                   <td className={`cell-titre${s.actif ? "" : " est-inactif"}`}>
                     <span className="cell-entity">{s.valeur}</span>
+                    {s.poids > 1 && (
+                      <>
+                        {" "}
+                        <span className="pill pill-accent">Prioritaire · poids {s.poids}</span>
+                      </>
+                    )}
                   </td>
                   <td className="cell-muted" data-label="Catégorie">
                     {s.categorie.nom}
@@ -884,7 +910,9 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
                       <button
                         type="button"
                         className="btn btn-contour btn-sm"
-                        onClick={() => setEnEdition({ id: s.id, valeur: s.valeur, categorie_id: s.categorie.id })}
+                        onClick={() =>
+                          setEnEdition({ id: s.id, valeur: s.valeur, categorie_id: s.categorie.id, poids: s.poids })
+                        }
                         aria-label={`Modifier le sélecteur ${s.valeur}`}
                       >
                         <IconeModifier taille={14} />
@@ -942,9 +970,19 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
               onChange={(v) => setEnEdition((s) => ({ ...s, categorie_id: v }))}
             />
           </div>
+          <div className="field">
+            <label className="field-label" htmlFor="edit-sel-poids">
+              Poids
+            </label>
+            <SelectPoids
+              id="edit-sel-poids"
+              valeur={enEdition.poids}
+              onChange={(v) => setEnEdition((s) => ({ ...s, poids: v }))}
+            />
+          </div>
           <p className="texte-aide">
             La modification vaut pour les collectes à venir. Les expositions déjà détectées gardent leurs
-            catégories.
+            catégories ; leur criticité peut augmenter lors d'une nouvelle détection, jamais baisser.
           </p>
         </Confirmation>
       )}
@@ -973,6 +1011,18 @@ function SectionCatalogue({ selecteurs, categories, agir }) {
         </Confirmation>
       )}
     </>
+  );
+}
+
+function SelectPoids({ id, valeur, onChange }) {
+  return (
+    <select id={id} className="select" value={valeur} onChange={(e) => onChange(Number(e.target.value))}>
+      {Array.from({ length: POIDS_MAXIMAL }, (_, i) => i + 1).map((poids) => (
+        <option key={poids} value={poids}>
+          {poids === 1 ? "1 — normal" : `${poids} — prioritaire`}
+        </option>
+      ))}
+    </select>
   );
 }
 

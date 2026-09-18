@@ -7,7 +7,7 @@ des selecteurs trouves, cf. Categorie.prioritaire) : le champ texte
 secteur_activite qu'on consultait auparavant n'etait jamais renseigne, si
 bien que seul le domaine .gov.cm declenchait les canaux renforces.
 
-La criticite (nombre de selecteurs distincts, cf. app.matching.criticite)
+La criticite (selecteurs distincts ponderes par leur poids, cf. app.matching.criticite)
 remplace l'ancien score de confiance : le routage se fait desormais sur
 des paliers nommes plutot que sur des seuils flottants.
 """

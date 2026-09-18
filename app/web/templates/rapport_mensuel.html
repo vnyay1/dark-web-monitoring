@@ -273,7 +273,7 @@
 {% if total_periode %}
 {# =========================== CRITICITE =========================== #}
 <section>
-    <h2>Criticité <span class="precision">nombre de sélecteurs camerounais distincts trouvés dans l'annonce</span></h2>
+    <h2>Criticité <span class="precision">score : sélecteurs camerounais distincts trouvés dans l'annonce, chacun compté pour son poids</span></h2>
     <div class="barre-criticite">
         {% for p in criticite if p.nombre %}
         <span class="c-{{ p.niveau }}" style="flex: {{ p.nombre }}"></span>
@@ -377,7 +377,7 @@
 {% endif %}
 
     <div class="methode">
-        <p><strong>Méthode.</strong> Sentinel indexe l'existence d'une fuite, jamais les données divulguées. La criticité compte les sélecteurs distincts du catalogue camerounais présents dans l'annonce ; elle est indicative et doit être corroborée par une analyse du CIRT avant toute action opérationnelle.</p>
+        <p><strong>Méthode.</strong> Sentinel indexe l'existence d'une fuite, jamais les données divulguées. La criticité compte les sélecteurs distincts du catalogue camerounais présents dans l'annonce, un sélecteur prioritaire comptant pour son poids ; elle est indicative et doit être corroborée par une analyse du CIRT avant toute action opérationnelle.</p>
         <p><strong>Publication.</strong> Date affichée par la source elle-même. Plusieurs sites de rançongiciel ne datent pas leurs annonces : la mention « non datée » n'est pas une anomalie de collecte.</p>
         <p><strong>Diffusion.</strong> Document réservé à l'encadrement du CIRT (CN-11). Il ne contient aucune donnée personnelle.</p>
     </div>

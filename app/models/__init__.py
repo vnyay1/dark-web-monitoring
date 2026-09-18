@@ -63,8 +63,9 @@ class StatutExposition(enum.Enum):
 
 class NiveauCriticite(enum.Enum):
     """
-    FR-10 - Niveau de criticite d'une exposition, derive du NOMBRE de
-    selecteurs distincts du catalogue trouves dans l'entree analysee.
+    FR-10 - Niveau de criticite d'une exposition, derive de son SCORE : les
+    selecteurs distincts du catalogue trouves dans l'entree analysee,
+    chacun compte pour son poids (1, sauf selecteur prioritaire).
 
     Remplace l'ancien score de confiance flottant : un analyste peut
     justifier "3 selecteurs camerounais distincts dans la meme annonce",
@@ -164,10 +165,11 @@ class Exposition(Base):
     date_derniere_detection = Column(DateTime(timezone=True), nullable=False,
                                       default=utc_now)
 
-    # FR-10 - criticite = nombre de selecteurs DISTINCTS trouves dans
-    # l'entree ; niveau_criticite en est le palier lisible. On ne stocke
-    # PAS la liste des selecteurs eux-memes : CN-03 enumere les
-    # metadonnees autorisees et n'en fait pas partie.
+    # FR-10 - criticite = score de l'entree : selecteurs DISTINCTS trouves,
+    # chacun compte pour son poids (Selecteur.poids, 1 par defaut) ;
+    # niveau_criticite en est le palier lisible. On ne stocke PAS la liste
+    # des selecteurs eux-memes : CN-03 enumere les metadonnees autorisees
+    # et n'en fait pas partie.
     criticite = Column(Integer, nullable=False, default=0)
     niveau_criticite = Column(SAEnum(NiveauCriticite), nullable=False,
                                default=NiveauCriticite.FAIBLE)
@@ -269,6 +271,13 @@ class Source(Base):
 # Selecteur (catalogue de selecteurs - FR-08)
 # ---------------------------------------------------------------------
 
+# Poids d'un selecteur dans la criticite : 1 pour un selecteur ordinaire,
+# jusqu'a POIDS_MAXIMAL pour un selecteur que l'administrateur juge
+# prioritaire (un nom de pays explicite, par exemple).
+POIDS_NORMAL = 1
+POIDS_MAXIMAL = 5
+
+
 class Selecteur(Base):
     __tablename__ = "selecteurs"
 
@@ -277,6 +286,11 @@ class Selecteur(Base):
     valeur = Column(String(255), nullable=False)
     categorie_id = Column(String(36), ForeignKey("categories.id"), nullable=False)
     actif = Column(Boolean, nullable=False, default=True)
+
+    # FR-10 : ce que le selecteur apporte a la criticite de l'entree ou il
+    # est trouve (cf. app.matching.criticite). Au-dela de POIDS_NORMAL, il
+    # est dit "prioritaire".
+    poids = Column(Integer, nullable=False, default=POIDS_NORMAL, server_default="1")
 
     categorie = relationship("Categorie", back_populates="selecteurs")
 

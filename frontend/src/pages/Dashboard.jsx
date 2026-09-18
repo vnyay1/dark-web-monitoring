@@ -105,7 +105,7 @@ export default function Dashboard() {
         <section className="card card-pad" aria-labelledby="titre-criticite">
           <h2 className="section-title" id="titre-criticite">
             Répartition par criticité
-            <span className="count">nombre de sélecteurs distincts</span>
+            <span className="count">score : sélecteurs distincts pondérés</span>
           </h2>
           <BarresHorizontales
             donnees={parCriticite}

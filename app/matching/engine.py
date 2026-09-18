@@ -56,6 +56,8 @@ class MatchResult:
     # Le selecteur est un nom de lieu generique (cf. Categorie.lieu_generique) :
     # la regle "liste de pays" de app.matching.exclusion s'y applique.
     categorie_lieu_generique: bool = False
+    # Poids du selecteur dans la criticite (cf. Selecteur.poids).
+    selecteur_poids: int = 1
 
 
 class _ContexteTexte:
@@ -239,7 +241,8 @@ def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRES
 def match_text_against_selecteur(texte: str, selecteur_valeur: str, selecteur_categorie: str,
                                    enable_fuzzy: bool = True,
                                    lieu_generique: bool = False,
-                                   contexte: _ContexteTexte = None) -> list[MatchResult]:
+                                   contexte: _ContexteTexte = None,
+                                   poids: int = 1) -> list[MatchResult]:
     """
     Applique les trois niveaux de correspondance pour UN selecteur donne.
     Retourne la liste de toutes les correspondances trouvees.
@@ -259,6 +262,7 @@ def match_text_against_selecteur(texte: str, selecteur_valeur: str, selecteur_ca
     for m in all_matches:
         m.selecteur_categorie = selecteur_categorie
         m.categorie_lieu_generique = lieu_generique
+        m.selecteur_poids = poids
 
     return all_matches
 
@@ -269,7 +273,7 @@ def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: boo
 
     selecteurs : liste d'objets Selecteur, charges AVEC leur categorie
     (joinedload, sinon une requete par selecteur), ou tuples
-    (valeur, categorie_id[, lieu_generique]) pour les tests.
+    (valeur, categorie_id[, lieu_generique[, poids]]) pour les tests.
     Retourne toutes les correspondances trouvees, tous selecteurs confondus.
     """
     contexte = _ContexteTexte(texte)
@@ -280,14 +284,16 @@ def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: boo
             valeur = selecteur.valeur
             categorie = selecteur.categorie_id
             lieu_generique = bool(selecteur.categorie and selecteur.categorie.lieu_generique)
+            poids = selecteur.poids or 1
         else:
             valeur, categorie = selecteur[0], selecteur[1]
             lieu_generique = bool(selecteur[2]) if len(selecteur) > 2 else False
+            poids = selecteur[3] if len(selecteur) > 3 else 1
 
         matches = match_text_against_selecteur(
             texte, valeur, categorie,
             enable_fuzzy=enable_fuzzy, lieu_generique=lieu_generique,
-            contexte=contexte,
+            contexte=contexte, poids=poids,
         )
         all_results.extend(matches)
 

@@ -43,6 +43,7 @@ package "Expositions" {
     +id : UUID
     +valeur : str
     +actif : bool
+    +poids : int
   }
 
   class ExclusionFauxPositif {

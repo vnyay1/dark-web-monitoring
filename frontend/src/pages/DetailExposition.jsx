@@ -89,8 +89,7 @@ export default function DetailExposition() {
             <PastilleCriticite niveau={donnees.niveau_criticite} />
           </span>
           <span className="stat-hint">
-            {donnees.criticite} {pluriel("sélecteur", donnees.criticite)} camerounais{" "}
-            {pluriel("distinct", donnees.criticite)} {pluriel("trouvé", donnees.criticite)}
+            Score {donnees.criticite} : sélecteurs camerounais distincts trouvés, chacun compté pour son poids
           </span>
         </div>
 

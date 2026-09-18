@@ -103,7 +103,7 @@ dark-web-monitoring/
 │   │
 │   ├── matching/                # moteur de correspondance (FR-08 à FR-13)
 │   │   ├── engine.py             # matching exact / insensible / fuzzy
-│   │   ├── criticite.py          # criticité = nb de sélecteurs distincts (FR-10)
+│   │   ├── criticite.py          # criticité = sélecteurs distincts pondérés (FR-10)
 │   │   ├── exclusion.py          # filtrage faux positifs (FR-11)
 │   │   ├── deduplication.py      # déduplication multi-source (FR-12)
 │   │   └── seed_selecteurs.py    # peuplement initial du catalogue (FR-08)
