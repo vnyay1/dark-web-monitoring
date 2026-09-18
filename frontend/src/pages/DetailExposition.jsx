@@ -244,8 +244,8 @@ export default function DetailExposition() {
           Les références ne sont pas cliquables : la consultation d'une source se fait exclusivement
           depuis l'environnement de collecte isolé.
           {peutLireTexte &&
-            " Le texte d'une annonce n'est conservé que pour une durée limitée : « Non conservé » " +
-              "signale un texte collecté avant cette fonction, ou déjà effacé."}
+            " « Non conservé » : annonce analysée avant la conservation des textes, ou dont la page de " +
+              "détail n'a pas encore été relue ; un administrateur peut récupérer son texte."}
         </p>
       </section>
 
