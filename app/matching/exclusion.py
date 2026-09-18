@@ -37,13 +37,23 @@ SEUIL_AUTRES_PAYS_PROXIMITE = 2
 FENETRE_PROXIMITE_CARACTERES = 150
 
 
+# Noms de pays cherches comme MOTS ENTIERS. En simple sous-chaine, "uk"
+# etait trouve dans "Ukraine" ou "duke", "usa" dans "usage", "india" dans
+# "indian", "chad" dans "Chadwick" : un "Cameroun" parfaitement legitime
+# pouvait etre rejete comme s'il figurait dans une liste de pays.
+MOTIFS_PAYS = {
+    pays: re.compile(r"(?<!\w)" + re.escape(pays) + r"(?!\w)")
+    for pays in AUTRES_PAYS_COURANTS
+}
+
+
 def _pays_a_proximite(texte: str, position: int, segment_trouve: str) -> list:
     """Autres noms de pays presents dans la fenetre de proximite du match."""
     debut = max(0, position - FENETRE_PROXIMITE_CARACTERES)
     fin = min(len(texte), position + len(segment_trouve) + FENETRE_PROXIMITE_CARACTERES)
     contexte = texte[debut:fin].lower()
 
-    return [pays for pays in AUTRES_PAYS_COURANTS if pays in contexte]
+    return [pays for pays, motif in MOTIFS_PAYS.items() if motif.search(contexte)]
 
 
 def _est_dans_liste_de_pays(texte: str, position: int, segment_trouve: str) -> bool:
