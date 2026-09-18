@@ -51,9 +51,11 @@ from app.models import TypeEvenementCollecte, utc_now
 from app.pipeline import executer_tous_les_connecteurs
 from app import supervision, tor
 
+# threadName : la collecte est parallele (cf. app.pipeline) ; le nom du
+# fil ("collecte_0"...) permet de suivre une source dans le journal.
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 

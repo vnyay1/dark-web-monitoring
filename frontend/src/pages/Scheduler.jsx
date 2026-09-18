@@ -292,7 +292,7 @@ export default function Scheduler() {
 
       <div className="grid grid-stats sched-metriques">
         <MetriqueSched
-          label="Source en cours"
+          label="Sources en cours"
           valeur={etat?.source_en_cours || (enCollecte ? "Préparation…" : "—")}
           hint={enCollecte ? "analyse en cours" : "aucune analyse en cours"}
           accent={enCollecte}

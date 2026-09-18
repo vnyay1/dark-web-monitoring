@@ -49,6 +49,11 @@ VALEURS_PAR_DEFAUT = {
         "10", "Nombre maximum de pages parcourues par source et par cycle (sources paginees)", "int",
     ),
 
+    "sources_en_parallele": (
+        "4", "Nombre de sources collectees en meme temps (1 = l'une apres l'autre) ; chacune "
+             "garde son delai minimum entre deux requetes", "int",
+    ),
+
     # --- FR-07 : planification ---
     "collecte_heure_min": (
         "0", "Heure la plus tot a laquelle la collecte quotidienne peut se declencher (0-23, UTC)", "int",
@@ -75,6 +80,7 @@ BORNES_MAXIMALES = {
     "hausse_criticite_confirmation": 100,
     "periode_collecte_jours": 3650,
     "pages_listing_max": 500,
+    "sources_en_parallele": 10,
     "collecte_heure_min": 23,
     "collecte_heure_max": 23,
 }

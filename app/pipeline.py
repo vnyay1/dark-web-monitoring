@@ -19,10 +19,22 @@ le nombre d'entrees traitees, donc la surface d'exception. Chaque entree
 et chaque connecteur sont isoles, avec rollback de la session (la
 deduplication commite en interne : sans rollback, une session en erreur
 ferait echouer toutes les entrees suivantes).
+
+COLLECTE PARALLELE - plusieurs sources sont collectees en meme temps
+(reglage sources_en_parallele, cf. executer_tous_les_connecteurs). Une
+source passe l'essentiel de son temps a attendre : le delai FR-06 entre
+deux requetes, plus la latence Tor. Seule cette collecte reseau est
+parallele. Tout ce qui lit puis ecrit la base (preparation, analyse,
+enregistrement) se fait sous app.db.verrou_base, une source apres
+l'autre : deux sources publiant la meme victime n'en font ainsi qu'une
+exposition. Le delai FR-06 reste compte PAR SOURCE (BaseConnector), et
+une source n'est jamais traitee par deux fils a la fois.
 """
 
 import argparse
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from sqlalchemy.orm import joinedload
@@ -42,7 +54,7 @@ from app.crawl.registre import (
     marquer_traitee,
     purger_registre,
 )
-from app.db import get_session, init_db
+from app.db import get_session, init_db, verrou_base
 from app.models import (
     Selecteur, Source, TypeEvenementCollecte, TypeSource, utc_now,
 )
@@ -311,6 +323,26 @@ def _seuils_du_run() -> dict:
     }
 
 
+# Sources en cours de traitement, affichees par la console de supervision :
+# plusieurs a la fois quand la collecte est parallele.
+_sources_en_cours = set()
+_verrou_sources_en_cours = threading.Lock()
+
+
+def _publier_source_en_cours(nom, en_cours: bool):
+    """Ajoute ou retire une source de la liste publiee pour la console."""
+    # La publication reste sous le verrou : deux fils ne peuvent pas
+    # publier deux listes dans le desordre.
+    with _verrou_sources_en_cours:
+        if en_cours:
+            _sources_en_cours.add(nom)
+        else:
+            _sources_en_cours.discard(nom)
+        supervision.battre_coeur(
+            source_en_cours=", ".join(sorted(_sources_en_cours)) or None
+        )
+
+
 def traiter_connecteur(connector_class, db_session=None, budget_details=None,
                        profondeur_max=None) -> dict:
     """
@@ -320,47 +352,71 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
     budget_details  : nombre maximum de pages de detail pour ce run.
     profondeur_max  : nombre maximum de pages de listing pour ce run.
 
+    Trois temps : preparation et analyse sous app.db.verrou_base, collecte
+    reseau hors verrou - c'est elle qui dure, et que la collecte parallele
+    fait se chevaucher entre sources.
+
     Retourne un resume statistique de l'execution.
     """
     session = db_session or get_session()
 
-    source = _get_or_create_source(session, connector_class)
-    connector = connector_class(db_session=session, source_id=source.id)
+    with verrou_base:
+        source = _get_or_create_source(session, connector_class)
+        connector = connector_class(db_session=session, source_id=source.id)
 
     logger.info(f"[pipeline] === Debut traitement : {connector.SOURCE_NAME} ===")
 
-    # Publie la source en cours d'analyse pour la console de supervision.
-    supervision.battre_coeur(source_en_cours=connector.SOURCE_NAME)
-    supervision.emettre(
-        TypeEvenementCollecte.DEBUT_SOURCE,
-        f"Analyse de la source {connector.SOURCE_NAME}...",
-        source=connector.SOURCE_NAME,
-        session=session,
-    )
+    # Publie la source en cours d'analyse pour la console de supervision ;
+    # le finally la retire quoi qu'il arrive, sans quoi elle resterait
+    # affichee au cycle suivant (la liste vit en memoire du processus).
+    _publier_source_en_cours(connector.SOURCE_NAME, True)
+    try:
+        with verrou_base:
+            supervision.emettre(
+                TypeEvenementCollecte.DEBUT_SOURCE,
+                f"Analyse de la source {connector.SOURCE_NAME}...",
+                source=connector.SOURCE_NAME,
+                session=session,
+            )
 
-    # Le connecteur ne lit pas la base : on lui passe ce qu'il doit ignorer,
-    # et jusqu'ou remonter (periode et plafond de pages reglables).
-    #
-    # Une annonce deja analysee dont l'exposition n'a pas encore son texte
-    # ou ses selecteurs (analysee avant ces fonctions, ou sur son seul
-    # titre) n'est PAS consideree comme connue : sa page de detail est
-    # relue, dans le budget du cycle, pour completer l'exposition.
-    a_completer, _ = signalements_a_completer(session, source, connector)
-    connues = identifiants_traites(session, source.id) - identifiants_a_relire(
-        session, source.id, identifiants_des_references(connector, a_completer),
-    )
-    seuils = _seuils_du_run()
-    seuils["a_completer"] = a_completer
-    if profondeur_max is None:
-        profondeur_max = get_config_int("pages_listing_max")
+            # Le connecteur ne lit pas la base : on lui passe ce qu'il doit
+            # ignorer, et jusqu'ou remonter (periode et plafond de pages
+            # reglables).
+            #
+            # Une annonce deja analysee dont l'exposition n'a pas encore son
+            # texte ou ses selecteurs (analysee avant ces fonctions, ou sur son
+            # seul titre) n'est PAS consideree comme connue : sa page de detail
+            # est relue, dans le budget du cycle, pour completer l'exposition.
+            a_completer, _ = signalements_a_completer(session, source, connector)
+            connues = identifiants_traites(session, source.id) - identifiants_a_relire(
+                session, source.id, identifiants_des_references(connector, a_completer),
+            )
+            seuils = _seuils_du_run()
+            seuils["a_completer"] = a_completer
+            if profondeur_max is None:
+                profondeur_max = get_config_int("pages_listing_max")
 
-    result = connector.collect(
-        entrees_connues=connues,
-        budget_details=budget_details,
-        profondeur_max=profondeur_max,
-        date_limite=seuils["date_limite"],
-    )
+        # Collecte reseau, HORS verrou : les autres sources avancent pendant
+        # que celle-ci attend ses reponses. Seul son journal d'audit, en fin
+        # de collecte, reprend le verrou (BaseConnector._journaliser_synthese).
+        result = connector.collect(
+            entrees_connues=connues,
+            budget_details=budget_details,
+            profondeur_max=profondeur_max,
+            date_limite=seuils["date_limite"],
+        )
 
+        with verrou_base:
+            return _analyser_collecte(session, source, connector, result, seuils)
+    finally:
+        _publier_source_en_cours(connector.SOURCE_NAME, False)
+
+
+def _analyser_collecte(session, source, connector, result, seuils) -> dict:
+    """
+    Analyse et enregistre ce qu'une collecte a rapporte. Appelee sous
+    app.db.verrou_base : une seule source a la fois ecrit en base.
+    """
     stats = {
         "source": connector.SOURCE_NAME,
         "collecte_reussie": result["success"],
@@ -443,6 +499,11 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
                 session, source, entree, selecteurs, seuils, stats
             )
             _marquer_dans_le_registre(session, source.id, connector, entree, a_produit)
+            # Un commit par entree : une mise a jour du registre non commitee
+            # garderait SQLite verrouillee en ecriture pendant l'analyse de
+            # toutes les entrees suivantes, et ferait attendre - voire echouer -
+            # le heartbeat du scheduler et le journal des autres sources.
+            session.commit()
         except Exception as e:
             # enregistrer_exposition() commite en interne : sans rollback,
             # la session resterait en erreur et toutes les entrees suivantes
@@ -520,45 +581,84 @@ def _repartir_budget(classes, budget_global) -> dict:
     return parts
 
 
+def _traiter_isole(connector_class, budget_details, profondeur_max) -> dict:
+    """
+    Traite UNE source dans SA PROPRE session : une session SQLAlchemy ne se
+    partage pas entre fils. Une erreur fatale devient un resultat d'echec,
+    sans jamais interrompre les autres sources.
+    """
+    session = get_session()
+    try:
+        return traiter_connecteur(
+            connector_class,
+            db_session=session,
+            budget_details=budget_details,
+            profondeur_max=profondeur_max,
+        )
+    except Exception as e:
+        logger.exception(
+            f"[pipeline] Connecteur {connector_class.SOURCE_NAME} en erreur fatale : {e}"
+        )
+        session.rollback()
+        return {
+            "source": connector_class.SOURCE_NAME,
+            "collecte_reussie": False,
+            "erreur_fatale": f"{type(e).__name__}: {str(e)[:200]}",
+        }
+    finally:
+        session.close()
+
+
+def nombre_de_sources_en_parallele(paralleles, nb_sources) -> int:
+    """
+    Nombre de sources collectees en meme temps : la valeur demandee (sinon
+    le reglage sources_en_parallele), bornee a [1, nombre de sources].
+    1 = collecte sequentielle, une source apres l'autre.
+    """
+    demande = get_config_int("sources_en_parallele") if paralleles is None else paralleles
+    return max(1, min(demande, nb_sources))
+
+
 def executer_tous_les_connecteurs(budget_global=None, profondeur_max=None,
-                                  classes=None) -> list:
+                                  classes=None, paralleles=None) -> list:
     """
     Execute le pipeline pour l'ensemble des connecteurs du registre
     (app.connectors.connecteurs_actifs). Respecte automatiquement le rate
     limiting (FR-06) via BaseConnector, et journalise chaque collecte (FR-17).
 
-    Un connecteur qui echoue de maniere fatale n'interrompt pas les suivants.
+    paralleles : nombre de sources collectees en meme temps (par defaut :
+    reglage sources_en_parallele ; cf. en-tete du module).
+
+    Un connecteur qui echoue de maniere fatale n'interrompt pas les autres.
+    Les resultats sont rendus dans l'ordre du registre, quel que soit
+    l'ordre dans lequel les sources ont fini.
     """
     classes = classes if classes is not None else connecteurs_actifs()
     budget = BUDGET_DETAILS_GLOBAL_PAR_RUN if budget_global is None else budget_global
     parts = _repartir_budget(classes, budget)
+    nb_fils = nombre_de_sources_en_parallele(paralleles, len(classes))
+
+    logger.info(
+        f"[pipeline] Cycle de collecte : {len(classes)} source(s), "
+        f"{nb_fils} en parallele."
+    )
+
+    with ThreadPoolExecutor(max_workers=nb_fils, thread_name_prefix="collecte") as pool:
+        futurs = [
+            pool.submit(
+                _traiter_isole, classe, parts.get(classe.SOURCE_NAME, 0), profondeur_max,
+            )
+            for classe in classes
+        ]
+        tous_les_stats = [futur.result() for futur in futurs]
 
     session = get_session()
-    tous_les_stats = []
-
-    for connector_class in classes:
-        try:
-            stats = traiter_connecteur(
-                connector_class,
-                db_session=session,
-                budget_details=parts.get(connector_class.SOURCE_NAME, 0),
-                profondeur_max=profondeur_max,
-            )
-        except Exception as e:
-            logger.exception(
-                f"[pipeline] Connecteur {connector_class.SOURCE_NAME} en erreur fatale : {e}"
-            )
-            session.rollback()
-            stats = {
-                "source": connector_class.SOURCE_NAME,
-                "collecte_reussie": False,
-                "erreur_fatale": f"{type(e).__name__}: {str(e)[:200]}",
-            }
-        tous_les_stats.append(stats)
-
-    purger_registre(session)
-    supervision.purger_evenements(session)
-    session.close()
+    try:
+        with verrou_base:
+            purger_registre(session)
+            supervision.purger_evenements(session)
+    finally:
+        session.close()
     return tous_les_stats
 
 
@@ -579,11 +679,20 @@ def _analyser_arguments():
         help="Plafond de pages de listing par source pour ce run "
              "(par defaut : reglage pages_listing_max).",
     )
+    parseur.add_argument(
+        "--paralleles", type=int, default=None,
+        help="Nombre de sources collectees en meme temps pour ce run "
+             "(par defaut : reglage sources_en_parallele ; 1 = l'une apres l'autre).",
+    )
     return parseur.parse_args()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    # threadName : avec la collecte parallele, les lignes des sources
+    # s'entremelent ; le nom du fil ("collecte_0"...) permet de les suivre.
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
+    )
     arguments = _analyser_arguments()
     init_db()
 
@@ -591,6 +700,7 @@ if __name__ == "__main__":
         budget_global=arguments.budget_details,
         profondeur_max=arguments.profondeur_max,
         classes=[connecteur_par_nom(arguments.source)] if arguments.source else None,
+        paralleles=arguments.paralleles,
     )
 
     print("\n" + "=" * 60)
