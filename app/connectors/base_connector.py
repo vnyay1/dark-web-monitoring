@@ -96,10 +96,14 @@ DELAI_ALEATOIRE_MAX = 15
 # source en panne coute donc quelques minutes, jamais une rafale.
 TENTATIVES_PAR_DEFAUT = 3
 
-# Le fuzzy matching de app.matching.engine est en O(len(texte) x nb_selecteurs).
-# Un post integral peut faire plusieurs centaines de Ko et faire exploser la
-# duree du run sans rien apporter au matching.
-LIMITE_TEXTE_BRUT = 20000
+# Garde-fou memoire seulement : l'annonce est desormais analysee (et
+# conservee, cf. app.conservation) EN ENTIER. La coupure a 20 000 caracteres
+# faisait manquer des selecteurs situes plus loin (CNI a la position 23 734
+# sur l'annonce everest de CCA Bank, 45 441 caracteres). Le cout du matching
+# reste borne : seul le fuzzy, en O(mots x selecteurs), est limite au debut
+# du texte (app.matching.engine.LIMITE_TEXTE_FUZZY) ; 1 000 000 de
+# caracteres s'analysent en 2 a 3 s contre le catalogue complet.
+LIMITE_TEXTE_BRUT = 1_000_000
 
 
 class BaseConnector:

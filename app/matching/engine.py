@@ -43,6 +43,13 @@ FUZZY_THRESHOLD = 85
 # "Artificial" ou "start-of-the-art".
 SEUIL_LONGUEUR_MOT_ENTIER = 6
 
+# Le fuzzy matching ne porte que sur ce debut de texte. C'est le seul niveau
+# couteux (O(mots x selecteurs)) : les niveaux exact et insensible a la casse
+# parcourent TOUT le texte, si long soit-il. Une annonce de 45 000 caracteres
+# (everest, CCA Bank) avait ses mentions de CNI au-dela des 20 000 premiers
+# caracteres, auxquels tout le texte etait alors coupe.
+LIMITE_TEXTE_FUZZY = 20000
+
 
 @dataclass
 class MatchResult:
@@ -64,13 +71,14 @@ class _ContexteTexte:
     """
     Pretraitements d'UN texte, partages par tous les selecteurs du
     catalogue. Les fenetres de mots sont construites a la demande, une
-    fois par taille (1 mot, 2 mots...), puis gardees.
+    fois par taille (1 mot, 2 mots...), puis gardees. Elles ne servent
+    qu'au fuzzy matching, d'ou leur limite a LIMITE_TEXTE_FUZZY.
     """
 
-    def __init__(self, texte: str):
+    def __init__(self, texte: str, limite_fuzzy: int = LIMITE_TEXTE_FUZZY):
         self.texte = texte
         self.texte_lower = texte.lower()
-        self.mots = texte.split()
+        self.mots = texte[:limite_fuzzy].split()
         self._fenetres = {}
 
     def fenetres(self, nb_mots: int) -> tuple:
