@@ -175,6 +175,29 @@ def reinitialiser_pour_recrawl(session, source_id=None) -> int:
     return nombre
 
 
+def remettre_en_file(session, source_id, identifiant) -> bool:
+    """
+    Remet UNE entree en file (A_TRAITER), quel que soit son statut, avec un
+    compteur d'echecs remis a zero : sa page de detail sera recuperee et
+    analysee au prochain cycle. Plus cible que reinitialiser_pour_recrawl(),
+    qui remettrait en file toute une source - soit des centaines de pages a
+    30 s ou plus chacune.
+
+    Retourne False si l'entree est absente du registre.
+    """
+    ligne = _ligne(session, source_id, identifiant)
+    if ligne is None:
+        return False
+
+    ligne.statut_detail = StatutDetailEntree.A_TRAITER
+    ligne.date_detail_traite = None
+    ligne.nb_echecs_detail = 0
+    session.commit()
+
+    logger.info(f"[registre] Entree remise en file : {identifiant}")
+    return True
+
+
 def _ligne(session, source_id, identifiant):
     return session.query(EntreeCollectee).filter_by(
         source_id=source_id, identifiant_entree=identifiant
@@ -189,6 +212,11 @@ def _analyser_arguments():
                     "enrichissement significatif du catalogue de selecteurs)."
     )
     parseur.add_argument("--source", help="SOURCE_NAME a re-crawler (defaut : toutes)")
+    parseur.add_argument(
+        "--identifiant",
+        help="Ne remettre en file QUE cette entree (colonne Reference du signalement, "
+             "ex. /news/cca-bank) ; exige --source",
+    )
     return parseur.parse_args()
 
 
@@ -199,6 +227,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     arguments = _analyser_arguments()
 
+    if arguments.identifiant and not arguments.source:
+        raise SystemExit("--identifiant exige --source.")
+
     session = get_session()
     source_id = None
 
@@ -207,6 +238,16 @@ if __name__ == "__main__":
         if source is None:
             raise SystemExit(f"Source inconnue en base : {arguments.source}")
         source_id = source.id
+
+    if arguments.identifiant:
+        trouvee = remettre_en_file(session, source_id, arguments.identifiant.strip())
+        session.close()
+        if not trouvee:
+            raise SystemExit(
+                f"Entree {arguments.identifiant!r} absente du registre de {arguments.source}."
+            )
+        print(f"Entree {arguments.identifiant} remise en file de crawl pour {arguments.source}.")
+        raise SystemExit(0)
 
     nombre = reinitialiser_pour_recrawl(session, source_id=source_id)
     session.close()

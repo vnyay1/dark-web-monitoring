@@ -622,6 +622,21 @@ class BaseConnector:
             stats["details_echec"] += 1
             return False
 
+        self._fusionner_detail(entry, enrichi)
+        stats["details_ok"] += 1
+        return True
+
+    @staticmethod
+    def texte_fusionne(texte_listing, texte_detail):
+        """Texte d'une entree enrichie, AVANT la coupure a LIMITE_TEXTE_BRUT."""
+        return " ".join(filter(None, [texte_listing, texte_detail]))
+
+    def _fusionner_detail(self, entry, enrichi):
+        """
+        Fusionne le resultat de parse_detail() dans l'entree. Isole ici pour
+        que la reconnaissance (phase correspondance) reproduise exactement
+        la collecte.
+        """
         # Le listing garde la priorite, SAUF la ou il n'avait rien : un
         # listing qui pose "date_publication": None ne doit pas masquer la
         # date trouvee sur la page de detail (setdefault() l'ignorait,
@@ -630,12 +645,10 @@ class BaseConnector:
             if cle != "texte_brut" and entry.get(cle) in (None, ""):
                 entry[cle] = valeur
 
-        entry["texte_brut"] = " ".join(filter(None, [
+        entry["texte_brut"] = self.texte_fusionne(
             entry.get("texte_brut"), enrichi.get("texte_brut"),
-        ]))[:LIMITE_TEXTE_BRUT]
+        )[:LIMITE_TEXTE_BRUT]
         entry["niveau_detail"] = "detail"
-        stats["details_ok"] += 1
-        return True
 
     # ------------------------------------------------------------------
     # Journal d'audit (FR-17, append-only)

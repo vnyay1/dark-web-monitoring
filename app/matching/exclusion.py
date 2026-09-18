@@ -37,6 +37,15 @@ SEUIL_AUTRES_PAYS_PROXIMITE = 2
 FENETRE_PROXIMITE_CARACTERES = 150
 
 
+def _pays_a_proximite(texte: str, position: int, segment_trouve: str) -> list:
+    """Autres noms de pays presents dans la fenetre de proximite du match."""
+    debut = max(0, position - FENETRE_PROXIMITE_CARACTERES)
+    fin = min(len(texte), position + len(segment_trouve) + FENETRE_PROXIMITE_CARACTERES)
+    contexte = texte[debut:fin].lower()
+
+    return [pays for pays in AUTRES_PAYS_COURANTS if pays in contexte]
+
+
 def _est_dans_liste_de_pays(texte: str, position: int, segment_trouve: str) -> bool:
     """
     Detecte si un match de type "nom de pays generique" (ex: Cameroon,
@@ -44,15 +53,7 @@ def _est_dans_liste_de_pays(texte: str, position: int, segment_trouve: str) -> b
     pays - typique d'un en-tete recapitulatif de leak site multi-victimes,
     qui n'est PAS une indication reelle d'un lien avec le Cameroun.
     """
-    debut = max(0, position - FENETRE_PROXIMITE_CARACTERES)
-    fin = min(len(texte), position + len(segment_trouve) + FENETRE_PROXIMITE_CARACTERES)
-    contexte = texte[debut:fin].lower()
-
-    nb_autres_pays_trouves = sum(
-        1 for pays in AUTRES_PAYS_COURANTS if pays in contexte
-    )
-
-    return nb_autres_pays_trouves >= SEUIL_AUTRES_PAYS_PROXIMITE
+    return len(_pays_a_proximite(texte, position, segment_trouve)) >= SEUIL_AUTRES_PAYS_PROXIMITE
 
 
 # ---------------------------------------------------------------------
@@ -89,6 +90,29 @@ def _cm_isole_dans_mot(texte: str, position: int, segment_trouve: str) -> bool:
 # Application des regles structurelles
 # ---------------------------------------------------------------------
 
+def motif_rejet_structurel(texte: str, m):
+    """
+    Motif pour lequel une regle structurelle ecarte ce match, ou None s'il
+    est retenu. Expose pour la reconnaissance (phase correspondance), qui
+    doit dire POURQUOI un selecteur n'a pas compte.
+    """
+    if m.position is None or m.position < 0:
+        return None
+
+    if _cm_isole_dans_mot(texte, m.position, m.segment_trouve):
+        return "'cm' isole dans un mot plus long"
+
+    # La regle "liste de pays" ne s'applique qu'aux noms de lieux
+    # generiques. Elle suit l'indicateur de la categorie, et non plus son
+    # nom : les categories sont renommables par l'administrateur.
+    if m.categorie_lieu_generique:
+        pays = _pays_a_proximite(texte, m.position, m.segment_trouve)
+        if len(pays) >= SEUIL_AUTRES_PAYS_PROXIMITE:
+            return f"contexte de liste de pays/victimes detecte ({', '.join(pays)})"
+
+    return None
+
+
 def appliquer_regles_structurelles(texte: str, matches: list) -> list:
     """
     Filtre une liste de MatchResult en appliquant les regles structurelles
@@ -97,21 +121,10 @@ def appliquer_regles_structurelles(texte: str, matches: list) -> list:
     filtered = []
 
     for m in matches:
-        if m.position is None or m.position < 0:
-            filtered.append(m)
+        motif = motif_rejet_structurel(texte, m)
+        if motif:
+            logger.info(f"[FR-11] Rejet '{m.segment_trouve}' : {motif}")
             continue
-
-        if _cm_isole_dans_mot(texte, m.position, m.segment_trouve):
-            logger.info(f"[FR-11] Rejet '{m.segment_trouve}' : 'cm' isole dans un mot plus long")
-            continue
-
-        # La regle "liste de pays" ne s'applique qu'aux noms de lieux
-        # generiques. Elle suit l'indicateur de la categorie, et non plus son
-        # nom : les categories sont renommables par l'administrateur.
-        if m.categorie_lieu_generique and _est_dans_liste_de_pays(texte, m.position, m.segment_trouve):
-            logger.info(f"[FR-11] Rejet '{m.segment_trouve}' : contexte de liste de pays/victimes detecte")
-            continue
-
         filtered.append(m)
 
     return filtered
@@ -131,6 +144,11 @@ def appliquer_liste_exclusion(texte: str, session) -> bool:
 
     Retourne True si le texte doit etre exclu (faux positif connu).
     """
+    return motif_exclusion_configuree(texte, session) is not None
+
+
+def motif_exclusion_configuree(texte: str, session):
+    """Motif de la liste d'exclusion qui ecarte ce texte, ou None."""
     from app.models import ExclusionFauxPositif
 
     exclusions = session.query(ExclusionFauxPositif).all()
@@ -139,12 +157,12 @@ def appliquer_liste_exclusion(texte: str, session) -> bool:
         try:
             if re.search(exclusion.motif, texte, re.IGNORECASE):
                 logger.info(f"[FR-11] Texte exclu par la regle : '{exclusion.motif}' (ajoutee par {exclusion.ajoute_par})")
-                return True
+                return exclusion.motif
         except re.error:
             logger.warning(f"[FR-11] Motif d'exclusion invalide (regex), ignore : '{exclusion.motif}'")
             continue
 
-    return False
+    return None
 
 
 def filtrer_faux_positifs(texte: str, matches: list, session=None) -> list:

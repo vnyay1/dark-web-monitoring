@@ -34,11 +34,19 @@ Usage :
     python -m app.connectors.reconnaissance --source safepay --phase detail --profondeur 14
     python -m app.connectors.reconnaissance --source safepay --phase dates --detail 3
     python -m app.connectors.reconnaissance --source blackwater --phase pages --max 3
+    python -m app.connectors.reconnaissance --source everest --phase correspondance \\
+        --entree /news/cca-bank --selecteurs "Cameroun,CNI,RCCM"
 
 La phase "dates" est la seule a imprimer du texte de la page : UNIQUEMENT la
 chaine de date de chaque entree, et ce qu'en tire parser_date(). Une date de
 publication est une metadonnee autorisee (CN-03) ; aucun autre champ n'est
 affiche. Elle sert a ecrire les DATE_FORMATS des connecteurs.
+
+La phase "correspondance" rejoue sur UNE entree toute la chaine d'analyse du
+pipeline et dit pourquoi elle a compte tant de selecteurs. Elle imprime des
+termes du CATALOGUE (jamais un segment de la page), des compteurs, des
+positions, des longueurs et des dates. Elle LIT la base (catalogue, reglages,
+registre, expositions) sans jamais y ecrire.
 """
 
 import argparse
@@ -203,6 +211,23 @@ def _recuperer(connecteur, url, max_retries=1, **kwargs):
     return connecteur.requete(url, tentatives=max_retries, **kwargs)
 
 
+def _url_de_la_page(connecteur, page):
+    """
+    URL de la page de listing numero 'page', en suivant la pagination du
+    connecteur (une requete par page precedente, delai FR-06 compris).
+    """
+    url = connecteur.TARGET_URL
+    for courante in range(1, page):
+        raw = _recuperer(connecteur, url).text
+        try:
+            url = connecteur.url_page_suivante(raw, courante)
+        finally:
+            del raw  # CN-05
+        if not url:
+            raise SystemExit(f"La source ne compte que {courante} page(s).")
+    return url
+
+
 def _verdict_liceite(connecteur, reponse, url_detail, libelle_lien):
     """
     Repond a la question qui decide si une source peut passer en
@@ -317,17 +342,7 @@ def phase_dates(connecteur, limite=15, pages_detail=0, page=1):
     """
     from app.connectors.dates import CLES_DATE, parser_date
 
-    url = connecteur.TARGET_URL
-    for courante in range(1, page):
-        raw = _recuperer(connecteur, url).text
-        try:
-            url = connecteur.url_page_suivante(raw, courante)
-        finally:
-            del raw  # CN-05
-        if not url:
-            raise SystemExit(f"La source ne compte que {courante} page(s).")
-
-    reponse = _recuperer(connecteur, url)
+    reponse = _recuperer(connecteur, _url_de_la_page(connecteur, page))
     entrees = connecteur.parse(reponse.text).get("entries", [])
     libelles = _libelles_de_champs(reponse.text)
 
@@ -499,19 +514,517 @@ def phase_detail(connecteur, index, profondeur=6):
     _verdict_liceite(connecteur, reponse, url, entree.get("nom_entite_detecte"))
 
 
+# ----------------------------------------------------------------------
+# Phase "correspondance" : pourquoi une entree a-t-elle compte tant de
+# selecteurs ?
+# ----------------------------------------------------------------------
+
+# Seules valeurs JSON affichees telles quelles : des dates de publication,
+# metadonnee autorisee (CN-03). Toute autre valeur est reduite a son type
+# et a sa longueur.
+CLES_JSON_DATE = ("date", "created_at", "updated_at", "published_at", "publication_date")
+
+# Une cle JSON qui n'a pas la forme d'un nom de champ peut etre une DONNEE
+# (un nom de fichier servant de cle, par exemple) : elle est masquee.
+CLE_JSON_LISIBLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,40}$")
+MAX_CLES_JSON = 40
+
+# Au-dela, les dates d'un meme chemin JSON sont resumees par leur plage.
+MAX_DATES_DETAILLEES = 10
+
+
+def _cle_json(cle):
+    cle = str(cle)
+    return cle if CLE_JSON_LISIBLE.match(cle) else f"<cle:{len(cle)}>"
+
+
+def _decrire_json(valeur, cle=None):
+    """Type et taille d'une valeur JSON, sans la valeur (dates exceptees)."""
+    if isinstance(valeur, dict):
+        return f"objet ({len(valeur)} cle(s))"
+    if isinstance(valeur, list):
+        textes = [v for v in valeur if isinstance(v, str)]
+        total = f", texte total {sum(len(t) for t in textes)}" if textes else ""
+        return f"liste ({len(valeur)} element(s){total})"
+    if isinstance(valeur, str):
+        return f"date {valeur[:40]!r}" if cle in CLES_JSON_DATE else f"texte:{len(valeur)}"
+    if valeur is None:
+        return "null"
+    if isinstance(valeur, bool):
+        return "booleen"
+    # Nombre : valeur non affichee (un montant revendique, par exemple).
+    return type(valeur).__name__
+
+
+def resumer_json(donnees, profondeur_max=6):
+    """
+    Squelette d'une structure JSON : cles, types et longueurs, jamais les
+    valeurs (dates exceptees). Pendant de resumer_structure() pour les sites
+    qui livrent leur contenu en JSON (everest, Inertia) ; comme lui, une
+    liste n'est exploree qu'a travers son premier element.
+    """
+    lignes = []
+
+    def explorer(valeur, profondeur):
+        if profondeur > profondeur_max:
+            return
+        marge = "  " * profondeur
+        if isinstance(valeur, dict):
+            elements = list(valeur.items())
+            for cle, enfant in elements[:MAX_CLES_JSON]:
+                lignes.append(f"{marge}{_cle_json(cle)}: {_decrire_json(enfant, cle)}")
+                explorer(enfant, profondeur + 1)
+            if len(elements) > MAX_CLES_JSON:
+                lignes.append(f"{marge}... {len(elements) - MAX_CLES_JSON} cle(s) de plus")
+        elif isinstance(valeur, list) and valeur:
+            lignes.append(f"{marge}[0]: {_decrire_json(valeur[0])}")
+            explorer(valeur[0], profondeur + 1)
+
+    explorer(donnees, 0)
+    return "\n".join(lignes)
+
+
+def _dates_json(donnees) -> dict:
+    """Dates du JSON groupees par chemin generique ("props.posts[].date")."""
+    groupes = {}
+
+    def explorer(valeur, chemin):
+        if isinstance(valeur, dict):
+            for cle, enfant in valeur.items():
+                sous_chemin = f"{chemin}.{_cle_json(cle)}" if chemin else _cle_json(cle)
+                if cle in CLES_JSON_DATE and isinstance(enfant, str):
+                    groupes.setdefault(sous_chemin, []).append(enfant)
+                else:
+                    explorer(enfant, sous_chemin)
+        elif isinstance(valeur, list):
+            for enfant in valeur:
+                explorer(enfant, f"{chemin}[]")
+
+    explorer(donnees, "")
+    return groupes
+
+
+def _trouver_entree(connecteur, identifiant, index, page):
+    """Entree du listing a diagnostiquer, preparee comme en collecte."""
+    reponse = _recuperer(connecteur, _url_de_la_page(connecteur, page))
+    try:
+        entrees = connecteur.parse(reponse.text).get("entries", [])
+    finally:
+        del reponse  # CN-05
+
+    for entree in entrees:
+        entree["identifiant_entree"] = (
+            entree.get("identifiant_entree") or connecteur.identifiant_entree(entree)
+        )
+        entree["niveau_detail"] = "listing"
+
+    if identifiant:
+        cible = identifiant.strip()
+        if not cible.startswith("h:"):
+            cible = connecteur._chemin_interne(cible) or cible
+        for entree in entrees:
+            if entree["identifiant_entree"] == cible:
+                return entree
+        raise SystemExit(
+            f"Entree {cible!r} introuvable parmi les {len(entrees)} entree(s) de la page "
+            f"{page}. L'identifiant est la colonne Reference du signalement."
+        )
+
+    if index >= len(entrees):
+        raise SystemExit(f"Index {index} hors limites : {len(entrees)} entree(s).")
+    return entrees[index]
+
+
+def _visiter_detail(connecteur, entree) -> dict:
+    """
+    Visite la page de detail comme en collecte et fusionne son contenu dans
+    l'entree. Renvoie ce que le diagnostic doit savoir, dont le contenu
+    DECODE de la page (compteurs uniquement, jamais imprime).
+    """
+    import html
+    import json
+
+    from app.connectors.dates import CLES_DATE
+
+    visite = {"url": None, "erreur": None, "texte_detail": "", "dates_detail": {},
+              "page": "", "json": None}
+    if not connecteur.SUPPORTE_DETAIL or not connecteur.url_detail(entree):
+        return visite
+
+    visite["url"] = connecteur.url_detail(entree)
+    raw = _recuperer(connecteur, visite["url"]).text
+    try:
+        extraire = getattr(connecteur, "_extraire_json_inertia", None)
+        if extraire is not None:
+            try:
+                visite["json"] = extraire(raw)
+                visite["page"] = json.dumps(visite["json"], ensure_ascii=False)
+            except Exception:
+                pass
+        if not visite["page"]:
+            visite["page"] = html.unescape(raw)
+        try:
+            enrichi = connecteur.parse_detail(raw, entree) or {}
+        except Exception as erreur:
+            visite["erreur"] = connecteur._libelle_erreur(erreur)
+            return visite
+    finally:
+        del raw  # CN-05
+
+    visite["texte_detail"] = enrichi.get("texte_brut") or ""
+    visite["dates_detail"] = {c: enrichi.get(c) for c in CLES_DATE if enrichi.get(c)}
+    connecteur._fusionner_detail(entree, enrichi)
+    return visite
+
+
+def _compter(texte, terme):
+    """(occurrences en casse exacte, occurrences en une autre casse)."""
+    exactes = texte.count(terme)
+    return exactes, max(0, texte.lower().count(terme.lower()) - exactes)
+
+
+def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=()):
+    """
+    Rejoue en memoire, sur UNE entree, toute la chaine d'analyse du pipeline
+    (fusion listing + detail, normalisation, fenetre de dates, matching,
+    faux positifs, criticite) et dit pourquoi elle a produit tant de
+    selecteurs.
+
+    N'imprime que des termes du catalogue, des compteurs, des positions,
+    des longueurs et des dates : jamais le texte de la page (CN-04/CN-05).
+    N'ecrit rien en base : catalogue, reglages, registre et expositions
+    sont seulement lus.
+    """
+    from rapidfuzz import fuzz
+    from sqlalchemy.orm import joinedload
+
+    from app.connectors.base_connector import LIMITE_TEXTE_BRUT
+    from app.connectors.dates import CLES_DATE, parser_date
+    from app.db import get_session, init_db
+    from app.matching.criticite import calculer_criticite
+    from app.matching.engine import (
+        SEUIL_LONGUEUR_MOT_ENTIER, _pattern_mot_entier, match_text_against_catalogue,
+    )
+    from app.matching.exclusion import motif_exclusion_configuree, motif_rejet_structurel
+    from app.models import (
+        EntreeCollectee, Exposition, Selecteur, Source, SourceReference, StatutDetailEntree,
+    )
+    from app.pipeline import _normaliser_entry, _seuils_du_run
+
+    init_db()
+    causes = []
+
+    def lire(valeur):
+        return parser_date(valeur, connecteur.DATE_FORMATS, source=connecteur.SOURCE_NAME,
+                           journaliser=False)
+
+    # --- Entree, telle que la collecte la voit ---------------------------
+    entree = _trouver_entree(connecteur, identifiant, index, page)
+    texte_listing = entree.get("texte_brut") or ""
+    dates_listing = {c: entree.get(c) for c in CLES_DATE if entree.get(c)}
+
+    visite = _visiter_detail(connecteur, entree)
+    texte_complet = connecteur.texte_fusionne(texte_listing, visite["texte_detail"])
+    normalisee = _normaliser_entry(entree, connecteur)
+    texte_analyse = normalisee["texte_brut"]
+    seuils = _seuils_du_run()
+
+    print()
+    print("ENTREE")
+    print("-" * 64)
+    print(f"  identifiant      : {normalisee['identifiant_entree']}")
+    print(f"  nom d'entite     : {normalisee['nom_entite']}")
+    if visite["url"] is None:
+        etat_detail = "non visitee (le connecteur n'a pas de page de detail pour cette entree)"
+        causes.append("Page de detail non visitee : seul le texte du listing est analyse.")
+    elif visite["erreur"]:
+        etat_detail = f"ECHEC de parse_detail : {visite['erreur']}"
+        causes.append(
+            f"[E/F] parse_detail echoue ({visite['erreur']}) : en collecte, l'entree part en "
+            f"echec de detail et seul le titre du listing est analyse."
+        )
+    else:
+        etat_detail = "visitee et lue"
+    print(f"  page de detail   : {etat_detail}")
+    print(f"  texte listing    : {len(texte_listing)} car.")
+    print(f"  texte detail     : {len(visite['texte_detail'])} car.")
+    print(f"  texte complet    : {len(texte_complet)} car.")
+    coupe = len(texte_complet) - len(texte_analyse)
+    print(f"  texte analyse    : {len(texte_analyse)} car."
+          + (f" (COUPE a {LIMITE_TEXTE_BRUT} : {coupe} car. jamais analyses)" if coupe > 0 else ""))
+
+    # --- Dates et fenetre d'analyse --------------------------------------
+    print()
+    print("DATES")
+    print("-" * 64)
+    for origine, dates in (("listing", dates_listing), ("detail", visite["dates_detail"])):
+        for cle, brute in dates.items():
+            lue = lire(brute)
+            print(f"  {origine:8} {cle:17} {str(brute)[:40]!r:44} -> "
+                  f"{lue.isoformat(sep=' ') if lue else 'NON RECONNUE'}")
+    cle_retenue = next((c for c in CLES_DATE if entree.get(c)), None)
+    date_reference = normalisee["date_publication"] or normalisee.get("date_plafond")
+    print(f"  retenue          : {cle_retenue or 'aucune'} (ordre {', '.join(CLES_DATE)})"
+          f" -> {date_reference.isoformat(sep=' ') if date_reference else 'aucune date'}")
+    print(f"  debut de periode : {seuils['date_limite']:%Y-%m-%d %H:%M} "
+          f"({seuils['periode_jours']} jours)")
+
+    hors_periode = date_reference is not None and date_reference < seuils["date_limite"]
+    print(f"  verdict          : {'HORS PERIODE - ecartee AVANT le matching' if hors_periode else 'dans la periode'}")
+    if hors_periode:
+        date_listing = lire(next(iter(dates_listing.values()), None))
+        message = "[A] HORS PERIODE : en collecte, l'entree enrichie est ecartee avant le matching."
+        if date_listing is not None and date_listing >= seuils["date_limite"]:
+            message += (" Le listing SEUL etait dans la periode : l'exposition a pu naitre du "
+                        "titre seul, et la page de detail ne l'a jamais completee.")
+        causes.append(message)
+
+    if visite["json"] is not None:
+        for chemin, valeurs in _dates_json(visite["json"]).items():
+            lues = [lire(v) for v in valeurs]
+            if len(valeurs) <= MAX_DATES_DETAILLEES:
+                for i, (brute, lue) in enumerate(zip(valeurs, lues)):
+                    print(f"  json     {chemin} #{i} {brute[:30]!r} -> "
+                          f"{lue.isoformat(sep=' ') if lue else 'NON RECONNUE'}")
+            else:
+                valides = [d for d in lues if d]
+                plage = f"de {min(valides):%Y-%m-%d} a {max(valides):%Y-%m-%d}" if valides else "illisibles"
+                print(f"  json     {chemin} : {len(valeurs)} dates, {plage}")
+
+    session = get_session()
+    try:
+        # --- Matching, faux positifs, criticite ---------------------------
+        catalogue = session.query(Selecteur).options(joinedload(Selecteur.categorie)).all()
+        actifs = [s for s in catalogue if s.actif]
+        noms_categories = {s.categorie_id: s.categorie.nom for s in catalogue}
+
+        trouves = match_text_against_catalogue(texte_analyse, actifs)
+        # Au-dela de la coupure : exact et casse seulement, cela suffit a
+        # dire qu'un selecteur s'y trouve.
+        au_dela = (
+            match_text_against_catalogue(texte_complet, actifs, enable_fuzzy=False)
+            if coupe > 0 else []
+        )
+        motif_liste = motif_exclusion_configuree(texte_analyse, session)
+
+        par_valeur = {}
+        retenus = []
+        for m in trouves:
+            info = par_valeur.setdefault(m.selecteur_valeur, {
+                "categorie": m.selecteur_categorie, "niveaux": {}, "motifs": {},
+                "retenues": 0, "apres": None,
+            })
+            info["niveaux"][m.type_correspondance] = info["niveaux"].get(m.type_correspondance, 0) + 1
+            motif = motif_rejet_structurel(texte_analyse, m)
+            if motif:
+                info["motifs"][motif] = info["motifs"].get(motif, 0) + 1
+            else:
+                info["retenues"] += 1
+                retenus.append(m)
+        for m in au_dela:
+            if m.selecteur_valeur in par_valeur and par_valeur[m.selecteur_valeur]["apres"] is None:
+                continue
+            info = par_valeur.setdefault(m.selecteur_valeur, {
+                "categorie": m.selecteur_categorie, "niveaux": {}, "motifs": {},
+                "retenues": 0, "apres": m.position,
+            })
+            info["apres"] = min(info["apres"], m.position)
+
+        if motif_liste is not None:
+            retenus = []
+        detail = calculer_criticite(retenus)
+
+        print()
+        print(f"SELECTEURS DU CATALOGUE TROUVES ({len(actifs)} actifs)")
+        print("-" * 64)
+        if not par_valeur:
+            print("  aucun")
+        for valeur, info in par_valeur.items():
+            categorie = noms_categories.get(info["categorie"], "?")[:22]
+            niveaux = ", ".join(f"{n} x{c}" for n, c in info["niveaux"].items()) or "-"
+            if info["apres"] is not None:
+                verdict = f"APRES LA COUPURE (1re position {info['apres']})"
+            elif info["retenues"]:
+                verdict = "RETENU" + (" (mais texte exclu, voir plus bas)" if motif_liste else "")
+            else:
+                verdict = "REJETE " + "; ".join(f"x{n} : {motif}" for motif, n in info["motifs"].items())
+            print(f"  {valeur[:26]!r:28} {categorie:23} {niveaux:24} {verdict}")
+
+        if motif_liste is not None:
+            print(f"\n  TEXTE ENTIEREMENT EXCLU par la liste d'exclusion (motif {motif_liste!r})")
+            causes.append(f"Texte exclu par la liste d'exclusion des analystes (motif {motif_liste!r}).")
+
+        apres = [v for v, i in par_valeur.items() if i["apres"] is not None]
+        if apres:
+            causes.append(
+                f"[B] {len(apres)} selecteur(s) presents seulement apres la coupure a "
+                f"{LIMITE_TEXTE_BRUT} car. : {', '.join(apres)}."
+            )
+        rejetes_pays = [
+            v for v, i in par_valeur.items()
+            if i["apres"] is None and not i["retenues"] and any("liste de pays" in m for m in i["motifs"])
+        ]
+        if rejetes_pays:
+            causes.append(
+                f"[C] Rejete(s) par la regle \"liste de pays\" : {', '.join(rejetes_pays)} "
+                f"(pays reperes indiques dans le tableau)."
+            )
+
+        print()
+        print("CRITICITE QUE PRODUIRAIT L'ANALYSE ACTUELLE")
+        print("-" * 64)
+        print(f"  {detail.resume()} - selecteurs retenus : {', '.join(detail.selecteurs) or 'aucun'}")
+        print(f"  minimum d'enregistrement : {seuils['criticite_minimum']}")
+
+        # --- Termes signales par l'operateur ------------------------------
+        if termes:
+            print()
+            print("TERMES DEMANDES (--selecteurs)")
+            print("-" * 64)
+        for terme in termes:
+            court = len(terme) <= SEUIL_LONGUEUR_MOT_ENTIER
+            au_catalogue = [s for s in catalogue if s.valeur == terme]
+            if any(s.actif for s in au_catalogue):
+                etat = "actif (" + ", ".join(s.categorie.nom for s in au_catalogue if s.actif) + ")"
+            elif au_catalogue:
+                etat = "INACTIF"
+            else:
+                etat = "ABSENT du catalogue"
+                causes.append(f"{terme!r} n'est pas un selecteur du catalogue (valeur exacte).")
+            if au_catalogue and not any(s.actif for s in au_catalogue):
+                causes.append(f"{terme!r} est au catalogue mais desactive.")
+
+            regle = " - court : MAJUSCULES exactes et mot isole" if court else ""
+            print(f"  {terme!r}{regle} - catalogue : {etat}")
+            for libelle, texte in (("page decodee", visite["page"]),
+                                   ("texte extrait", texte_complet),
+                                   ("texte analyse", texte_analyse)):
+                if not texte:
+                    continue
+                exactes, autre_casse = _compter(texte, terme)
+                ligne = f"      {libelle:14}: {exactes} en casse exacte, {autre_casse} en autre casse"
+                if court and exactes:
+                    isolees = len(_pattern_mot_entier(terme).findall(texte))
+                    ligne += f", dont {exactes - isolees} collee(s) a une lettre, un chiffre ou un tiret"
+                print(ligne)
+
+            page_ex = _compter(visite["page"], terme)[0] if visite["page"] else 0
+            ext_ex, ext_autre = _compter(texte_complet, terme)
+            if page_ex > ext_ex:
+                causes.append(
+                    f"[E] {page_ex - ext_ex} occurrence(s) de {terme!r} (casse exacte) sont dans "
+                    f"la page mais pas dans le texte extrait : un champ que parse_detail ne lit "
+                    f"pas les porte (voir le squelette JSON)."
+                )
+            if court and ext_ex + ext_autre:
+                isolees = len(_pattern_mot_entier(terme).findall(texte_complet))
+                if not isolees:
+                    causes.append(
+                        f"[D] {terme!r} n'apparait jamais en majuscules exactes et isole : "
+                        f"regle voulue pour les acronymes courts."
+                    )
+
+        if visite["json"] is not None:
+            print()
+            print("SQUELETTE JSON DE LA PAGE DE DETAIL (valeurs non affichees)")
+            print("-" * 64)
+            print(resumer_json(visite["json"].get("props", visite["json"])))
+
+        # --- Registre du crawl et expositions (lecture seule) -------------
+        print()
+        print("REGISTRE ET EXPOSITIONS (lecture seule)")
+        print("-" * 64)
+        source = session.query(Source).filter_by(nom=connecteur.SOURCE_NAME).first()
+        ligne = None
+        liees = []
+        if source is not None:
+            ligne = session.query(EntreeCollectee).filter_by(
+                source_id=source.id, identifiant_entree=normalisee["identifiant_entree"],
+            ).first()
+            liees = [
+                sr.exposition for sr in session.query(SourceReference).filter_by(
+                    source_id=source.id, reference_source=normalisee["reference_source"],
+                )
+            ]
+
+        if ligne is None:
+            print("  registre         : entree absente (jamais vue en collecte, ou purgee)")
+        else:
+            print(f"  registre         : {ligne.statut_detail.value}, "
+                  f"{ligne.nb_echecs_detail} echec(s) de detail, "
+                  f"a produit une exposition : {'oui' if ligne.a_produit_exposition else 'non'}")
+            traite = (
+                f"detail traite le {ligne.date_detail_traite:%Y-%m-%d}"
+                if ligne.date_detail_traite else "detail jamais traite"
+            )
+            print(f"                     vue le {ligne.date_premiere_vue:%Y-%m-%d}, {traite}")
+            if ligne.statut_detail == StatutDetailEntree.A_TRAITER:
+                causes.append(
+                    "[F] Page de detail pas encore servie par le budget : l'entree n'a ete "
+                    "analysee que sur son titre."
+                )
+            elif ligne.statut_detail == StatutDetailEntree.ECHEC:
+                causes.append(
+                    f"[F] Entree abandonnee apres {ligne.nb_echecs_detail} echecs de detail "
+                    f"(erreur dans la page Audit) : seul le titre a ete analyse."
+                )
+
+        nom = normalisee["nom_entite"] or ""
+        proches = [
+            e for e in session.query(Exposition).all()
+            if e in liees or (nom and fuzz.ratio(nom.lower(), e.nom_entite.lower()) >= 80)
+        ]
+        for exposition in proches[:10]:
+            lien = " <- signalement de cette entree" if exposition in liees else ""
+            print(f"  exposition       : {exposition.nom_entite!r} criticite {exposition.criticite} "
+                  f"({exposition.niveau_criticite.value}), {exposition.statut.value}, "
+                  f"1re detection {exposition.date_premiere_detection:%Y-%m-%d}, "
+                  f"{len(exposition.sources)} signalement(s){lien}")
+        if not proches:
+            print("  exposition       : aucune au nom proche")
+
+        for exposition in liees:
+            if not hors_periode and detail.nb_selecteurs > exposition.criticite:
+                causes.append(
+                    f"L'analyse actuelle retiendrait {detail.nb_selecteurs} selecteur(s), contre "
+                    f"{exposition.criticite} enregistre(s) : remettre l'entree en file "
+                    f"(python3 -m app.crawl.registre --source {connecteur.SOURCE_NAME} "
+                    f"--identifiant {normalisee['identifiant_entree']})."
+                )
+                break
+    finally:
+        session.close()
+        visite["page"] = None  # CN-05 : le contenu decode ne survit pas au diagnostic
+
+    print()
+    print("VERDICT")
+    print("-" * 64)
+    for cause in dict.fromkeys(causes):
+        print(f"  - {cause}")
+    if not causes:
+        print(f"  Aucune cause detectee : la chaine actuelle retient {detail.nb_selecteurs} "
+              f"selecteur(s) pour cette entree.")
+
+
 def _analyser_arguments():
     parseur = argparse.ArgumentParser(
         description="Reconnaissance structurelle d'une source (sortie console uniquement)."
     )
     parseur.add_argument("--source", required=True, help="SOURCE_NAME du connecteur")
     parseur.add_argument("--phase", default="listing",
-                         choices=("listing", "detail", "formes", "dates", "pages"))
+                         choices=("listing", "detail", "formes", "dates", "pages", "correspondance"))
     parseur.add_argument("--max", type=int, default=3,
                          help="Phase pages : nombre maximum de pages a suivre")
     parseur.add_argument("--index", type=int, default=0,
                          help="Entree du listing dont on inspecte le detail")
+    parseur.add_argument("--entree",
+                         help="Phase correspondance : identifiant de l'entree (colonne "
+                              "Reference du signalement, ex. /news/cca-bank), sinon --index")
+    parseur.add_argument("--selecteurs", default="",
+                         help="Phase correspondance : termes a compter, separes par des "
+                              "virgules (ex. \"Cameroun,CNI,RCCM\")")
     parseur.add_argument("--page", type=int, default=1,
-                         help="Phase dates : page de listing a examiner")
+                         help="Phases dates et correspondance : page de listing a examiner")
     parseur.add_argument("--detail", type=int, default=0,
                          help="Phase dates : nombre de pages de detail a lire en plus du listing")
     parseur.add_argument("--profondeur", type=int, default=6,
@@ -540,5 +1053,11 @@ if __name__ == "__main__":
         phase_pages(connecteur, arguments.max)
     elif arguments.phase == "dates":
         phase_dates(connecteur, pages_detail=arguments.detail, page=arguments.page)
+    elif arguments.phase == "correspondance":
+        phase_correspondance(
+            connecteur, identifiant=arguments.entree, index=arguments.index,
+            page=arguments.page,
+            termes=[t.strip() for t in arguments.selecteurs.split(",") if t.strip()],
+        )
     else:
         phase_detail(connecteur, arguments.index, arguments.profondeur)
