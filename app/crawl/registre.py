@@ -7,9 +7,10 @@ identifiants deja traites en argument de collect().
 
 ORDRE D'ECRITURE, IMPORTANT - une entree n'est marquee TRAITEE qu'APRES
 avoir traverse le matching et la persistance. L'ordre inverse serait un
-bug : CN-05 interdit de stocker le texte enrichi, donc un crash entre la
-recuperation de la page de detail et l'enregistrement de l'Exposition
-perdrait definitivement la correspondance. Avec cet ordre, un crash se
+bug : CN-05 interdit de stocker le texte enrichi (seule derogation : celui
+d'une entree qui a PRODUIT une exposition, cf. app.conservation), donc un
+crash entre la recuperation de la page de detail et l'enregistrement de
+l'Exposition perdrait definitivement la correspondance. Avec cet ordre, un crash se
 traduit par un simple re-crawl au cycle suivant : l'operation est
 idempotente.
 """

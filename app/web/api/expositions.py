@@ -9,7 +9,7 @@ from app.config_system import get_config_int
 from app.db import get_session
 from app.models import (
     Categorie, Exposition, NiveauCriticite, RoleUtilisateur,
-    StatutExposition, utc_now,
+    SourceReference, StatutExposition, utc_now,
 )
 from app.web.permissions import role_requis
 
@@ -50,6 +50,9 @@ def _sources_de(exposition) -> list:
             "date_signalement": (
                 sr.date_signalement.isoformat() if sr.date_signalement else None
             ),
+            # Le texte lui-meme n'est JAMAIS ici : endpoint dedie, reserve aux
+            # superviseurs (derogation CN-04/CN-05, cf. app.conservation).
+            "texte_disponible": sr.date_texte_brut is not None,
         }
         for sr in exposition.sources
     ]
@@ -164,6 +167,41 @@ def enregistrer(api_bp):
                     "message": "Exposition inexistante.",
                 }), 404
             return jsonify(serialiser(exposition, detaille=True))
+        finally:
+            session.close()
+
+    @api_bp.route(
+        "/expositions/<exposition_id>/signalements/<signalement_id>/texte", methods=["GET"]
+    )
+    @login_required
+    @role_requis(RoleUtilisateur.SUPERVISOR)
+    def texte_signalement(exposition_id, signalement_id):
+        """
+        Texte conserve de l'annonce d'un signalement (derogation CN-04/CN-05,
+        cf. app.conservation) : deja masque, lu a la demande, jamais mis en
+        cache par le navigateur.
+        """
+        session = get_session()
+        try:
+            signalement = session.get(SourceReference, signalement_id)
+            if signalement is None or signalement.exposition_id != exposition_id:
+                return jsonify({
+                    "erreur": "introuvable",
+                    "message": "Signalement inexistant.",
+                }), 404
+            if signalement.date_texte_brut is None:
+                return jsonify({
+                    "erreur": "introuvable",
+                    "message": "Aucun texte conserve pour ce signalement.",
+                }), 404
+
+            reponse = jsonify({
+                "texte": signalement.texte_brut,
+                "longueur": len(signalement.texte_brut or ""),
+                "date_texte_brut": signalement.date_texte_brut.isoformat(),
+            })
+            reponse.headers["Cache-Control"] = "no-store"
+            return reponse
         finally:
             session.close()
 

@@ -112,6 +112,19 @@ const GROUPES_REGLAGES = [
     },
   },
   {
+    titre: "Texte des annonces",
+    description:
+      "Dérogation à CN-04/CN-05 : le texte masqué d'une annonce ayant produit une exposition est " +
+      "conservé, et lisible par les superviseurs depuis le détail de l'exposition.",
+    reglages: {
+      retention_texte_brut_jours: {
+        libelle: "Durée de conservation",
+        unite: "jours",
+        aide: "0 : aucun texte n'est conservé, et ceux déjà conservés sont effacés à la fin du prochain cycle.",
+      },
+    },
+  },
+  {
     titre: "Planification",
     description: "La collecte quotidienne part à une heure tirée au hasard dans cette plage, exprimée en UTC.",
     reglages: {

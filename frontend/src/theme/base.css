@@ -1568,6 +1568,61 @@ table.data td.num-col {
   max-width: 420px;
 }
 
+/* Texte conserve d'une annonce, deroule sous son signalement. La ligne
+   reste dans le DOM (cible d'aria-controls) : [hidden] doit l'emporter sur
+   le display:block du mode carte. */
+tr.ligne-texte-brut[hidden],
+.tableau-cartes tr.ligne-texte-brut[hidden] {
+  display: none;
+}
+
+.texte-annonce {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.texte-annonce-avertissement {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.texte-annonce-avertissement .icone {
+  flex: none;
+  margin-top: 2px;
+}
+
+.texte-annonce-meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.texte-annonce-corps {
+  margin: 0;
+  max-height: 24rem;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .tableau-cartes table.data tr.ligne-texte-brut td {
+    display: block;
+  }
+}
+
 /* Chronologie d'une exposition */
 .chronologie {
   list-style: none;

@@ -94,6 +94,8 @@ export const api = {
   // --- Expositions ---
   expositions: (filtres) => requete(`/expositions${parametres(filtres)}`),
   exposition: (id) => requete(`/expositions/${id}`),
+  texteSignalement: (id, signalementId) =>
+    requete(`/expositions/${id}/signalements/${signalementId}/texte`),
   changerStatut: (id, statut) =>
     requete(`/expositions/${id}/statut`, corpsJson({ statut })),
 

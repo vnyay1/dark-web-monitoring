@@ -29,6 +29,7 @@ from sqlalchemy.orm import joinedload
 
 from app.config_system import get_config_int
 from app.connectors import connecteurs_actifs, connecteur_par_nom
+from app.conservation import preparer_texte_conserve, purger_textes_bruts
 from app.connectors.dates import CLES_DATE, parser_date
 from app.crawl.registre import (
     enregistrer_entrees_vues,
@@ -195,6 +196,12 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         niveau_criticite=detail.niveau,
         source_id=source.id,
         date_publication=date_publication,
+        # Derogation CN-04/CN-05 (cf. app.conservation) : le texte analyse,
+        # masque, est conserve sur le signalement. Jamais si la retention
+        # est a 0.
+        texte_brut=(
+            preparer_texte_conserve(texte) if seuils["retention_texte_jours"] > 0 else None
+        ),
     )
 
     # FR-25/FR-26 : declenchement des alertes (nouvelle detection ou
@@ -242,6 +249,7 @@ def _seuils_du_run() -> dict:
         "criticite_minimum": get_config_int("criticite_minimum_enregistrement"),
         "date_limite": utc_now() - timedelta(days=periode_jours),
         "periode_jours": periode_jours,
+        "retention_texte_jours": get_config_int("retention_texte_brut_jours"),
     }
 
 
@@ -479,6 +487,7 @@ def executer_tous_les_connecteurs(budget_global=None, profondeur_max=None,
         tous_les_stats.append(stats)
 
     purger_registre(session)
+    purger_textes_bruts(session)
     supervision.purger_evenements(session)
     session.close()
     return tous_les_stats

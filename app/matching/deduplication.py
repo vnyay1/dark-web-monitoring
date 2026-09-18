@@ -64,8 +64,23 @@ def _trouver_exposition_existante(session, nom_entite: str):
 
     return meilleure_correspondance
 
+def _conserver_texte(sr, texte_brut):
+    """
+    Pose le texte conserve du signalement (derogation CN-04/CN-05, cf.
+    app.conservation), SEULEMENT s'il est plus long que celui deja conserve.
+    Le titre d'une entree connue est re-analyse a chaque cycle : sans cette
+    regle, il ecraserait le texte complet recupere sur sa page de detail.
+    """
+    if not texte_brut:
+        return
+    if sr.date_texte_brut is not None and len(texte_brut) <= len(sr.texte_brut or ""):
+        return
+    sr.texte_brut = texte_brut
+    sr.date_texte_brut = utc_now()
+
+
 def _ajouter_reference(session, exposition, type_source, reference_source,
-                       source_id, date_publication):
+                       source_id, date_publication, texte_brut=None):
     """
     Ajoute un signalement de source a une exposition, sans doublon.
     Retourne True si une reference a effectivement ete ajoutee.
@@ -77,15 +92,18 @@ def _ajouter_reference(session, exposition, type_source, reference_source,
                 sr.source_id = source_id
             if sr.date_publication is None and date_publication is not None:
                 sr.date_publication = date_publication
+            _conserver_texte(sr, texte_brut)
             return False
 
-    session.add(SourceReference(
+    reference = SourceReference(
         exposition_id=exposition.id,
         source_id=source_id,
         type_source=type_source,
         reference_source=reference_source,
         date_publication=date_publication,
-    ))
+    )
+    _conserver_texte(reference, texte_brut)
+    session.add(reference)
     return True
 
 
@@ -109,6 +127,7 @@ def enregistrer_exposition(
     niveau_criticite: NiveauCriticite,
     source_id: str = None,
     date_publication=None,
+    texte_brut: str = None,
 ) -> tuple:
     """
     Point d'entree principal FR-12 : enregistre une detection en
@@ -120,6 +139,9 @@ def enregistrer_exposition(
     - ancienne_criticite : la criticite AVANT mise a jour (None si
       nouvelle exposition) - utile pour detecter une hausse significative
       (cf FR-25/FR-26, alerte de confirmation)
+
+    texte_brut : texte DEJA MASQUE a conserver sur le signalement (cf.
+    app.conservation), None si la conservation est desactivee.
     """
     categories = _charger_categories(session, categorie_ids)
     exposition_existante = _trouver_exposition_existante(session, nom_entite)
@@ -130,7 +152,7 @@ def enregistrer_exposition(
         exposition_existante.date_derniere_detection = utc_now()
 
         if _ajouter_reference(session, exposition_existante, type_source,
-                              reference_source, source_id, date_publication):
+                              reference_source, source_id, date_publication, texte_brut):
             logger.info(
                 f"[FR-12] Nouvelle SourceReference ajoutee a l'exposition existante '{nom_entite}'."
             )
@@ -174,7 +196,7 @@ def enregistrer_exposition(
     session.flush()
 
     _ajouter_reference(session, nouvelle_exposition, type_source,
-                       reference_source, source_id, date_publication)
+                       reference_source, source_id, date_publication, texte_brut)
     session.commit()
 
     logger.info(

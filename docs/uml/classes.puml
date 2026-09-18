@@ -28,6 +28,8 @@ package "Expositions" {
     +reference_source : str
     +date_publication : datetime
     +date_signalement : datetime
+    +texte_brut : str
+    +date_texte_brut : datetime
   }
 
   class Categorie {

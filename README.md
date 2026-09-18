@@ -16,6 +16,22 @@ Le système indexe **l'existence** d'une fuite de données — jamais les donné
 
 Cette contrainte est non négociable et prévaut sur toute exigence fonctionnelle du cahier des charges.
 
+### Dérogation à CN-04 / CN-05 : texte des annonces (2026-09-18)
+
+Pour qualifier une exposition, l'analyste doit pouvoir relire l'annonce qui l'a déclenchée. Par décision
+du porteur du projet (accord écrit de l'encadrement **à consigner**), le texte de l'annonce est conservé
+**dans ce seul cas**, avec les garde-fous suivants (point d'audit unique : `app/conservation.py`) :
+
+- seul le texte **déjà extrait et analysé** d'une entrée **ayant produit une exposition** est conservé,
+  sur son signalement (`SourceReference.texte_brut`). Le HTML des pages et le texte des entrées sans
+  correspondance ne sont jamais écrits ;
+- il est **masqué** avant stockage : URL, adresses email, empreintes, mots de passe annoncés, numéros de
+  téléphone, suites de 9 chiffres ou plus. **Limite connue** : les noms de personnes restent en clair ;
+- il est **effacé** après `retention_texte_brut_jours` (90 jours par défaut, réglable dans
+  Configuration). **0 désactive la conservation** et efface les textes déjà conservés ;
+- il n'est lisible que par un **superviseur** ou plus, via le bouton « Détails » du détail d'une
+  exposition. Il n'apparaît dans aucune liste, aucun export et aucun rapport.
+
 ---
 
 ## Architecture
@@ -29,7 +45,7 @@ Cette contrainte est non négociable et prévaut sur toute exigence fonctionnell
 │         ▼                                                    │
 │  Connecteurs (8 sources réelles) ──► app/tor (Tor centralisé)│
 │         │  crawl incrémental : listing puis pages de détail  │
-│         ▼  texte en mémoire uniquement (CN-05)               │
+│         ▼  texte en mémoire (CN-05, sauf dérogation)         │
 │  Fenêtre temporelle ─► Matching ─► Filtrage faux positifs    │
 │         │            ─► Criticité ─► Catégories              │
 │         │            ─► Déduplication multi-source           │
@@ -88,6 +104,7 @@ dark-web-monitoring/
 │   │
 │   ├── supervision.py            # état partagé du scheduler + fil d'événements
 │   ├── securite.py               # politique de mots de passe (FR-24)
+│   ├── conservation.py           # dérogation CN-04/CN-05 : texte masqué, rétention
 │   │
 │   ├── connectors/              # connecteurs de sources (FR-02, FR-03)
 │   │   ├── base_connector.py     # interface commune, rate limiting, audit
@@ -282,6 +299,16 @@ le verrou expire de lui-même si le processus disparaît sans arrêt propre.
 ```bash
 python3 -m app.pipeline                        # toutes les sources
 python3 -m app.pipeline --source payload       # une seule source
+```
+
+Arrêter le scheduler avant une collecte manuelle : deux processus ne partagent pas leur délai FR-06.
+
+Pour comprendre pourquoi une entrée a produit tant de sélecteurs (date retenue, coupure du texte,
+motif de chaque rejet...), sans rien afficher du contenu de la page ni rien écrire en base :
+
+```bash
+python3 -m app.connectors.reconnaissance --source everest --phase correspondance     --entree /news/cca-bank --selecteurs "Cameroun,CNI,RCCM"
+python3 -m app.crawl.registre --source everest --identifiant /news/cca-bank   # la remettre en file
 ```
 
 ---
