@@ -29,10 +29,14 @@ from sqlalchemy.orm import joinedload
 
 from app.config_system import get_config_int
 from app.connectors import connecteurs_actifs, connecteur_par_nom
-from app.conservation import preparer_texte_conserve, texte_complet
+from app.conservation import (
+    identifiants_des_references, preparer_texte_conserve, signalements_a_completer,
+    texte_complet,
+)
 from app.connectors.dates import CLES_DATE, parser_date
 from app.crawl.registre import (
     enregistrer_entrees_vues,
+    identifiants_a_relire,
     identifiants_traites,
     marquer_echec_detail,
     marquer_traitee,
@@ -46,7 +50,7 @@ from app import supervision
 from app.matching.engine import match_text_against_catalogue
 from app.matching.exclusion import filtrer_faux_positifs
 from app.matching.criticite import calculer_criticite
-from app.matching.deduplication import enregistrer_exposition
+from app.matching.deduplication import completer_signalements, enregistrer_exposition
 from app.alerting.dispatcher import declencher_alertes
 
 logger = logging.getLogger(__name__)
@@ -142,9 +146,25 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     Applique la chaine d'analyse a UNE entree normalisee.
     Retourne True si l'entree a produit (ou mis a jour) une Exposition.
 
-    seuils : dict issu de _seuils_du_run() (criticite minimale + date limite).
+    seuils : dict issu de _seuils_du_run() (criticite minimale + date limite),
+    complete par traiter_connecteur() des signalements a completer.
     """
     texte = entry["texte_brut"]
+
+    # Completion d'une exposition DEJA enregistree, a qui il manque le texte
+    # de l'annonce ou ses selecteurs (cf. app.conservation) : des que
+    # l'annonce est lue en entier, elle complete son propre signalement.
+    signalements = seuils.get("a_completer", {}).get(entry["reference_source"])
+    if signalements and texte_complet(entry):
+        if not texte:
+            # Garde-fou : une annonce vide ne serait jamais completee, et
+            # serait relue a chaque cycle. Comptee comme un echec de detail,
+            # elle est abandonnee au bout de MAX_ECHECS_DETAIL (registre).
+            entry["echec_detail"] = "annonce sans texte"
+            return False
+        _completer_exposition(session, entry, signalements, selecteurs, stats)
+        return True
+
     if not texte:
         return False
 
@@ -200,6 +220,8 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         # l'annonce, masque, est conserve sur le signalement. Pas un titre
         # de listing re-analyse seul.
         texte_brut=preparer_texte_conserve(texte) if texte_complet(entry) else None,
+        # Selecteurs trouves, affiches dans le detail de l'exposition.
+        selecteurs=detail.details,
     )
 
     # FR-25/FR-26 : declenchement des alertes (nouvelle detection ou
@@ -231,6 +253,45 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         f"selecteurs={detail.selecteurs})"
     )
     return True
+
+
+def _completer_exposition(session, entry, signalements, selecteurs, stats):
+    """
+    Relecture complete d'une annonce deja signalee : texte, selecteurs,
+    criticite et categories de son exposition (jamais a la baisse).
+
+    La fenetre d'analyse ne s'applique pas ici : elle sert a ne pas
+    DETECTER d'incidents anciens, pas a laisser incomplete une exposition
+    deja enregistree. Le seuil minimum d'enregistrement non plus :
+    l'exposition existe deja.
+    """
+    texte = entry["texte_brut"]
+    detail = calculer_criticite(filtrer_faux_positifs(
+        texte, match_text_against_catalogue(texte, selecteurs), session=session,
+    ))
+
+    completees = completer_signalements(
+        session, signalements,
+        categorie_ids=detail.categories,
+        criticite=detail.score,
+        niveau_criticite=detail.niveau,
+        date_publication=entry.get("date_publication"),
+        texte_brut=preparer_texte_conserve(texte),
+        selecteurs=detail.details,
+    )
+
+    for exposition, ancienne_criticite in completees:
+        # Meme regle qu'a toute redetection : une hausse significative de
+        # criticite declenche l'alerte de confirmation (FR-25/FR-26).
+        declencher_alertes(
+            session, exposition, est_nouvelle=False, ancienne_criticite=ancienne_criticite,
+        )
+        logger.info(
+            f"[pipeline] Exposition completee : '{exposition.nom_entite}' "
+            f"(criticite {ancienne_criticite} -> {exposition.criticite}, "
+            f"selecteurs={detail.selecteurs})"
+        )
+    stats["nb_expositions_completees"] += len(completees)
 
 
 def _seuils_du_run() -> dict:
@@ -279,8 +340,17 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
 
     # Le connecteur ne lit pas la base : on lui passe ce qu'il doit ignorer,
     # et jusqu'ou remonter (periode et plafond de pages reglables).
-    connues = identifiants_traites(session, source.id)
+    #
+    # Une annonce deja analysee dont l'exposition n'a pas encore son texte
+    # ou ses selecteurs (analysee avant ces fonctions, ou sur son seul
+    # titre) n'est PAS consideree comme connue : sa page de detail est
+    # relue, dans le budget du cycle, pour completer l'exposition.
+    a_completer, _ = signalements_a_completer(session, source, connector)
+    connues = identifiants_traites(session, source.id) - identifiants_a_relire(
+        session, source.id, identifiants_des_references(connector, a_completer),
+    )
     seuils = _seuils_du_run()
+    seuils["a_completer"] = a_completer
     if profondeur_max is None:
         profondeur_max = get_config_int("pages_listing_max")
 
@@ -296,6 +366,7 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         "collecte_reussie": result["success"],
         "nb_entries_brutes": 0,
         "nb_expositions_creees_ou_maj": 0,
+        "nb_expositions_completees": 0,
         "nb_rejetees_faux_positif": 0,
         "nb_rejetees_criticite_faible": 0,
         "nb_hors_periode": 0,
@@ -391,7 +462,9 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         TypeEvenementCollecte.FIN_SOURCE,
         f"{connector.SOURCE_NAME} : {stats['nb_entries_brutes']} entree(s) analysee(s), "
         f"{stats['nb_expositions_creees_ou_maj']} exposition(s), "
-        f"{stats['nb_hors_periode']} hors periode",
+        + (f"{stats['nb_expositions_completees']} completee(s), "
+           if stats["nb_expositions_completees"] else "")
+        + f"{stats['nb_hors_periode']} hors periode",
         source=connector.SOURCE_NAME,
         session=session,
     )
@@ -536,6 +609,7 @@ if __name__ == "__main__":
               f" (echecs : {r.get('details_echec', 0)},"
               f" hors budget : {r.get('details_ignores', 0)})")
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
+        print(f"  Expositions completees (texte, selecteurs) : {r.get('nb_expositions_completees', 0)}")
         print(f"  Entrees sans date exploitable : {r.get('nb_sans_date', 0)}")
         print(f"  Rejetees (hors periode) : {r.get('nb_hors_periode', 0)}")
         print(f"  Rejetees (faux positif) : {r.get('nb_rejetees_faux_positif', 0)}")

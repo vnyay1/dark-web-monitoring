@@ -31,8 +31,13 @@ cas**, avec les garde-fous suivants (point d'audit unique : `app/conservation.py
 - il n'est lisible que par un **superviseur** ou plus, via le bouton « Détails » du détail d'une
   exposition. Il n'apparaît dans aucune liste, aucun export et aucun rapport.
 
-Les signalements antérieurs à cette fonction affichent « Non conservé » : leur texte se récupère avec
-`python3 -m app.maintenance.recuperer_textes` (voir « Collecte manuelle »).
+Avec le texte sont enregistrés les **sélecteurs trouvés** (termes du catalogue, poids, occurrences),
+affichés dans le détail de l'exposition pour justifier sa criticité.
+
+Un signalement antérieur à ces fonctions (« Non conservé », sélecteurs non enregistrés) est **complété
+par la collecte elle-même** : elle relit son annonce, page de détail comprise, dans le budget du cycle et
+sans lui appliquer la période d'analyse. `python3 -m app.maintenance.recuperer_textes` fait la même
+chose à la demande (voir « Collecte manuelle »).
 
 ---
 

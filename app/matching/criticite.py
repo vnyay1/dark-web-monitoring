@@ -48,9 +48,14 @@ class CriticiteDetail:
     # Somme des poids des selecteurs distincts : c'est la criticite
     # enregistree et comparee aux paliers.
     score: int = 0
-    # Valeurs des selecteurs distincts trouves. Sert au log et a la console
-    # de supervision ; n'est JAMAIS persistee (CN-03).
+    # Valeurs des selecteurs distincts trouves, pour le log et la console
+    # de supervision.
     selecteurs: list = field(default_factory=list)
+    # Un dict par selecteur distinct (valeur, categorie_id, poids,
+    # occurrences, niveaux de correspondance) : c'est ce qui est enregistre
+    # sur le signalement et affiche dans le detail de l'exposition. Des
+    # termes du CATALOGUE, jamais un segment du texte analyse.
+    details: list = field(default_factory=list)
     # Ceux d'entre eux dont le poids depasse 1.
     prioritaires: list = field(default_factory=list)
     # Identifiants des categories de ces selecteurs : elles deviennent les
@@ -114,18 +119,32 @@ def calculer_criticite(matches: list) -> CriticiteDetail:
 
     # Dictionnaire plutot que set() : conserve l'ordre de decouverte, ce
     # qui rend les logs reproductibles et lisibles.
-    poids = {}
+    par_valeur = {}
     for m in matches:
-        poids[m.selecteur_valeur] = max(poids.get(m.selecteur_valeur, 0), m.selecteur_poids or 1)
-    distincts = list(poids)
-    score = sum(poids.values())
+        detail = par_valeur.setdefault(m.selecteur_valeur, {
+            "valeur": m.selecteur_valeur,
+            "categorie_id": m.selecteur_categorie,
+            "poids": 0,
+            "occurrences": 0,
+            "correspondances": {},
+        })
+        if (m.selecteur_poids or 1) > detail["poids"]:
+            detail["poids"] = m.selecteur_poids or 1
+            detail["categorie_id"] = m.selecteur_categorie
+        detail["occurrences"] += 1
+        niveaux = detail["correspondances"]
+        niveaux[m.type_correspondance] = niveaux.get(m.type_correspondance, 0) + 1
+
+    distincts = list(par_valeur)
+    score = sum(d["poids"] for d in par_valeur.values())
 
     return CriticiteDetail(
         nb_selecteurs=len(distincts),
         niveau=niveau_pour(score),
         score=score,
         selecteurs=distincts,
-        prioritaires=[valeur for valeur in distincts if poids[valeur] > 1],
+        details=list(par_valeur.values()),
+        prioritaires=[valeur for valeur in distincts if par_valeur[valeur]["poids"] > 1],
         categories=list(dict.fromkeys(
             m.selecteur_categorie for m in matches if m.selecteur_categorie
         )),

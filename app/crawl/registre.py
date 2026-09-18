@@ -47,6 +47,27 @@ def identifiants_traites(session, source_id) -> set:
     return {ligne[0] for ligne in lignes}
 
 
+def identifiants_a_relire(session, source_id, candidats) -> set:
+    """
+    Parmi ces identifiants, ceux d'entrees deja analysees (TRAITEE ou
+    SANS_DETAIL) qu'il faut relire pour completer leur exposition (cf.
+    app.conservation, "completion"). Une entree abandonnee (ECHEC) n'est
+    pas relue : sa page est cassee, la relire a chaque cycle userait le
+    budget pour rien.
+    """
+    if not candidats:
+        return set()
+    lignes = session.query(EntreeCollectee.identifiant_entree).filter(
+        EntreeCollectee.source_id == source_id,
+        EntreeCollectee.identifiant_entree.in_(list(candidats)),
+        EntreeCollectee.statut_detail.in_((
+            StatutDetailEntree.TRAITEE,
+            StatutDetailEntree.SANS_DETAIL,
+        )),
+    ).all()
+    return {ligne[0] for ligne in lignes}
+
+
 def enregistrer_entrees_vues(session, source_id, entrees) -> dict:
     """
     Cree les lignes manquantes et rafraichit date_derniere_vue des autres,

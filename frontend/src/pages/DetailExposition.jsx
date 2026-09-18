@@ -5,6 +5,9 @@
  * exposition peut etre reperee sur plusieurs sources a des dates
  * differentes, ce que la liste ne pouvait pas montrer.
  *
+ * La section "Selecteurs trouves" justifie la criticite : les termes du
+ * catalogue reperes dans l'annonce, avec leur poids.
+ *
  * Un superviseur peut derouler, sous chaque signalement, le texte conserve
  * de l'annonce (derogation CN-04/CN-05, cf. app/conservation.py). Il n'est
  * charge qu'au premier clic, par un appel dedie.
@@ -138,6 +141,8 @@ export default function DetailExposition() {
         </div>
       </div>
 
+      <SelecteursTrouves selecteurs={donnees.selecteurs_trouves} criticite={donnees.criticite} />
+
       <section className="card card-pad espace-bas" aria-labelledby="titre-chronologie">
         <h2 className="section-title" id="titre-chronologie">
           Chronologie
@@ -251,6 +256,94 @@ export default function DetailExposition() {
 
       <Messages messages={messages} />
     </>
+  );
+}
+
+const LIBELLE_CORRESPONDANCE = {
+  exact: "exacte",
+  insensible_casse: "casse différente",
+  fuzzy: "approchée",
+};
+
+/** Selecteurs du catalogue trouves dans les annonces, avec leur poids. */
+function SelecteursTrouves({ selecteurs, criticite }) {
+  const liste = selecteurs?.liste;
+  const nonRelus = selecteurs?.signalements_non_relus || 0;
+
+  return (
+    <section className="espace-bas" aria-labelledby="titre-selecteurs">
+      <h2 className="section-title" id="titre-selecteurs">
+        Sélecteurs trouvés
+        {liste && (
+          <span className="count">
+            {liste.length} {pluriel("sélecteur distinct", liste.length, "sélecteurs distincts")}
+          </span>
+        )}
+      </h2>
+
+      {!liste ? (
+        <p className="texte-aide">
+          Sélecteurs non enregistrés : l'exposition a été détectée avant leur enregistrement. La collecte les
+          enregistre à la prochaine relecture de son annonce.
+        </p>
+      ) : liste.length === 0 ? (
+        <p className="texte-aide">Aucun sélecteur retenu lors de la dernière lecture complète de l'annonce.</p>
+      ) : (
+        <>
+          <div className="table-wrap tableau-cartes">
+            <table className="data">
+              <caption className="sr-only">Sélecteurs du catalogue trouvés dans les annonces, avec leur poids</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Sélecteur</th>
+                  <th scope="col">Catégorie</th>
+                  <th scope="col">Poids</th>
+                  <th scope="col">Occurrences</th>
+                  <th scope="col">Correspondance</th>
+                  <th scope="col">Sources</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liste.map((s) => (
+                  <tr key={s.valeur}>
+                    <td className="cell-entity cell-titre">{s.valeur}</td>
+                    <td className="cell-muted" data-label="Catégorie">
+                      {s.categorie || "—"}
+                    </td>
+                    <td data-label="Poids">
+                      <span className="cell-mono">{s.poids}</span>
+                      {s.poids > 1 && (
+                        <>
+                          {" "}
+                          <span className="pill pill-accent">Prioritaire</span>
+                        </>
+                      )}
+                    </td>
+                    <td className="cell-mono" data-label="Occurrences">
+                      {s.occurrences}
+                    </td>
+                    <td className="cell-muted" data-label="Correspondance">
+                      {s.correspondances.map((c) => LIBELLE_CORRESPONDANCE[c] || c).join(", ")}
+                    </td>
+                    <td className="cell-muted" data-label="Sources">
+                      {s.sources.join(", ") || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="texte-aide espace-haut">
+            La criticité (score {criticite}) est la somme des poids des sélecteurs distincts trouvés dans l'annonce la
+            plus complète. Une correspondance approchée n'est jamais retenue quand le mot trouvé est lui-même un
+            sélecteur du catalogue.
+            {nonRelus > 0 &&
+              ` ${nonRelus} ${pluriel("signalement", nonRelus)} pas encore ${pluriel("relu", nonRelus)} : ` +
+                "ses sélecteurs s'ajouteront à la prochaine relecture de son annonce."}
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
