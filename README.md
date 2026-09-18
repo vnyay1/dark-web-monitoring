@@ -261,6 +261,20 @@ python3 -m app.matching.seed_selecteurs
 python3 -m app.create_user
 ```
 
+### Mise à jour (après un `git pull`)
+
+Le serveur web et le scheduler gardent en mémoire le code chargé à leur démarrage : tant qu'ils ne
+sont pas relancés, ils exécutent l'**ancienne** version (nouveaux réglages absents, nouvelles
+sections vides, ancienne logique de collecte). Dans l'ordre :
+
+1. `git pull`, puis `alembic upgrade head` ;
+2. arrêter le serveur web (`Ctrl+C` dans son terminal) et le relancer : `python3 run.py` ;
+3. arrêter le scheduler depuis la page *Collecte*, puis le redémarrer ;
+4. recharger la page dans le navigateur (`Ctrl+Maj+R`).
+
+Un bandeau prévient les administrateurs quand le serveur web ou le scheduler exécute une version
+antérieure au code installé (`app/version.py` : commit lu dans `.git`, comparé à celui du démarrage).
+
 ---
 
 ## Utilisation

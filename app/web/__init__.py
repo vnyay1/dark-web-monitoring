@@ -184,4 +184,10 @@ def _servir_interface_react(app):
         if chemin and fichier.is_file():
             return send_from_directory(RACINE_BUILD, chemin)
 
-        return send_from_directory(RACINE_BUILD, "index.html")
+        # no-cache : le navigateur revalide index.html a chaque chargement, et
+        # prend donc la nouvelle interface des qu'elle est deployee. Werkzeug
+        # le pose deja par defaut ; l'expliciter protege index.html si un
+        # SEND_FILE_MAX_AGE_DEFAULT est regle un jour pour les assets.
+        reponse = send_from_directory(RACINE_BUILD, "index.html")
+        reponse.headers["Cache-Control"] = "no-cache"
+        return reponse

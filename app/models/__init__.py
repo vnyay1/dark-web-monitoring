@@ -588,6 +588,11 @@ class EtatScheduler(Base):
     ip_changee_le = Column(DateTime(timezone=True), nullable=True)
     verification_ip_demandee = Column(Boolean, nullable=False, default=False)
 
+    # Version du code (commit) que le processus a chargee a son demarrage,
+    # cf. app.version : l'interface previent quand elle differe du code
+    # installe, c'est-a-dire quand un redemarrage manque apres un git pull.
+    version_code = Column(String(40), nullable=True)
+
     def __repr__(self):
         return f"<EtatScheduler {self.statut.value} pid={self.pid}>"
 

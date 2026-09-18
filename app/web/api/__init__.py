@@ -72,11 +72,12 @@ def enregistrer_api(app):
         reports,
         scheduler,
         settings,
+        systeme,
         users,
     )
 
     for module in (auth, dashboard, expositions, alerts, scheduler,
-                   settings, users, audit, compliance, reports):
+                   settings, systeme, users, audit, compliance, reports):
         module.enregistrer(api_bp)
 
     app.register_blueprint(api_bp)
