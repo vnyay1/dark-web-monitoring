@@ -343,6 +343,53 @@ def _publier_source_en_cours(nom, en_cours: bool):
         )
 
 
+def _catalogue_fige(session) -> list:
+    """
+    Selecteurs actifs sous forme de tuples (valeur, categorie_id,
+    lieu_generique, poids), forme que match_text_against_catalogue accepte.
+
+    Pourquoi pas les objets Selecteur : chaque commit de la session les
+    EXPIRE, et le pipeline commite apres chaque entree - chaque analyse
+    relisait alors tout le catalogue en base, selecteur par selecteur. Et le
+    calcul de priorite des pages de detail tourne pendant la collecte
+    reseau, hors verrou : il ne doit pas toucher la base.
+    """
+    return [
+        (
+            s.valeur,
+            s.categorie_id,
+            bool(s.categorie and s.categorie.lieu_generique),
+            s.poids or 1,
+        )
+        for s in (
+            session.query(Selecteur)
+            .options(joinedload(Selecteur.categorie))
+            .filter_by(actif=True)
+            .all()
+        )
+    ]
+
+
+def _priorite_detail(entree, identifiants_a_completer, catalogue) -> int:
+    """
+    Ordre de service des pages de detail dans le budget du cycle :
+      2 - annonce d'une exposition a completer (texte ou selecteurs manquants) ;
+      1 - annonce dont le texte de listing cite deja un selecteur du
+          catalogue (correspondance exacte : un titre est court, le test est
+          immediat) - une annonce probablement camerounaise ;
+      0 - toutes les autres, dans l'ordre du listing.
+    Sans cela, une annonce camerounaise placee bas dans un listing charge
+    n'etait lue que sur son titre (criticite partielle, texte non conserve)
+    tant que le budget ne l'atteignait pas.
+    """
+    if entree.get("identifiant_entree") in identifiants_a_completer:
+        return 2
+    texte = entree.get("texte_brut")
+    if texte and match_text_against_catalogue(texte, catalogue, enable_fuzzy=False):
+        return 1
+    return 0
+
+
 def traiter_connecteur(connector_class, db_session=None, budget_details=None,
                        profondeur_max=None) -> dict:
     """
@@ -388,13 +435,15 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
             # seul titre) n'est PAS consideree comme connue : sa page de detail
             # est relue, dans le budget du cycle, pour completer l'exposition.
             a_completer, _ = signalements_a_completer(session, source, connector)
+            identifiants_a_completer = identifiants_des_references(connector, a_completer)
             connues = identifiants_traites(session, source.id) - identifiants_a_relire(
-                session, source.id, identifiants_des_references(connector, a_completer),
+                session, source.id, identifiants_a_completer,
             )
             seuils = _seuils_du_run()
             seuils["a_completer"] = a_completer
             if profondeur_max is None:
                 profondeur_max = get_config_int("pages_listing_max")
+            catalogue = _catalogue_fige(session)
 
         # Collecte reseau, HORS verrou : les autres sources avancent pendant
         # que celle-ci attend ses reponses. Seul son journal d'audit, en fin
@@ -404,15 +453,16 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
             budget_details=budget_details,
             profondeur_max=profondeur_max,
             date_limite=seuils["date_limite"],
+            priorite=lambda entree: _priorite_detail(entree, identifiants_a_completer, catalogue),
         )
 
         with verrou_base:
-            return _analyser_collecte(session, source, connector, result, seuils)
+            return _analyser_collecte(session, source, connector, result, seuils, catalogue)
     finally:
         _publier_source_en_cours(connector.SOURCE_NAME, False)
 
 
-def _analyser_collecte(session, source, connector, result, seuils) -> dict:
+def _analyser_collecte(session, source, connector, result, seuils, catalogue) -> dict:
     """
     Analyse et enregistre ce qu'une collecte a rapporte. Appelee sous
     app.db.verrou_base : une seule source a la fois ecrit en base.
@@ -478,16 +528,9 @@ def _analyser_collecte(session, source, connector, result, seuils) -> dict:
 
     enregistrer_entrees_vues(session, source.id, entrees)
 
-    # Selecteurs actifs charges une seule fois pour toutes les entrees
-    # Categorie chargee avec le selecteur : le moteur lit son identifiant
-    # et son indicateur lieu_generique pour chaque selecteur, une requete
-    # par selecteur sinon.
-    selecteurs = (
-        session.query(Selecteur)
-        .options(joinedload(Selecteur.categorie))
-        .filter_by(actif=True)
-        .all()
-    )
+    # Catalogue charge une seule fois, a la preparation de la source
+    # (cf. _catalogue_fige) : les commits de la boucle ne l'expirent pas.
+    selecteurs = catalogue
     logger.info(
         f"[pipeline] Fenetre d'analyse : {seuils['periode_jours']} jours "
         f"(entrees publiees avant le {seuils['date_limite'].date()} ignorees)."

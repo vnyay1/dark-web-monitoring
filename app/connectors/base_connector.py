@@ -336,7 +336,7 @@ class BaseConnector:
     # ------------------------------------------------------------------
 
     def collect(self, entrees_connues=None, budget_details=None, profondeur_max=None,
-                date_limite=None):
+                date_limite=None, priorite=None):
         """
         Point d'entree principal (cf. contrat en tete de module).
 
@@ -349,6 +349,11 @@ class BaseConnector:
         date_limite     : debut de la periode reglee par l'administrateur,
                           fournie par le pipeline (le connecteur ne lit pas
                           la base). Sert a arreter la pagination.
+        priorite        : fonction entree -> entier, fournie par le pipeline
+                          (qui connait le catalogue et les expositions) :
+                          les pages de detail des entrees de plus haute
+                          priorite sont servies en premier dans le budget.
+                          Sans elle, ordre du listing (et priorite_detail).
 
         Appele sans argument sur un connecteur qui ne surcharge rien, il
         fait exactement une requete et retourne exactement la meme
@@ -365,6 +370,7 @@ class BaseConnector:
         stats = {
             "pages_listing": 0, "entrees": 0, "nouvelles": 0,
             "details_ok": 0, "details_echec": 0, "details_ignores": 0,
+            "details_prioritaires": 0,
             "budget_alloue": budget, "sondes_date": 0, "arret": "page_unique",
         }
         erreurs = {}
@@ -382,7 +388,7 @@ class BaseConnector:
                 "statistiques_crawl": stats,
             }
 
-        self._phase_detail(entries, entrees_connues, budget, stats, erreurs)
+        self._phase_detail(entries, entrees_connues, budget, stats, erreurs, priorite)
         if self.LISTING_CHRONOLOGIQUE:
             self._poser_dates_plafond(entries)
         self._journaliser_synthese(stats, erreurs, True, debut)
@@ -578,11 +584,17 @@ class BaseConnector:
         dates = self.dates_lisibles([entry])
         return dates[0] if dates else None
 
-    def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs):
+    def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs, priorite=None):
         """
         Enrichit les entrees NOUVELLES par leur page de detail, dans la
         limite du budget. Un echec sur une entree n'interrompt jamais la
         collecte : il est comptabilise et reessaye au run suivant.
+
+        Ordre de service : priorite() du pipeline d'abord (une annonce dont
+        le titre cite deja un selecteur passe avant les autres), puis
+        priorite_detail() du connecteur, puis l'ordre du listing. Sans cet
+        ordre, une annonce camerounaise placee bas dans un listing charge
+        n'etait lue que sur son titre tant que le budget ne l'atteignait pas.
         """
         if not self.SUPPORTE_DETAIL or budget <= 0:
             return
@@ -596,8 +608,15 @@ class BaseConnector:
             and not e.get("echec_detail")
             and self.url_detail(e)
         ]
-        candidats.sort(key=self.priorite_detail, reverse=True)  # tri stable
+        rangs = {
+            id(e): ((priorite(e) if priorite else 0), self.priorite_detail(e))
+            for e in candidats
+        }
+        candidats.sort(key=lambda e: rangs[id(e)], reverse=True)  # tri stable
         stats["details_ignores"] = max(0, len(candidats) - budget)
+        stats["details_prioritaires"] = sum(
+            1 for e in candidats[:budget] if rangs[id(e)][0] > 0
+        )
 
         for entry in candidats[:budget]:
             self._enrichir_par_detail(entry, stats, erreurs)
