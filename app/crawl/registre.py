@@ -27,7 +27,14 @@ qu'il ne memorise pas :
       2. sa SIGNATURE DE LISTING a change : meme identifiant, contenu
          different (ex. un post ajoute a une categorie everest deja
          traitee). La comparaison se fait donc au niveau de l'ENTREE, et
-         jamais de la source ni de la categorie entiere.
+         jamais de la source ni de la categorie entiere. Une entree qui
+         n'a pas encore de signature est relue UNE fois pour etablir sa
+         reference (amorcage, cf. signatures_connues).
+
+  - Une source deja entierement TRAITEE n'est donc PAS figee. C'est
+    exactement ce qui s'etait produit sur everest : 46 entrees connues,
+    aucune signature, donc aucun candidat au budget - et comme le listing
+    seul ne produit plus d'exposition, plus aucune detection.
 
 ORDRE D'ECRITURE, IMPORTANT - une entree n'est marquee TRAITEE qu'APRES
 avoir traverse le matching et la persistance. L'ordre inverse serait un
@@ -94,17 +101,32 @@ def identifiants_a_relire(session, source_id, candidats) -> set:
 
 def signatures_connues(session, source_id) -> dict:
     """
-    {identifiant: signature_listing} des entrees qui en portent une.
+    {identifiant: signature_listing} des entrees deja analysees dont la page
+    de detail PEUT etre relue. Passe au connecteur par le pipeline (le
+    connecteur ne lit pas la base) : une entree dont la signature differe
+    redevient candidate au budget de pages de detail.
 
-    Passe au connecteur par le pipeline (le connecteur ne lit pas la base) :
-    une entree connue dont la signature differe redevient candidate au
-    budget de pages de detail.
+    La valeur vaut None quand aucune signature n'a encore ete enregistree.
+    Ce n'est PAS la meme chose qu'une entree absente du dictionnaire : c'est
+    une entree a AMORCER, analysee avant l'existence de ce mecanisme, dont
+    la page sera relue une fois pour etablir sa reference (cf.
+    BaseConnector.signature_a_change). Les entrees d'un everest deja
+    entierement TRAITEE restaient sinon figees pour toujours : plus aucune
+    page de detail relue, et depuis que le listing seul ne produit plus
+    d'exposition, plus aucune detection non plus.
+
+    Les entrees ECHEC en sont exclues, comme dans identifiants_a_relire() :
+    leur page est cassee, les amorcer a chaque cycle userait le budget pour
+    rien.
     """
     lignes = session.query(
         EntreeCollectee.identifiant_entree, EntreeCollectee.signature_listing
     ).filter(
         EntreeCollectee.source_id == source_id,
-        EntreeCollectee.signature_listing.isnot(None),
+        EntreeCollectee.statut_detail.in_((
+            StatutDetailEntree.TRAITEE,
+            StatutDetailEntree.SANS_DETAIL,
+        )),
     ).all()
 
     return {identifiant: signature for identifiant, signature in lignes}

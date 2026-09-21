@@ -332,20 +332,38 @@ class BaseConnector:
 
     def signature_a_change(self, entry, signatures_connues):
         """
-        Vrai si l'entree est connue ET que sa signature de listing differe
-        de celle du dernier passage. Une entree dont la signature n'a jamais
-        ete enregistree (collecte anterieure a ce mecanisme, ou connecteur
-        sans signature) n'est PAS relue : sans point de comparaison, on
-        relirait tout le registre a chaque cycle.
+        Vrai si la page de detail d'une entree deja analysee doit etre
+        relue : sa signature de listing differe de celle du dernier
+        passage, ou AUCUNE n'a encore ete enregistree.
+
+        Ce second cas est l'AMORCAGE, et il est indispensable : une source
+        deja entierement TRAITEE avant l'existence des signatures n'aurait
+        jamais eu de reference a comparer, donc plus jamais une seule page
+        de detail relue. Combine a la regle "le listing seul ne produit pas
+        d'exposition", everest s'est retrouve fige : 46 entrees, 0 candidat,
+        0 detection.
+
+        L'amorcage ne coute qu'UN passage par entree : marquer_traitee()
+        enregistre la signature des que la page a ete lue. Il est borne par
+        le budget de pages de detail du cycle et s'epuise en quelques
+        cycles, apres quoi seuls les vrais changements declenchent une
+        relecture.
+
+        Un connecteur qui ne publie pas de signature (signature_listing()
+        -> None) ne relit jamais rien : l'amorcage n'aboutirait pas et
+        l'entree serait reproposee indefiniment.
         """
         if not signatures_connues:
             return False
         identifiant = entry.get("identifiant_entree") or self.identifiant_entree(entry)
-        precedente = signatures_connues.get(identifiant)
-        if precedente is None:
+        # Absente du dictionnaire : entree neuve, en file, ou abandonnee
+        # (ECHEC). Aucune ne releve de ce mecanisme.
+        if identifiant not in signatures_connues:
             return False
         courante = self.signature_listing(entry)
-        return courante is not None and courante != precedente
+        if courante is None:
+            return False
+        return courante != signatures_connues[identifiant]
 
     def identifiant_entree(self, entry):
         """
@@ -675,7 +693,8 @@ class BaseConnector:
         stats["details_prioritaires"] = sum(
             1 for e in candidats[:budget] if rangs[id(e)][0] > 0
         )
-        # Entrees deja connues reprises parce que leur listing a change.
+        # Entrees deja connues reprises : listing change, ou amorcage de
+        # leur signature (cf. signature_a_change).
         stats["details_relus"] = sum(
             1 for e in candidats[:budget] if e["identifiant_entree"] in entrees_connues
         )

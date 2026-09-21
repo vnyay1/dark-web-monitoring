@@ -404,25 +404,32 @@ def _priorite_detail(entree, identifiants_a_completer, catalogue,
                      connector=None, signatures=None) -> int:
     """
     Ordre de service des pages de detail dans le budget du cycle :
-      2 - annonce d'une exposition a completer (texte ou selecteurs manquants) ;
-      1 - annonce dont le texte de listing cite deja un selecteur du
+      3 - annonce d'une exposition a completer (texte ou selecteurs manquants) ;
+      2 - annonce dont le texte de listing cite deja un selecteur du
           catalogue (correspondance exacte : un titre est court, le test est
-          immediat) - une annonce probablement camerounaise - OU annonce
-          deja traitee dont le listing annonce un volume different, donc du
-          contenu qui n'a jamais ete analyse ;
+          immediat) - une annonce probablement camerounaise ;
+      1 - annonce deja traitee dont le listing a change, ou dont la
+          signature n'a jamais ete enregistree (amorcage) ;
       0 - toutes les autres, dans l'ordre du listing.
     Sans cela, une annonce camerounaise placee bas dans un listing charge
     n'etait lue que sur son titre (criticite partielle, texte non conserve)
     tant que le budget ne l'atteignait pas.
 
+    Le rang 1 est STRICTEMENT inferieur au rang 2, et ce n'est pas un
+    detail : au premier cycle qui suit l'introduction des signatures, TOUTE
+    la source est a amorcer. Au meme rang, les 46 entrees d'everest
+    seraient departagees par le seul ordre du listing, et une annonce
+    camerounaise placee au-dela du budget (20) ne serait pas lue - soit
+    exactement le probleme que cette fonction existe pour eviter.
+
     Tourne pendant la collecte reseau, HORS verrou : ne touche pas la base
     (cf. _catalogue_fige, et 'signatures' lu en amont).
     """
     if entree.get("identifiant_entree") in identifiants_a_completer:
-        return 2
+        return 3
     texte = entree.get("texte_brut")
     if texte and match_text_against_catalogue(texte, catalogue, enable_fuzzy=False):
-        return 1
+        return 2
     if connector is not None and connector.signature_a_change(entree, signatures):
         return 1
     return 0
@@ -851,7 +858,7 @@ if __name__ == "__main__":
         print(f"  Pages de detail recuperees : {r.get('details_ok', 0)}"
               f" (echecs : {r.get('details_echec', 0)},"
               f" hors budget : {r.get('details_ignores', 0)},"
-              f" relues pour changement : {r.get('details_relus', 0)})")
+              f" relues : {r.get('details_relus', 0)})")
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
         print(f"  Expositions completees (texte, selecteurs) : {r.get('nb_expositions_completees', 0)}")
         print(f"  Entrees sans date exploitable : {r.get('nb_sans_date', 0)}")
