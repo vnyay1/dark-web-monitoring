@@ -47,16 +47,16 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config_system import get_config_int
 from app.db import init_db
+from app.journalisation import configurer_journalisation
 from app.models import TypeEvenementCollecte, utc_now
 from app.pipeline import executer_tous_les_connecteurs
 from app import supervision, tor
 
-# threadName : la collecte est parallele (cf. app.pipeline) ; le nom du
-# fil ("collecte_0"...) permet de suivre une source dans le journal.
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
-)
+# Console ET fichier (logs/scheduler.log) : ce processus tourne des heures,
+# souvent lance depuis l'interface, et sa sortie standard n'est alors lue par
+# personne. Le format porte threadName, la collecte etant parallele (cf.
+# app.pipeline) : le nom du fil ("collecte_0"...) permet de suivre une source.
+configurer_journalisation("scheduler")
 logger = logging.getLogger(__name__)
 
 

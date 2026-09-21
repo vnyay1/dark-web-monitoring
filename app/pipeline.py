@@ -821,11 +821,11 @@ def _analyser_arguments():
 
 
 if __name__ == "__main__":
-    # threadName : avec la collecte parallele, les lignes des sources
-    # s'entremelent ; le nom du fil ("collecte_0"...) permet de les suivre.
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
-    )
+    # Console ET fichier (logs/pipeline.log). threadName : avec la collecte
+    # parallele, les lignes des sources s'entremelent ; le nom du fil
+    # ("collecte_0"...) permet de les suivre.
+    from app.journalisation import configurer_journalisation
+    configurer_journalisation("pipeline")
     arguments = _analyser_arguments()
     init_db()
 

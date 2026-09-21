@@ -26,6 +26,27 @@ logger = logging.getLogger(__name__)
 RACINE_PROJET = Path(__file__).resolve().parents[3]
 
 
+def _fichier_erreurs_scheduler():
+    """
+    Fichier ouvert en ajout ou le sous-processus scheduler deverse stderr,
+    ou None si le repertoire n'est pas ecrivable (le lancement se fait alors
+    sans, plutot que d'echouer). Le parent le referme aussitot apres Popen :
+    le descripteur duplique dans l'enfant lui survit.
+    """
+    from app.journalisation import repertoire_journaux
+
+    try:
+        repertoire = repertoire_journaux()
+        repertoire.mkdir(parents=True, exist_ok=True)
+        return open(repertoire / "scheduler.err.log", "a", encoding="utf-8")
+    except OSError:
+        logger.warning(
+            "[scheduler] Journal d'erreurs indisponible : stderr du "
+            "sous-processus sera perdu.", exc_info=True,
+        )
+        return None
+
+
 def _terminer_processus(pid: int):
     """
     Demande l'arret du processus scheduler.
@@ -108,12 +129,20 @@ def enregistrer(api_bp):
                 ),
             }), 409
 
+        # stdout part dans DEVNULL : le processus installe son propre
+        # RotatingFileHandler (logs/scheduler.log, cf. app.journalisation) et
+        # les deux feraient double emploi. stderr, lui, est redirige vers un
+        # fichier : une trace d'exception qui tue le processus AVANT
+        # l'installation du handler - import manquant, .env incomplet,
+        # migration en retard - n'apparaitrait nulle part autrement, et le
+        # scheduler semblerait "ne pas demarrer" sans explication.
+        erreurs = _fichier_erreurs_scheduler()
         try:
             processus = subprocess.Popen(
                 [sys.executable, "-m", "app.scheduler"],
                 cwd=str(RACINE_PROJET),
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=erreurs or subprocess.DEVNULL,
                 start_new_session=True,
             )
         except Exception:
@@ -128,6 +157,11 @@ def enregistrer(api_bp):
                     "du serveur pour le detail."
                 ),
             }), 500
+        finally:
+            # Le descripteur a ete duplique dans l'enfant, qui continue d'y
+            # ecrire : le garder ouvert ici ne ferait que fuiter.
+            if erreurs is not None:
+                erreurs.close()
 
         return jsonify({
             "succes": True,

@@ -4,7 +4,12 @@ Point d'entree pour lancer l'application Flask en developpement.
 
 import os
 
+from app.journalisation import configurer_journalisation
 from app.web import create_app
+
+# Console ET fichier (logs/web.log). Avant create_app() : les messages emis
+# pendant la construction de l'application sont alors deja captes.
+configurer_journalisation("web")
 
 app = create_app()
 

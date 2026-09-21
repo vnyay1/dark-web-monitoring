@@ -425,7 +425,8 @@ export default function Scheduler() {
         </div>
         <p className="texte-aide espace-haut" id="aide-vider">
           « Vider l'affichage » n'efface que l'écran : le fil reste enregistré et réapparaît au
-          prochain chargement de la page.
+          prochain chargement de la page. Le journal du serveur (<code>logs/scheduler.log</code>)
+          n'est jamais concerné.
         </p>
       </section>
 

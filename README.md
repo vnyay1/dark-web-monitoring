@@ -110,6 +110,7 @@ dark-web-monitoring/
 │   │   └── registre.py           # entrées déjà analysées, reprise de cycle
 │   │
 │   ├── supervision.py            # état partagé du scheduler + fil d'événements
+│   ├── journalisation.py         # journaux sur fichier tournant (logs/)
 │   ├── securite.py               # politique de mots de passe (FR-24)
 │   ├── conservation.py           # dérogation CN-04/CN-05 : texte intégral masqué
 │   │
@@ -361,6 +362,18 @@ python3 -m app.maintenance.recuperer_textes --source everest --tous --confirmer 
 - **CN-09 / CN-10** : collecte strictement passive, respect d'un délai minimum de 30 secondes entre deux requêtes sur une même source (`FR-06`).
 - **CN-11** : toute information concernant une organisation camerounaise réelle est communiquée exclusivement à l'encadrement.
 - Les liens pointant directement vers des données divulguées (Mega.nz, endpoints de téléchargement, etc.) ne sont jamais conservés — seule leur existence est enregistrée.
+
+### Journaux serveur
+
+Le serveur web, le scheduler et le pipeline écrivent sur la console **et** dans un fichier tournant
+(`app/journalisation.py`) : `logs/web.log`, `logs/scheduler.log`, `logs/pipeline.log`, 5 Mo × 5
+archives chacun. `logs/scheduler.err.log` recueille la sortie d'erreur du scheduler lancé depuis
+l'interface, pour qu'un plantage antérieur à l'initialisation du journal reste diagnosticable.
+Répertoire modifiable par `SENTINEL_LOG_DIR` (facultatif, contrairement aux variables de `.env`).
+
+Le répertoire `logs/` est ignoré par git et ne doit jamais sortir de la VM de collecte. Il est
+**sans rapport** avec le bouton « Vider l'affichage » de la page Collecte, qui n'efface que l'écran
+du navigateur : le fil d'activité, lui, vit en base (`EvenementCollecte`, rétention 7 jours).
 
 ---
 
