@@ -56,7 +56,7 @@ from app.crawl.registre import (
 )
 from app.db import get_session, init_db, verrou_base
 from app.models import (
-    Selecteur, Source, TypeEvenementCollecte, TypeSource, utc_now,
+    Selecteur, Source, StatutDetailEntree, TypeEvenementCollecte, TypeSource, utc_now,
 )
 from app import supervision
 from app.matching.engine import match_text_against_catalogue
@@ -150,6 +150,11 @@ def _normaliser_entry(entry, connector) -> dict:
             bool(connector.url_detail(entry)) if connector.SUPPORTE_DETAIL else False
         ),
         "echec_detail": entry.get("echec_detail"),
+        # Pose par _analyser_collecte, qui seul a acces au registre : la page
+        # de detail de cette annonce ne sera jamais lue (cf.
+        # _detail_definitivement_perdu). Sans cette cle, _traiter_une_entree
+        # devrait interroger la base par entree.
+        "detail_abandonne": False,
     }
 
 
@@ -178,6 +183,27 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
         return True
 
     if not texte:
+        return False
+
+    # FR-03 - une annonce qui POSSEDE une page de detail n'est JAMAIS
+    # enregistree sur le seul texte de la page d'accueil (le listing).
+    #
+    # Sans cette garde, le titre d'une categorie suffisait a creer une
+    # Exposition et son alerte ; la page de detail, lue ensuite, relevait la
+    # criticite et declenchait une SECONDE alerte pour le meme incident. Et
+    # tant que le budget ne servait pas cette page, l'exposition restait
+    # partielle (criticite du seul titre, aucun texte conserve).
+    #
+    # L'entree n'est pas perdue : elle reste A_TRAITER dans le registre (cf.
+    # _marquer_dans_le_registre) et _priorite_detail la sert AVANT les autres,
+    # puisque son texte de listing cite deja un selecteur.
+    #
+    # Seule exception, sinon une annonce camerounaise sur une page cassee ne
+    # serait jamais signalee : une page de detail definitivement inaccessible
+    # (cf. _detail_definitivement_perdu). L'analyse se replie alors sur le
+    # titre, avec la criticite partielle que cela implique.
+    if not texte_complet(entry) and not entry["detail_abandonne"]:
+        stats["nb_details_en_attente"] += 1
         return False
 
     # FR-03 : fenetre temporelle reglee par l'administrateur.
@@ -478,6 +504,10 @@ def _analyser_collecte(session, source, connector, result, seuils, catalogue) ->
         "nb_hors_periode": 0,
         "nb_sans_date": 0,
         "nb_entrees_en_erreur": 0,
+        # Annonces laissees de cote parce que leur page de detail n'a pas
+        # encore ete lue (cf. _traiter_une_entree) : elles seront servies en
+        # priorite au prochain passage du budget.
+        "nb_details_en_attente": 0,
     }
     stats.update(result.get("statistiques_crawl", {}))
 
@@ -526,7 +556,14 @@ def _analyser_collecte(session, source, connector, result, seuils, catalogue) ->
     # dates). Visible dans la page Collecte, sans avoir a lire les logs.
     stats["nb_sans_date"] = sum(1 for e in entrees if e["date_publication"] is None)
 
-    enregistrer_entrees_vues(session, source.id, entrees)
+    lignes_registre = enregistrer_entrees_vues(session, source.id, entrees)
+
+    # Une annonce dont la page de detail est definitivement perdue est la
+    # seule a pouvoir etre analysee sur son titre (cf. _traiter_une_entree).
+    for entree in entrees:
+        entree["detail_abandonne"] = _detail_definitivement_perdu(
+            lignes_registre.get(entree["identifiant_entree"]), entree, connector
+        )
 
     # Catalogue charge une seule fois, a la preparation de la source
     # (cf. _catalogue_fige) : les commits de la boucle ne l'expirent pas.
@@ -568,12 +605,36 @@ def _analyser_collecte(session, source, connector, result, seuils, catalogue) ->
         f"{stats['nb_expositions_creees_ou_maj']} exposition(s), "
         + (f"{stats['nb_expositions_completees']} completee(s), "
            if stats["nb_expositions_completees"] else "")
-        + f"{stats['nb_hors_periode']} hors periode",
+        + f"{stats['nb_hors_periode']} hors periode"
+        + (f", {stats['nb_details_en_attente']} en attente de page de detail"
+           if stats["nb_details_en_attente"] else ""),
         source=connector.SOURCE_NAME,
         session=session,
     )
 
     return stats
+
+
+def _detail_definitivement_perdu(ligne, entree, connector) -> bool:
+    """
+    Vrai quand la page de detail de cette annonce ne sera jamais lue : soit
+    elle est deja abandonnee (StatutDetailEntree.ECHEC), soit l'echec de CE
+    cycle est celui qui l'abandonne.
+
+    L'echec courant est ANTICIPE parce que le registre n'est ecrit qu'APRES
+    l'analyse (cf. _marquer_dans_le_registre) : au moment ou l'entree est
+    analysee, nb_echecs_detail ne compte pas encore l'echec du cycle en
+    cours. Sans cette anticipation, l'entree serait ecartee par
+    _traiter_une_entree, puis passerait en ECHEC et ne reviendrait jamais
+    dans le budget : le repli sur le titre ne se declencherait jamais.
+    """
+    if ligne is None:
+        return False
+    if ligne.statut_detail == StatutDetailEntree.ECHEC:
+        return True
+    return bool(entree["echec_detail"]) and (
+        ligne.nb_echecs_detail + 1 >= connector.MAX_ECHECS_DETAIL
+    )
 
 
 def _marquer_dans_le_registre(session, source_id, connector, entree, a_produit):
@@ -764,6 +825,7 @@ if __name__ == "__main__":
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
         print(f"  Expositions completees (texte, selecteurs) : {r.get('nb_expositions_completees', 0)}")
         print(f"  Entrees sans date exploitable : {r.get('nb_sans_date', 0)}")
+        print(f"  En attente de leur page de detail : {r.get('nb_details_en_attente', 0)}")
         print(f"  Rejetees (hors periode) : {r.get('nb_hors_periode', 0)}")
         print(f"  Rejetees (faux positif) : {r.get('nb_rejetees_faux_positif', 0)}")
         print(f"  Rejetees (criticite trop faible) : {r.get('nb_rejetees_criticite_faible', 0)}")
