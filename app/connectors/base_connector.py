@@ -330,6 +330,41 @@ class BaseConnector:
         graine = "|".join(str(partie if partie is not None else "") for partie in parties)
         return hashlib.sha256(graine.encode("utf-8")).hexdigest()
 
+    def raison_relecture(self, entry, signatures_connues):
+        """
+        Pourquoi la page de detail d'une entree DEJA analysee doit etre
+        relue, ou None s'il n'y a pas lieu :
+
+          "changement" - sa signature de listing differe de celle du
+                         dernier passage : du contenu a ete ajoute depuis
+                         la derniere lecture ;
+          "amorcage"   - aucune signature n'a encore ete enregistree pour
+                         elle (entree analysee avant ce mecanisme).
+
+        Les deux valent relecture, mais pas au meme titre : un changement
+        est la PREUVE d'un contenu neuf, alors qu'un amorçage n'etablit
+        qu'une reference. C'est pourquoi seul le premier passe outre la
+        fenetre d'analyse (cf. _phase_detail), et pourquoi l'amorcage est
+        servi apres les annonces prometteuses (cf. pipeline._priorite_detail).
+        """
+        if not signatures_connues:
+            return None
+        identifiant = entry.get("identifiant_entree") or self.identifiant_entree(entry)
+        # Absente du dictionnaire : entree neuve, en file, ou abandonnee
+        # (ECHEC). Aucune ne releve de ce mecanisme.
+        if identifiant not in signatures_connues:
+            return None
+        courante = self.signature_listing(entry)
+        # Un connecteur qui ne publie pas de signature ne relit jamais rien :
+        # l'amorcage n'aboutirait pas et l'entree serait reproposee
+        # indefiniment.
+        if courante is None:
+            return None
+        precedente = signatures_connues[identifiant]
+        if precedente is None:
+            return "amorcage"
+        return "changement" if courante != precedente else None
+
     def signature_a_change(self, entry, signatures_connues):
         """
         Vrai si la page de detail d'une entree deja analysee doit etre
@@ -352,18 +387,27 @@ class BaseConnector:
         Un connecteur qui ne publie pas de signature (signature_listing()
         -> None) ne relit jamais rien : l'amorcage n'aboutirait pas et
         l'entree serait reproposee indefiniment.
+
+        Raccourci sur raison_relecture(), qui seule distingue les deux cas.
         """
-        if not signatures_connues:
+        return self.raison_relecture(entry, signatures_connues) is not None
+
+    def hors_periode_listing(self, entry, date_limite) -> bool:
+        """
+        Vrai quand le LISTING date deja cette annonce avant la fenetre
+        d'analyse : sa page de detail ne vaut pas les 30 s minimum qu'elle
+        couterait (FR-06), le pipeline la rejetterait ensuite en
+        nb_hors_periode.
+
+        Une entree dont la date n'est pas lisible - ou que la source ne date
+        pas du tout - n'est JAMAIS ecartee ici : trois sources ne datent pas
+        leurs annonces, et les ignorer reviendrait a cesser de les
+        surveiller. Memes regles de date que le pipeline (dates_lisibles).
+        """
+        if date_limite is None:
             return False
-        identifiant = entry.get("identifiant_entree") or self.identifiant_entree(entry)
-        # Absente du dictionnaire : entree neuve, en file, ou abandonnee
-        # (ECHEC). Aucune ne releve de ce mecanisme.
-        if identifiant not in signatures_connues:
-            return False
-        courante = self.signature_listing(entry)
-        if courante is None:
-            return False
-        return courante != signatures_connues[identifiant]
+        dates = self.dates_lisibles([entry])
+        return bool(dates) and dates[0] < date_limite
 
     def identifiant_entree(self, entry):
         """
@@ -397,7 +441,8 @@ class BaseConnector:
     # ------------------------------------------------------------------
 
     def collect(self, entrees_connues=None, budget_details=None, profondeur_max=None,
-                date_limite=None, priorite=None, signatures_connues=None):
+                date_limite=None, priorite=None, signatures_connues=None,
+                entrees_a_completer=None):
         """
         Point d'entree principal (cf. contrat en tete de module).
 
@@ -412,9 +457,15 @@ class BaseConnector:
         profondeur_max  : plafond de pages de listing pour ce run ; ne peut
                           pas depasser MAX_PAGES_LISTING, plafond propre au
                           connecteur.
+        entrees_a_completer : identifiants dont l'exposition attend son
+                          texte ou ses selecteurs. Leur page de detail est
+                          lue meme hors periode : la completion ignore la
+                          fenetre par conception.
         date_limite     : debut de la periode reglee par l'administrateur,
                           fournie par le pipeline (le connecteur ne lit pas
-                          la base). Sert a arreter la pagination.
+                          la base). Sert a arreter la pagination, et a ne
+                          pas depenser de budget sur une annonce que le
+                          listing date deja hors periode.
         priorite        : fonction entree -> entier, fournie par le pipeline
                           (qui connait le catalogue et les expositions) :
                           les pages de detail des entrees de plus haute
@@ -437,6 +488,7 @@ class BaseConnector:
             "pages_listing": 0, "entrees": 0, "nouvelles": 0,
             "details_ok": 0, "details_echec": 0, "details_ignores": 0,
             "details_prioritaires": 0, "details_relus": 0,
+            "details_hors_periode": 0,
             "budget_alloue": budget, "sondes_date": 0, "arret": "page_unique",
         }
         erreurs = {}
@@ -455,7 +507,8 @@ class BaseConnector:
             }
 
         self._phase_detail(
-            entries, entrees_connues, budget, stats, erreurs, priorite, signatures_connues
+            entries, entrees_connues, budget, stats, erreurs, priorite,
+            signatures_connues, date_limite, entrees_a_completer,
         )
         if self.LISTING_CHRONOLOGIQUE:
             self._poser_dates_plafond(entries)
@@ -653,7 +706,8 @@ class BaseConnector:
         return dates[0] if dates else None
 
     def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs,
-                      priorite=None, signatures_connues=None):
+                      priorite=None, signatures_connues=None, date_limite=None,
+                      entrees_a_completer=None):
         """
         Enrichit les entrees NOUVELLES par leur page de detail, dans la
         limite du budget. Un echec sur une entree n'interrompt jamais la
@@ -665,6 +719,18 @@ class BaseConnector:
         La comparaison se fait donc entree par entree, jamais au niveau de
         la source entiere.
 
+        FENETRE D'ANALYSE - une annonce que le LISTING date deja hors
+        periode ne consomme pas de budget : sa page couterait 30 s minimum
+        (FR-06) pour etre ensuite rejetee par le pipeline. La fenetre ne
+        s'applique qu'aux entrees JAMAIS lues en entier, soit les nouvelles
+        et celles en amorcage. Deux exceptions :
+          - une exposition a completer : la completion ignore deja la
+            fenetre par conception (cf. pipeline._completer_exposition) ;
+          - une signature CHANGEE : le changement est la preuve d'un contenu
+            neuf, que la date d'annonce du listing peut ne pas refleter (une
+            categorie qui gagne un post ne voit pas forcement sa date
+            rafraichie).
+
         Ordre de service : priorite() du pipeline d'abord (une annonce dont
         le titre cite deja un selecteur passe avant les autres), puis
         priorite_detail() du connecteur, puis l'ordre du listing. Sans cet
@@ -674,16 +740,31 @@ class BaseConnector:
         if not self.SUPPORTE_DETAIL or budget <= 0:
             return
 
-        # Les entrees deja visitees par une sonde de date (ou dont la sonde
-        # a echoue) ne sont pas revisitees.
-        candidats = [
-            e for e in entries
-            if (e["identifiant_entree"] not in entrees_connues
-                or self.signature_a_change(e, signatures_connues))
-            and e.get("niveau_detail") != "detail"
-            and not e.get("echec_detail")
-            and self.url_detail(e)
-        ]
+        entrees_a_completer = entrees_a_completer or set()
+        candidats, hors_periode = [], 0
+
+        for entree in entries:
+            # Les entrees deja visitees par une sonde de date (ou dont la
+            # sonde a echoue) ne sont pas revisitees.
+            if (entree.get("niveau_detail") == "detail"
+                    or entree.get("echec_detail")
+                    or not self.url_detail(entree)):
+                continue
+
+            identifiant = entree["identifiant_entree"]
+            raison = self.raison_relecture(entree, signatures_connues)
+            if identifiant in entrees_connues and raison is None:
+                continue
+
+            if (identifiant not in entrees_a_completer
+                    and raison != "changement"
+                    and self.hors_periode_listing(entree, date_limite)):
+                hors_periode += 1
+                continue
+
+            candidats.append(entree)
+
+        stats["details_hors_periode"] = hors_periode
         rangs = {
             id(e): ((priorite(e) if priorite else 0), self.priorite_detail(e))
             for e in candidats

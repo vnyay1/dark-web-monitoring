@@ -506,6 +506,10 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
                 entree, identifiants_a_completer, catalogue, connector, signatures
             ),
             signatures_connues=signatures,
+            # Une exposition a completer est relue meme hors periode : la
+            # completion ignore la fenetre par conception (cf.
+            # _completer_exposition).
+            entrees_a_completer=identifiants_a_completer,
         )
 
         with verrou_base:
@@ -858,7 +862,8 @@ if __name__ == "__main__":
         print(f"  Pages de detail recuperees : {r.get('details_ok', 0)}"
               f" (echecs : {r.get('details_echec', 0)},"
               f" hors budget : {r.get('details_ignores', 0)},"
-              f" relues : {r.get('details_relus', 0)})")
+              f" relues : {r.get('details_relus', 0)},"
+              f" hors periode : {r.get('details_hors_periode', 0)})")
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
         print(f"  Expositions completees (texte, selecteurs) : {r.get('nb_expositions_completees', 0)}")
         print(f"  Entrees sans date exploitable : {r.get('nb_sans_date', 0)}")
