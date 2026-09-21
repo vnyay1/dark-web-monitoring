@@ -304,6 +304,49 @@ class BaseConnector:
         """
         return 0
 
+    def signature_listing(self, entry):
+        """
+        Empreinte de ce que le LISTING dit du volume d'une entree, ou None.
+
+        Sert a une seule chose : detecter qu'une annonce deja traitee a du
+        contenu nouveau (un post ajoute a une categorie, par exemple) et
+        merite donc que sa page de detail soit relue. Sans elle, une entree
+        passee en TRAITEE ne serait plus jamais lue, meme enrichie.
+
+        CN-03/CN-04 - la valeur retournee est un sha256 calcule UNIQUEMENT
+        sur des metadonnees de volume et de date (nombre de publications,
+        date d'annonce). Jamais un nom d'entite, jamais un extrait de texte,
+        jamais une empreinte du contenu divulgue : le registre ne doit pas
+        devenir un index de victimes (cf. docstring de EntreeCollectee).
+
+        None par defaut : une source qui ne publie aucun compteur fiable
+        garde le comportement d'origine (une entree traitee n'est plus relue).
+        """
+        return None
+
+    @staticmethod
+    def empreinte_signature(*parties):
+        """sha256 des parties fournies, pour signature_listing()."""
+        graine = "|".join(str(partie if partie is not None else "") for partie in parties)
+        return hashlib.sha256(graine.encode("utf-8")).hexdigest()
+
+    def signature_a_change(self, entry, signatures_connues):
+        """
+        Vrai si l'entree est connue ET que sa signature de listing differe
+        de celle du dernier passage. Une entree dont la signature n'a jamais
+        ete enregistree (collecte anterieure a ce mecanisme, ou connecteur
+        sans signature) n'est PAS relue : sans point de comparaison, on
+        relirait tout le registre a chaque cycle.
+        """
+        if not signatures_connues:
+            return False
+        identifiant = entry.get("identifiant_entree") or self.identifiant_entree(entry)
+        precedente = signatures_connues.get(identifiant)
+        if precedente is None:
+            return False
+        courante = self.signature_listing(entry)
+        return courante is not None and courante != precedente
+
     def identifiant_entree(self, entry):
         """
         Identite stable d'une entree au sein de la source, utilisee comme
@@ -336,12 +379,17 @@ class BaseConnector:
     # ------------------------------------------------------------------
 
     def collect(self, entrees_connues=None, budget_details=None, profondeur_max=None,
-                date_limite=None, priorite=None):
+                date_limite=None, priorite=None, signatures_connues=None):
         """
         Point d'entree principal (cf. contrat en tete de module).
 
         entrees_connues : set d'identifiants deja traites, fourni par le
         pipeline. Les entrees qui s'y trouvent ne consomment pas de budget.
+        signatures_connues : {identifiant: signature} du dernier passage,
+                          fourni par le pipeline (le connecteur ne lit pas la
+                          base). Une entree connue dont la signature a change
+                          redevient candidate au budget : meme annonce,
+                          contenu different. Cf. signature_listing().
         budget_details  : nombre maximum de pages de detail pour ce run.
         profondeur_max  : plafond de pages de listing pour ce run ; ne peut
                           pas depasser MAX_PAGES_LISTING, plafond propre au
@@ -370,7 +418,7 @@ class BaseConnector:
         stats = {
             "pages_listing": 0, "entrees": 0, "nouvelles": 0,
             "details_ok": 0, "details_echec": 0, "details_ignores": 0,
-            "details_prioritaires": 0,
+            "details_prioritaires": 0, "details_relus": 0,
             "budget_alloue": budget, "sondes_date": 0, "arret": "page_unique",
         }
         erreurs = {}
@@ -388,7 +436,9 @@ class BaseConnector:
                 "statistiques_crawl": stats,
             }
 
-        self._phase_detail(entries, entrees_connues, budget, stats, erreurs, priorite)
+        self._phase_detail(
+            entries, entrees_connues, budget, stats, erreurs, priorite, signatures_connues
+        )
         if self.LISTING_CHRONOLOGIQUE:
             self._poser_dates_plafond(entries)
         self._journaliser_synthese(stats, erreurs, True, debut)
@@ -584,11 +634,18 @@ class BaseConnector:
         dates = self.dates_lisibles([entry])
         return dates[0] if dates else None
 
-    def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs, priorite=None):
+    def _phase_detail(self, entries, entrees_connues, budget, stats, erreurs,
+                      priorite=None, signatures_connues=None):
         """
         Enrichit les entrees NOUVELLES par leur page de detail, dans la
         limite du budget. Un echec sur une entree n'interrompt jamais la
         collecte : il est comptabilise et reessaye au run suivant.
+
+        Une entree deja connue redevient candidate quand sa SIGNATURE DE
+        LISTING a change (cf. signature_listing) : meme annonce, contenu
+        different - typiquement un post ajoute a une categorie deja traitee.
+        La comparaison se fait donc entree par entree, jamais au niveau de
+        la source entiere.
 
         Ordre de service : priorite() du pipeline d'abord (une annonce dont
         le titre cite deja un selecteur passe avant les autres), puis
@@ -603,7 +660,8 @@ class BaseConnector:
         # a echoue) ne sont pas revisitees.
         candidats = [
             e for e in entries
-            if e["identifiant_entree"] not in entrees_connues
+            if (e["identifiant_entree"] not in entrees_connues
+                or self.signature_a_change(e, signatures_connues))
             and e.get("niveau_detail") != "detail"
             and not e.get("echec_detail")
             and self.url_detail(e)
@@ -616,6 +674,10 @@ class BaseConnector:
         stats["details_ignores"] = max(0, len(candidats) - budget)
         stats["details_prioritaires"] = sum(
             1 for e in candidats[:budget] if rangs[id(e)][0] > 0
+        )
+        # Entrees deja connues reprises parce que leur listing a change.
+        stats["details_relus"] = sum(
+            1 for e in candidats[:budget] if e["identifiant_entree"] in entrees_connues
         )
 
         for entry in candidats[:budget]:

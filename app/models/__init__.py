@@ -478,6 +478,14 @@ class EntreeCollectee(Base):
        finalite declaree (entites camerounaises).
     4. Retention limitee : purger_registre() supprime les lignes qui n'ont
        plus ete vues depuis 90 jours.
+    5. signature_listing est un sha256 calcule par le connecteur
+       (BaseConnector.signature_listing) sur les seules metadonnees de
+       VOLUME et de DATE que le listing publie - pour everest, le nombre de
+       posts d'une categorie et sa date. Elle repond a une seule question :
+       "cette annonce deja traitee a-t-elle du contenu nouveau ?". Elle
+       n'est jamais calculee sur un nom d'entite ni sur un extrait de texte,
+       et n'est pas reversible : elle ne permet pas de retrouver ce que la
+       page contenait.
     """
     __tablename__ = "entrees_collectees"
 
@@ -495,6 +503,11 @@ class EntreeCollectee(Base):
 
     nb_echecs_detail = Column(Integer, nullable=False, default=0)
     a_produit_exposition = Column(Boolean, nullable=False, default=False)
+
+    # Empreinte du volume annonce par le listing au dernier passage
+    # (cf. point 5 de la docstring). NULL = pas de point de comparaison :
+    # l'entree n'est alors jamais relue pour changement.
+    signature_listing = Column(String(64), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("source_id", "identifiant_entree", name="uq_entree_par_source"),

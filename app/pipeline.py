@@ -53,6 +53,7 @@ from app.crawl.registre import (
     marquer_echec_detail,
     marquer_traitee,
     purger_registre,
+    signatures_connues,
 )
 from app.db import get_session, init_db, verrou_base
 from app.models import (
@@ -150,6 +151,9 @@ def _normaliser_entry(entry, connector) -> dict:
             bool(connector.url_detail(entry)) if connector.SUPPORTE_DETAIL else False
         ),
         "echec_detail": entry.get("echec_detail"),
+        # Calculee ici parce que le dict normalise perd les cles propres au
+        # connecteur (nb_posts, date...) dont elle est tiree.
+        "signature_listing": connector.signature_listing(entry),
         # Pose par _analyser_collecte, qui seul a acces au registre : la page
         # de detail de cette annonce ne sera jamais lue (cf.
         # _detail_definitivement_perdu). Sans cette cle, _traiter_une_entree
@@ -396,22 +400,30 @@ def _catalogue_fige(session) -> list:
     ]
 
 
-def _priorite_detail(entree, identifiants_a_completer, catalogue) -> int:
+def _priorite_detail(entree, identifiants_a_completer, catalogue,
+                     connector=None, signatures=None) -> int:
     """
     Ordre de service des pages de detail dans le budget du cycle :
       2 - annonce d'une exposition a completer (texte ou selecteurs manquants) ;
       1 - annonce dont le texte de listing cite deja un selecteur du
           catalogue (correspondance exacte : un titre est court, le test est
-          immediat) - une annonce probablement camerounaise ;
+          immediat) - une annonce probablement camerounaise - OU annonce
+          deja traitee dont le listing annonce un volume different, donc du
+          contenu qui n'a jamais ete analyse ;
       0 - toutes les autres, dans l'ordre du listing.
     Sans cela, une annonce camerounaise placee bas dans un listing charge
     n'etait lue que sur son titre (criticite partielle, texte non conserve)
     tant que le budget ne l'atteignait pas.
+
+    Tourne pendant la collecte reseau, HORS verrou : ne touche pas la base
+    (cf. _catalogue_fige, et 'signatures' lu en amont).
     """
     if entree.get("identifiant_entree") in identifiants_a_completer:
         return 2
     texte = entree.get("texte_brut")
     if texte and match_text_against_catalogue(texte, catalogue, enable_fuzzy=False):
+        return 1
+    if connector is not None and connector.signature_a_change(entree, signatures):
         return 1
     return 0
 
@@ -465,6 +477,10 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
             connues = identifiants_traites(session, source.id) - identifiants_a_relire(
                 session, source.id, identifiants_a_completer,
             )
+            # Une entree connue dont le listing annonce un volume different
+            # (un post ajoute a une categorie deja traitee) redevient
+            # candidate au budget, cf. BaseConnector.signature_a_change.
+            signatures = signatures_connues(session, source.id)
             seuils = _seuils_du_run()
             seuils["a_completer"] = a_completer
             if profondeur_max is None:
@@ -479,7 +495,10 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
             budget_details=budget_details,
             profondeur_max=profondeur_max,
             date_limite=seuils["date_limite"],
-            priorite=lambda entree: _priorite_detail(entree, identifiants_a_completer, catalogue),
+            priorite=lambda entree: _priorite_detail(
+                entree, identifiants_a_completer, catalogue, connector, signatures
+            ),
+            signatures_connues=signatures,
         )
 
         with verrou_base:
@@ -654,7 +673,17 @@ def _marquer_dans_le_registre(session, source_id, connector, entree, a_produit):
     elif entree["niveau_detail"] == "detail" or not entree["a_page_detail"]:
         # Marque TRAITEE meme sans correspondance : sinon les entrees non
         # camerounaises, l'immense majorite, seraient reproposees a l'infini.
-        marquer_traitee(session, source_id, identifiant, a_produit_exposition=a_produit)
+        #
+        # La signature n'est rafraichie que quand la page de detail vient
+        # d'etre lue : sur une simple relecture de titre, l'ancienne reste,
+        # sans quoi un changement serait oublie avant d'avoir ete analyse.
+        marquer_traitee(
+            session, source_id, identifiant,
+            a_produit_exposition=a_produit,
+            signature_listing=(
+                entree["signature_listing"] if entree["niveau_detail"] == "detail" else None
+            ),
+        )
 
 
 def _repartir_budget(classes, budget_global) -> dict:
@@ -821,7 +850,8 @@ if __name__ == "__main__":
         print(f"  Entrees nouvelles : {r.get('nouvelles', 0)}")
         print(f"  Pages de detail recuperees : {r.get('details_ok', 0)}"
               f" (echecs : {r.get('details_echec', 0)},"
-              f" hors budget : {r.get('details_ignores', 0)})")
+              f" hors budget : {r.get('details_ignores', 0)},"
+              f" relues pour changement : {r.get('details_relus', 0)})")
         print(f"  Expositions creees/mises a jour : {r.get('nb_expositions_creees_ou_maj', 0)}")
         print(f"  Expositions completees (texte, selecteurs) : {r.get('nb_expositions_completees', 0)}")
         print(f"  Entrees sans date exploitable : {r.get('nb_sans_date', 0)}")

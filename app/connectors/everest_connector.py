@@ -116,6 +116,18 @@ class EverestConnector(BaseConnector):
         lien = entry.get("lien_detail")
         return f"{self.BASE_URL}{lien}" if lien else None
 
+    def signature_listing(self, entry):
+        """
+        La page d'accueil annonce, par categorie, son nombre de posts
+        (postCount) et sa date. Une categorie qui gagne un post voit donc sa
+        signature changer, et sa page /news/<slug> est relue au cycle
+        suivant meme si elle est deja TRAITEE.
+
+        CN-03/CN-04 : un compteur et une date, rien d'autre - ni le titre de
+        la categorie (qui nommerait la victime), ni le moindre extrait.
+        """
+        return self.empreinte_signature(entry.get("nb_posts"), entry.get("date"))
+
     def parse_detail(self, raw_content, entry):
         """
         Parse UNE page de categorie (ex: /news/cca-bank) et concatene le

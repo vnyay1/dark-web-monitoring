@@ -5,6 +5,30 @@ Toute l'ecriture du registre est isolee ici : le connecteur, lui, ne
 touche jamais a la base. Le pipeline lui passe simplement l'ensemble des
 identifiants deja traites en argument de collect().
 
+PAGE D'ACCUEIL vs PAGES DE DETAIL - ce que le registre memorise, et ce
+qu'il ne memorise pas :
+
+  - La page d'ACCUEIL (listing) est relue INTEGRALEMENT a chaque cycle :
+    elle ne coute qu'une requete et c'est elle qui revele les nouvelles
+    annonces. Elle ne produit jamais d'exposition a elle seule (cf.
+    app/pipeline.py::_traiter_une_entree) : le registre n'a donc pas a la
+    memoriser.
+  - Les pages de DETAIL sont le cout reel (30 s minimum par page, FR-06) :
+    le registre existe pour ne les relire ni deux fois, ni jamais.
+  - PREMIERE collecte : aucune ligne en base, toutes les entrees du listing
+    sont A_TRAITER et servies dans l'ordre de pipeline::_priorite_detail,
+    dans la limite du budget du cycle. Le reliquat n'est pas marque et est
+    repris au cycle suivant : le crawl est reprenable.
+  - Collectes SUIVANTES : une entree TRAITEE / SANS_DETAIL / ECHEC est
+    exclue du budget (identifiants_traites). Deux exceptions, et deux
+    seulement :
+      1. son exposition est a completer - texte ou selecteurs manquants
+         (identifiants_a_relire, cf. app.conservation) ;
+      2. sa SIGNATURE DE LISTING a change : meme identifiant, contenu
+         different (ex. un post ajoute a une categorie everest deja
+         traitee). La comparaison se fait donc au niveau de l'ENTREE, et
+         jamais de la source ni de la categorie entiere.
+
 ORDRE D'ECRITURE, IMPORTANT - une entree n'est marquee TRAITEE qu'APRES
 avoir traverse le matching et la persistance. L'ordre inverse serait un
 bug : CN-05 interdit de stocker le texte enrichi (seule derogation : celui
@@ -68,6 +92,24 @@ def identifiants_a_relire(session, source_id, candidats) -> set:
     return {ligne[0] for ligne in lignes}
 
 
+def signatures_connues(session, source_id) -> dict:
+    """
+    {identifiant: signature_listing} des entrees qui en portent une.
+
+    Passe au connecteur par le pipeline (le connecteur ne lit pas la base) :
+    une entree connue dont la signature differe redevient candidate au
+    budget de pages de detail.
+    """
+    lignes = session.query(
+        EntreeCollectee.identifiant_entree, EntreeCollectee.signature_listing
+    ).filter(
+        EntreeCollectee.source_id == source_id,
+        EntreeCollectee.signature_listing.isnot(None),
+    ).all()
+
+    return {identifiant: signature for identifiant, signature in lignes}
+
+
 def enregistrer_entrees_vues(session, source_id, entrees) -> dict:
     """
     Cree les lignes manquantes et rafraichit date_derniere_vue des autres,
@@ -75,6 +117,12 @@ def enregistrer_entrees_vues(session, source_id, entrees) -> dict:
 
     Une entree d'une source listing-only est creee directement en
     SANS_DETAIL : sans cela le budget la reproposerait a chaque cycle.
+
+    La signature de listing n'est posee QU'A LA CREATION de la ligne. La
+    rafraichir ici effacerait le changement avant qu'il ait servi : une
+    entree vue mais non servie par le budget verrait sa nouvelle signature
+    enregistree, et sa page de detail ne serait jamais relue. Elle est donc
+    (re)ecrite par marquer_traitee(), au moment ou la page a vraiment ete lue.
 
     Retourne {identifiant: EntreeCollectee}.
     """
@@ -106,6 +154,7 @@ def enregistrer_entrees_vues(session, source_id, entrees) -> dict:
                 ),
                 date_premiere_vue=maintenant,
                 date_derniere_vue=maintenant,
+                signature_listing=entree.get("signature_listing"),
             )
             session.add(ligne)
             existantes[identifiant] = ligne
@@ -116,12 +165,18 @@ def enregistrer_entrees_vues(session, source_id, entrees) -> dict:
     return existantes
 
 
-def marquer_traitee(session, source_id, identifiant, a_produit_exposition=False):
+def marquer_traitee(session, source_id, identifiant, a_produit_exposition=False,
+                    signature_listing=None):
     """
     Marque une entree comme analysee. Appele MEME si l'entree n'a matche
     aucun selecteur : sinon les entrees non camerounaises - la grande
     majorite - resteraient eternellement A_TRAITER et le budget tournerait
     en rond sans jamais progresser.
+
+    C'est ici, et nulle part ailleurs, que la signature de listing est
+    rafraichie : l'entree vient d'etre lue en entier, la signature decrit
+    donc bien ce qui a ete analyse. Un None laisse la signature precedente
+    en place (connecteur sans signature, ou relecture de titre).
     """
     ligne = _ligne(session, source_id, identifiant)
     if ligne is None:
@@ -130,6 +185,8 @@ def marquer_traitee(session, source_id, identifiant, a_produit_exposition=False)
     ligne.statut_detail = StatutDetailEntree.TRAITEE
     ligne.date_detail_traite = utc_now()
     ligne.a_produit_exposition = bool(a_produit_exposition)
+    if signature_listing is not None:
+        ligne.signature_listing = signature_listing
 
 
 def marquer_echec_detail(session, source_id, identifiant, max_echecs=3):
