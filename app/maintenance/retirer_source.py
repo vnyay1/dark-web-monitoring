@@ -15,7 +15,10 @@ PORTEE
   - file du crawl incremental (EntreeCollectee) de la source.
 
 CE QUI N'EST JAMAIS SUPPRIME
-  - le journal d'audit : il est append-only par conception (FR-17) ;
+  - le journal d'audit : aucune ligne n'est supprimee par ce retrait
+    (FR-17). Il s'elague seul par ancienneté (file circulaire, cf.
+    app.audit) et la purge de conformite peut l'amputer, mais ce n'est
+    jamais le retrait d'une source qui le decide ;
   - la ligne Source elle-meme. Source.audits porte cascade="all,
     delete-orphan" : supprimer la source par l'ORM effacerait son journal
     d'audit. Elle passe en actif=False et disparait de l'interface.

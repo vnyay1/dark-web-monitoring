@@ -758,6 +758,7 @@ class BaseConnector:
             return
 
         # Import local : la reconnaissance, sans base, n'en depend pas.
+        from app.audit import journaliser
         from app.db import verrou_base
         from app.models import JournalAudit, ResultatAudit
 
@@ -780,10 +781,10 @@ class BaseConnector:
             ))
 
         # Collecte parallele : les autres sources ecrivent peut-etre en ce
-        # moment (cf. app.db.verrou_base).
+        # moment (cf. app.db.verrou_base). journaliser() elague le journal au
+        # passage (file circulaire, cf. app.audit).
         with verrou_base:
-            self.db_session.add_all(lignes)
-            self.db_session.commit()
+            journaliser(self.db_session, lignes)
 
     @staticmethod
     def _libelle_erreur(exception):

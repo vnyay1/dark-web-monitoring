@@ -54,7 +54,9 @@ export default function Conformite() {
     try {
       const resultat = await api.purger(dateLimite, confirmation);
       ajouter(
-        `${resultat.nb_purgees} ${pluriel("exposition supprimée", resultat.nb_purgees, "expositions supprimées")} définitivement.`,
+        `${resultat.nb_purgees} ${pluriel("exposition supprimée", resultat.nb_purgees, "expositions supprimées")} `
+        + `définitivement, ainsi que ${resultat.nb_audit_purgees} `
+        + `${pluriel("entrée du journal d'audit", resultat.nb_audit_purgees, "entrées du journal d'audit")}.`,
       );
       setApercu(null);
       setConfirmation("");
@@ -112,7 +114,8 @@ export default function Conformite() {
         <Banniere ton="error">
           <p>
             Supprime définitivement les expositions antérieures à la date choisie, avec leurs signalements et
-            leurs alertes. Opération <strong>irréversible</strong>, annulable par aucun moyen.
+            leurs alertes, ainsi que les entrées du journal d'audit de la même période. Opération{" "}
+            <strong>irréversible</strong>, annulable par aucun moyen.
           </p>
         </Banniere>
 
@@ -122,7 +125,8 @@ export default function Conformite() {
               <h3 className="etape-titre">Choisir la date limite</h3>
               <div className="field champ-etape">
                 <label className="field-label" htmlFor="c-date">
-                  Supprimer les expositions détectées avant le
+                  Supprimer les expositions détectées et les entrées du journal d'audit
+                  antérieures au
                 </label>
                 <input
                   id="c-date"
@@ -144,7 +148,7 @@ export default function Conformite() {
               <h3 className="etape-titre">Mesurer ce qui serait supprimé</h3>
               <button type="button" className="btn" disabled={!dateLimite || calcul} onClick={previsualiser}>
                 {calcul && <span className="spinner" aria-hidden="true" />}
-                Calculer le nombre d'expositions concernées
+                Calculer ce qui serait supprimé
               </button>
               {apercu && (
                 <div className="espace-haut" role="status">
@@ -157,10 +161,26 @@ export default function Conformite() {
                         {apercu.nb_concernees > 1 ? "seraient supprimées" : "serait supprimée"} définitivement
                         (antérieures au {apercu.date_limite}).
                       </p>
+                      <p>
+                        Le journal d'audit est purgé sur la même date :{" "}
+                        <strong>
+                          {apercu.nb_audit} {pluriel("entrée", apercu.nb_audit)}
+                        </strong>{" "}
+                        {apercu.nb_audit > 1 ? "seraient supprimées" : "serait supprimée"}.
+                      </p>
                     </Banniere>
                   ) : (
                     <Banniere ton="info">
-                      <p>Aucune exposition antérieure à cette date : rien à purger.</p>
+                      <p>
+                        Aucune exposition antérieure à cette date : rien à purger.
+                        {apercu.nb_audit > 0 && (
+                          <>
+                            {" "}Le journal d'audit compte {apercu.nb_audit}{" "}
+                            {pluriel("entrée", apercu.nb_audit)} de cette période, mais la purge
+                            s'amorce sur les expositions.
+                          </>
+                        )}
+                      </p>
                     </Banniere>
                   )}
                 </div>

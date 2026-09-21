@@ -110,6 +110,7 @@ dark-web-monitoring/
 │   │   └── registre.py           # entrées déjà analysées, reprise de cycle
 │   │
 │   ├── supervision.py            # état partagé du scheduler + fil d'événements
+│   ├── audit.py                  # journal d'audit : ecriture unique, plafond FIFO
 │   ├── journalisation.py         # journaux sur fichier tournant (logs/)
 │   ├── securite.py               # politique de mots de passe (FR-24)
 │   ├── conservation.py           # dérogation CN-04/CN-05 : texte intégral masqué
@@ -362,6 +363,15 @@ python3 -m app.maintenance.recuperer_textes --source everest --tous --confirmer 
 - **CN-09 / CN-10** : collecte strictement passive, respect d'un délai minimum de 30 secondes entre deux requêtes sur une même source (`FR-06`).
 - **CN-11** : toute information concernant une organisation camerounaise réelle est communiquée exclusivement à l'encadrement.
 - Les liens pointant directement vers des données divulguées (Mega.nz, endpoints de téléchargement, etc.) ne sont jamais conservés — seule leur existence est enregistrée.
+
+### Journal d'audit (FR-17)
+
+`app/audit.py` est l'unique point d'écriture de la table `journal_audit` (synthèse de chaque appel
+de connecteur, tentatives de connexion, purges). Aucune route ne modifie ni ne supprime une ligne en
+particulier, mais le journal est une **file circulaire de 1 000 entrées** : au-delà, les plus
+anciennes sortent à l'écriture de la suivante. La purge de conformité l'ampute également, sur la
+même date limite que les expositions. Ce qui doit être conservé durablement est donc exporté avant
+(`/compliance/export-complet`).
 
 ### Journaux serveur
 

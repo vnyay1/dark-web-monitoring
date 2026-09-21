@@ -338,10 +338,21 @@ class ExclusionFauxPositif(Base):
 
 
 # ---------------------------------------------------------------------
-# JournalAudit (FR-17 - append-only)
+# JournalAudit (FR-17)
 # ---------------------------------------------------------------------
 
 class JournalAudit(Base):
+    """
+    Trace durable des appels de connecteur et des tentatives de connexion.
+
+    Append-only du point de vue de l'application : aucune route ne modifie
+    ni ne supprime une ligne en particulier. Ce n'est pas pour autant une
+    archive illimitee - app.audit, unique point d'ecriture, en fait une
+    FILE CIRCULAIRE de app.audit.LIMITE_JOURNAL entrees (les plus anciennes
+    sortent a l'ecriture d'une nouvelle), et la purge de conformite
+    l'ampute sur sa date limite. Ce qui doit etre conserve est exporte
+    avant (GET /compliance/export-complet).
+    """
     __tablename__ = "journal_audit"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)

@@ -6,6 +6,7 @@ from flask import jsonify, request, session as session_flask
 from flask_login import login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
 
+from app.audit import journaliser
 from app.db import get_session
 from app.models import JournalAudit, ResultatAudit, User
 from app.web import limitation
@@ -24,7 +25,9 @@ def _journaliser_connexion(reussie: bool, nom: str) -> None:
     """
     session = get_session()
     try:
-        session.add(JournalAudit(
+        # journaliser() elague le journal au passage (file circulaire de
+        # 1000 entrees, cf. app.audit) : c'est l'unique point d'ecriture.
+        journaliser(session, JournalAudit(
             source_id=None,  # nullable : evenement d'authentification, pas de collecte
             resultat=ResultatAudit.SUCCES if reussie else ResultatAudit.ECHEC,
             details=(
@@ -32,7 +35,6 @@ def _journaliser_connexion(reussie: bool, nom: str) -> None:
                 else f"Echec de connexion pour : {nom or '(nom vide)'}"
             ),
         ))
-        session.commit()
     except Exception:
         # Un journal indisponible ne doit pas empecher de se connecter, mais
         # ne doit pas non plus passer inapercu cote serveur.

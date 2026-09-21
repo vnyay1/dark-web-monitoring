@@ -1,4 +1,9 @@
-"""FR-17 - Consultation du journal d'audit (super_admin)."""
+"""
+FR-17 - Consultation du journal d'audit (super_admin).
+
+Lecture seule : le journal n'a qu'un point d'ecriture, app.audit, qui le
+tient a app.audit.LIMITE_JOURNAL entrees (file circulaire).
+"""
 
 from flask import jsonify, request
 from flask_login import login_required
@@ -8,8 +13,10 @@ from app.models import JournalAudit, ResultatAudit, RoleUtilisateur, Source
 from app.web.permissions import role_requis
 
 
-# Le journal grossit d'une ligne par appel de connecteur : une borne est
-# indispensable pour ne pas envoyer des dizaines de milliers de lignes.
+# Borne d'AFFICHAGE, distincte du plafond de la table (app.audit :
+# LIMITE_JOURNAL). Plus basse que lui volontairement : une page qui
+# renverrait le journal entier serait illisible, et le drapeau "tronque"
+# avertit l'analyste que d'autres lignes existent.
 LIMITE_AUDIT = 500
 
 
