@@ -391,9 +391,19 @@ archives chacun. `logs/scheduler.err.log` recueille la sortie d'erreur du schedu
 l'interface, pour qu'un plantage antérieur à l'initialisation du journal reste diagnosticable.
 Répertoire modifiable par `SENTINEL_LOG_DIR` (facultatif, contrairement aux variables de `.env`).
 
-Le répertoire `logs/` est ignoré par git et ne doit jamais sortir de la VM de collecte. Il est
-**sans rapport** avec le bouton « Vider l'affichage » de la page Collecte, qui n'efface que l'écran
-du navigateur : le fil d'activité, lui, vit en base (`EvenementCollecte`, rétention 7 jours).
+Le répertoire `logs/` est ignoré par git et ne doit jamais sortir de la VM de collecte.
+
+Trois journaux distincts coexistent, à ne pas confondre :
+
+| Journal | Où | Vidé par |
+|---|---|---|
+| Fil d'activité de la page Collecte | table `EvenementCollecte` | rétention 7 jours, **et** le bouton « Vider les logs » (admin) |
+| Journal d'audit (FR-17) | table `journal_audit` | file circulaire de 1 000 entrées, et la purge de conformité |
+| Journaux serveur | `logs/*.log` | rotation à 5 Mo × 5 uniquement |
+
+Le bouton « Vider les logs » de la page Collecte supprime le premier **en base** : il disparaît pour
+tous les analystes, y compris après rechargement de la page. Il ne touche ni au journal d'audit ni
+aux fichiers `logs/*.log`.
 
 ---
 

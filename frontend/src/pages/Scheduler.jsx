@@ -93,6 +93,7 @@ export default function Scheduler() {
   const [message, setMessage] = useState(null);
   const [action, setAction] = useState(null);
   const [confirmerArret, setConfirmerArret] = useState(false);
+  const [confirmerVidage, setConfirmerVidage] = useState(false);
   const [maintenant, setMaintenant] = useState(Date.now());
   const [suitDirect, setSuitDirect] = useState(true);
   const [nonVues, setNonVues] = useState(0);
@@ -194,6 +195,24 @@ export default function Scheduler() {
     } finally {
       setAction(null);
     }
+  }
+
+  async function viderLogs() {
+    await executer("vider", async () => {
+      const reponse = await api.schedulerViderEvenements();
+
+      // Le curseur DOIT repartir de zero : EvenementCollecte.id est un
+      // entier auto-incremente sans AUTOINCREMENT, donc apres un vidage
+      // SQLite reattribue les ids a partir de 1. Un curseur reste a 500 ne
+      // verrait plus jamais aucun evenement, et la console resterait
+      // definitivement vide. Remis a null, le prochain sondage repasse par
+      // schedulerHistorique().
+      curseur.current = null;
+      setLignes([]);
+      setHistoriqueTronque(false);
+      setNonVues(0);
+      return reponse;
+    });
   }
 
   const actif = etat?.actif;
@@ -372,17 +391,18 @@ export default function Scheduler() {
                   : "Revenir au direct"}
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setLignes([]);
-                setHistoriqueTronque(false);
-              }}
-              aria-describedby="aide-vider"
-            >
-              Vider l'affichage
-            </button>
+            {peutPiloter && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setConfirmerVidage(true)}
+                disabled={action === "vider"}
+                aria-describedby="aide-vider"
+              >
+                {action === "vider" && <span className="spinner" aria-hidden="true" />}
+                Vider les logs
+              </button>
+            )}
           </div>
         </div>
 
@@ -424,9 +444,12 @@ export default function Scheduler() {
           )}
         </div>
         <p className="texte-aide espace-haut" id="aide-vider">
-          « Vider l'affichage » n'efface que l'écran : le fil reste enregistré et réapparaît au
-          prochain chargement de la page. Le journal du serveur (<code>logs/scheduler.log</code>)
-          n'est jamais concerné.
+          {peutPiloter
+            ? "« Vider les logs » supprime définitivement le fil d'activité enregistré : il "
+              + "disparaît pour tous les analystes, y compris après rechargement de la page. Le "
+              + "journal d'audit et les journaux serveur (logs/*.log) ne sont pas concernés."
+            : "Le fil d'activité est enregistré : il réapparaît au prochain chargement de la page. "
+              + "Seul un administrateur peut le vider."}
         </p>
       </section>
 
@@ -445,6 +468,26 @@ export default function Scheduler() {
           <p>
             Plus aucune collecte n'aura lieu tant qu'il ne sera pas redémarré.
             {enCollecte && <strong> La collecte en cours sera interrompue.</strong>}
+          </p>
+        </Confirmation>
+      )}
+
+      {confirmerVidage && (
+        <Confirmation
+          titre="Vider les logs du pipeline ?"
+          libelleConfirmer="Vider"
+          libelleEnCours="Suppression…"
+          enCours={action === "vider"}
+          onAnnuler={() => setConfirmerVidage(false)}
+          onConfirmer={async () => {
+            await viderLogs();
+            setConfirmerVidage(false);
+          }}
+        >
+          <p>
+            Le fil d'activité enregistré sera supprimé <strong>pour tous les analystes</strong>, et
+            ne réapparaîtra pas au rechargement de la page. Le journal d'audit et les journaux
+            serveur ne sont pas concernés.
           </p>
         </Confirmation>
       )}

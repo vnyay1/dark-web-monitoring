@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from flask import jsonify, request
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app import supervision
 from app.models import RoleUtilisateur
@@ -104,6 +104,32 @@ def enregistrer(api_bp):
         return jsonify({
             "evenements": lignes,
             "dernier_id": lignes[-1]["id"] if lignes else depuis,
+        })
+
+    @api_bp.route("/scheduler/evenements", methods=["DELETE"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def vider_evenements_scheduler():
+        """
+        Vide le fil d'activite affiche par la console de supervision.
+
+        Reserve a l'administrateur, comme les autres actions de pilotage de
+        cette page : le fil vit en base, donc le vider le vide pour tous les
+        analystes. Le journal d'audit et les fichiers logs/*.log ne sont pas
+        concernes.
+        """
+        nb = supervision.vider_evenements()
+        logger.info(
+            f"[scheduler] Fil d'activite vide par "
+            f"'{current_user.nom_utilisateur}' : {nb} evenement(s)."
+        )
+        return jsonify({
+            "succes": True,
+            "nb_supprimes": nb,
+            "message": (
+                f"{nb} ligne(s) supprimee(s) du fil d'activite." if nb
+                else "Le fil d'activite etait deja vide."
+            ),
         })
 
     @api_bp.route("/scheduler/demarrer", methods=["POST"])

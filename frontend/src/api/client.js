@@ -112,6 +112,9 @@ export const api = {
   schedulerEvenements: (depuis) =>
     requete(`/scheduler/evenements${depuis === undefined ? "" : `?depuis=${depuis}`}`),
   schedulerHistorique: () => requete("/scheduler/evenements?historique=cycle"),
+  // Supprime le fil en base : il est partage, donc vide pour tout le monde.
+  schedulerViderEvenements: () =>
+    requete("/scheduler/evenements", { method: "DELETE" }),
   schedulerVerifierIp: () => requete("/scheduler/verifier-ip", corpsJson()),
   schedulerDemarrer: () => requete("/scheduler/demarrer", corpsJson()),
   schedulerArreter: () => requete("/scheduler/arreter", corpsJson()),

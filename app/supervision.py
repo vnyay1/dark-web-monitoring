@@ -525,6 +525,39 @@ def purger_evenements(session=None, jours: int = RETENTION_EVENEMENTS_JOURS) -> 
             session.close()
 
 
+def vider_evenements(session=None) -> int:
+    """
+    Vide le fil d'activite, a la demande d'un administrateur (bouton
+    « Vider les logs » de la page Collecte). A distinguer de
+    purger_evenements(), qui est la retention automatique de fin de cycle.
+
+    Le fil est un etat PARTAGE : le vider le vide pour tous les analystes,
+    et pas seulement pour l'ecran de celui qui clique.
+
+    Ne touche ni au journal d'audit (FR-17, trace durable des collectes et
+    des connexions) ni aux fichiers logs/*.log (cf. app.journalisation) :
+    ce sont trois choses distinctes, et seule celle-ci est affichee dans la
+    console de supervision.
+
+    ATTENTION cote client : EvenementCollecte.id est un entier
+    auto-incremente sans le mot-cle SQLite AUTOINCREMENT. Une fois la table
+    videe, les nouveaux evenements repartent de l'id 1 - un curseur de
+    lecture conserve par l'interface ne verrait donc plus jamais rien. Il
+    doit etre remis a zero apres cet appel (cf. pages/Scheduler.jsx).
+    """
+    propre = session is None
+    session = session or get_session()
+
+    try:
+        supprimes = session.query(EvenementCollecte).delete(synchronize_session=False)
+        session.commit()
+        logger.info(f"[supervision] Fil d'activite vide : {supprimes} evenement(s).")
+        return supprimes
+    finally:
+        if propre:
+            session.close()
+
+
 # ---------------------------------------------------------------------
 # Lecture pour l'interface
 # ---------------------------------------------------------------------
