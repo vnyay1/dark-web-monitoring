@@ -167,7 +167,7 @@ dark-web-monitoring/
 │   ├── src/
 │   │   ├── api/                   # client HTTP, session, hooks
 │   │   ├── components/            # mise en page, briques, graphiques
-│   │   ├── pages/                 # 12 écrans
+│   │   ├── pages/                 # 13 écrans
 │   │   └── theme/                 # jetons de design et styles de base
 │   └── dist/                      # build versionné (aucun Node requis sur la VM)
 │
@@ -212,10 +212,20 @@ Quatre rôles, avec héritage hiérarchique des permissions :
 |---|---|
 | **user** | Consultation (dashboard, expositions, alertes) |
 | **supervisor** | + modification du statut d'une exposition, génération de rapports/export |
-| **admin** | + gestion des comptes (hors super-admin), configuration du catalogue de sélecteurs, modification de rôle (hors super-admin) |
+| **admin** | + gestion des comptes (hors super-admin), configuration du catalogue de sélecteurs, modification de rôle (hors super-admin), consultation des **Archives** |
 | **super-admin** | + gestion des comptes admin, journal d'audit complet, seuils d'alerte critiques, export/purge de conformité, historique des changements de rôle |
 
 Un utilisateur ne peut jamais se désactiver lui-même, ni désactiver/modifier un compte de rang égal ou supérieur au sien (sauf super-admin, non restreint).
+
+### Archivage des expositions
+
+Une exposition qualifiée **Faux positif** ou **Clôturée** quitte la page Expositions pour la page
+**Archives**, réservée à `admin` et `super-admin`. C'est un simple filtre de requête : rien n'est
+supprimé ni déplacé, les signalements, alertes et textes conservés restent intacts, et remettre
+l'exposition dans un statut actif la ramène immédiatement dans Expositions. Le tableau de bord, le
+rapport mensuel, les exports JSON/CSV et l'export de conformité continuent de porter sur
+l'historique **complet** : les statistiques et la traçabilité ne doivent pas dépendre de ce que
+l'analyste a rangé.
 
 ---
 

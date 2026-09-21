@@ -24,6 +24,7 @@ import Layout from "./components/Layout";
 import { Chargement } from "./components/communs";
 
 const Alertes = lazy(() => import("./pages/Alertes"));
+const Archives = lazy(() => import("./pages/Archives"));
 const Audit = lazy(() => import("./pages/Audit"));
 const Comptes = lazy(() => import("./pages/Comptes"));
 const Configuration = lazy(() => import("./pages/Configuration"));
@@ -82,6 +83,14 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="expositions" element={<Expositions />} />
         <Route path="expositions/:id" element={<DetailExposition />} />
+        <Route
+          path="archives"
+          element={
+            <RouteProtegee role="admin">
+              <Archives />
+            </RouteProtegee>
+          }
+        />
         <Route path="alertes" element={<Alertes />} />
         <Route path="scheduler" element={<Scheduler />} />
 

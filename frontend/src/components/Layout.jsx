@@ -24,6 +24,7 @@ import { InterrupteurTheme } from "../theme/theme";
 import { Banniere, Chargement, fuseauLocal, LIBELLE_ROLE } from "./communs";
 import {
   IconeAlertes,
+  IconeArchives,
   IconeAudit,
   IconeCollecte,
   IconeComptes,
@@ -47,6 +48,9 @@ const GROUPES = [
     entrees: [
       { chemin: "/", libelle: "Tableau de bord", icone: IconeTableauDeBord, exact: true },
       { chemin: "/expositions", libelle: "Expositions", icone: IconeExpositions },
+      // Faux positifs et dossiers clotures : consultation reservee, ce ne
+      // sont plus des indicateurs a traiter (cf. pages/Archives.jsx).
+      { chemin: "/archives", libelle: "Archives", icone: IconeArchives, role: "admin" },
       { chemin: "/alertes", libelle: "Alertes", icone: IconeAlertes, badge: true },
     ],
   },

@@ -1,4 +1,19 @@
-"""FR-20/FR-21 - Expositions : liste filtrable, detail, changement de statut."""
+"""
+FR-20/FR-21 - Expositions : liste filtrable, detail, changement de statut.
+
+ARCHIVAGE - une exposition qualifiee "faux positif" ou "cloturee" quitte la
+liste de travail pour la page Archives (admin et super_admin). C'est un
+simple FILTRE DE REQUETE, pas un deplacement de donnees : rien n'est
+duplique, aucune relation existante n'est touchee (SourceReference, Alerte),
+et remettre l'exposition dans un statut actif suffit a la faire reapparaitre
+dans Expositions - il n'y a pas d'etat d'archivage a maintenir en coherence
+avec le statut.
+
+Le filtre s'arrete a CES DEUX ROUTES. Le tableau de bord, le rapport
+mensuel, les exports et l'export de conformite continuent de voir toutes les
+expositions : les statistiques et la tracabilite reglementaire doivent porter
+sur l'historique complet, pas sur ce que l'analyste a range.
+"""
 
 from datetime import timedelta
 
@@ -17,6 +32,10 @@ from app.web.permissions import role_requis
 
 # Nombre maximum d'expositions renvoyees en une fois.
 LIMITE_PAR_PAGE = 200
+
+# Statuts terminaux : l'analyste a tranche, l'exposition n'a plus a encombrer
+# la liste de travail. Cf. la note ARCHIVAGE en tete de module.
+STATUTS_ARCHIVES = (StatutExposition.FALSE_POSITIVE, StatutExposition.CLOSED)
 
 
 def seuil_du_niveau(niveau: NiveauCriticite) -> int:
@@ -118,6 +137,9 @@ def serialiser(exposition, detaille: bool = False) -> dict:
         "criticite": exposition.criticite,
         "niveau_criticite": exposition.niveau_criticite.value,
         "statut": exposition.statut.value,
+        # Permet a l'interface de retirer la ligne de la liste ouverte des
+        # qu'un changement de statut la fait basculer, sans rechargement.
+        "archivee": exposition.statut in STATUTS_ARCHIVES,
         "date_premiere_detection": exposition.date_premiere_detection.isoformat(),
         "date_derniere_detection": exposition.date_derniere_detection.isoformat(),
         "date_publication_source": (
@@ -137,73 +159,121 @@ def serialiser(exposition, detaille: bool = False) -> dict:
     return donnees
 
 
+def _appliquer_filtres(query, args):
+    """
+    Filtres communs a la liste de travail et aux archives.
+
+    Un filtre dont la valeur est invalide est ignore plutot que rejete :
+    l'interface ne doit pas casser sur un parametre d'URL bricole a la main.
+    """
+    categorie = args.get("categorie", "").strip()
+    if categorie:
+        query = query.filter(Exposition.categories.any(Categorie.id == categorie))
+
+    statut = args.get("statut", "").strip()
+    if statut:
+        try:
+            query = query.filter(Exposition.statut == StatutExposition(statut))
+        except ValueError:
+            pass
+
+    niveau_min = args.get("niveau_min", "").strip()
+    if niveau_min:
+        try:
+            query = query.filter(
+                Exposition.criticite >= seuil_du_niveau(NiveauCriticite(niveau_min))
+            )
+        except ValueError:
+            pass
+
+    periode = args.get("periode", "").strip()
+    # isdigit() seul acceptait une chaine de 300 chiffres, que timedelta
+    # refuse par un OverflowError -> 500. 3650 jours (10 ans) depassent
+    # largement l'historique que le systeme peut detenir.
+    if periode.isdigit() and 1 <= len(periode) <= 4:
+        jours = min(int(periode), 3650)
+        query = query.filter(
+            Exposition.date_premiere_detection >= utc_now() - timedelta(days=jours)
+        )
+
+    recherche = args.get("q", "").strip()
+    if recherche:
+        query = query.filter(Exposition.nom_entite.ilike(f"%{recherche}%"))
+
+    return query
+
+
+def _reponse_liste(session, query, statuts_proposes) -> dict:
+    """
+    Corps de reponse commun aux deux listes.
+
+    statuts_proposes borne le FILTRE de statut de l'interface a ce que la
+    route peut effectivement renvoyer : proposer "Cloturee" dans le filtre
+    d'Expositions ne ramenerait jamais rien.
+
+    statuts_modifiables, lui, reste COMPLET : c'est la liste du selecteur de
+    changement de statut, et c'est precisement depuis Expositions qu'on
+    classe une exposition en faux positif ou qu'on la cloture.
+    """
+    total = query.count()
+    lignes = (
+        query.order_by(Exposition.date_premiere_detection.desc())
+        .limit(LIMITE_PAR_PAGE)
+        .all()
+    )
+
+    return {
+        "expositions": [serialiser(e) for e in lignes],
+        "total": total,
+        "tronque": total > len(lignes),
+        "referentiels": {
+            "categories": [
+                {"id": c.id, "nom": c.nom}
+                for c in session.query(Categorie).order_by(Categorie.nom)
+            ],
+            "statuts": [s.value for s in statuts_proposes],
+            "statuts_modifiables": [s.value for s in StatutExposition],
+            "niveaux": [n.value for n in NiveauCriticite],
+        },
+    }
+
+
 def enregistrer(api_bp):
 
     @api_bp.route("/expositions", methods=["GET"])
     @login_required
     def liste_expositions():
+        """Liste de travail : tout sauf les expositions archivees."""
         session = get_session()
         try:
-            query = session.query(Exposition)
-
-            # Un filtre dont la valeur est invalide est ignore plutot que
-            # rejete : l'interface ne doit pas casser sur un parametre
-            # d'URL bricole a la main.
-            categorie = request.args.get("categorie", "").strip()
-            if categorie:
-                query = query.filter(Exposition.categories.any(Categorie.id == categorie))
-
-            statut = request.args.get("statut", "").strip()
-            if statut:
-                try:
-                    query = query.filter(Exposition.statut == StatutExposition(statut))
-                except ValueError:
-                    pass
-
-            niveau_min = request.args.get("niveau_min", "").strip()
-            if niveau_min:
-                try:
-                    query = query.filter(
-                        Exposition.criticite >= seuil_du_niveau(NiveauCriticite(niveau_min))
-                    )
-                except ValueError:
-                    pass
-
-            periode = request.args.get("periode", "").strip()
-            # isdigit() seul acceptait une chaine de 300 chiffres, que
-            # timedelta refuse par un OverflowError -> 500. 3650 jours (10
-            # ans) depassent largement l'historique que le systeme peut
-            # detenir.
-            if periode.isdigit() and 1 <= len(periode) <= 4:
-                jours = min(int(periode), 3650)
-                query = query.filter(
-                    Exposition.date_premiere_detection >= utc_now() - timedelta(days=jours)
-                )
-
-            recherche = request.args.get("q", "").strip()
-            if recherche:
-                query = query.filter(Exposition.nom_entite.ilike(f"%{recherche}%"))
-
-            total = query.count()
-            lignes = (
-                query.order_by(Exposition.date_premiere_detection.desc())
-                .limit(LIMITE_PAR_PAGE)
-                .all()
+            query = _appliquer_filtres(session.query(Exposition), request.args).filter(
+                Exposition.statut.notin_(STATUTS_ARCHIVES)
             )
+            return jsonify(_reponse_liste(
+                session, query,
+                [s for s in StatutExposition if s not in STATUTS_ARCHIVES],
+            ))
+        finally:
+            session.close()
 
-            return jsonify({
-                "expositions": [serialiser(e) for e in lignes],
-                "total": total,
-                "tronque": total > len(lignes),
-                "referentiels": {
-                    "categories": [
-                        {"id": c.id, "nom": c.nom}
-                        for c in session.query(Categorie).order_by(Categorie.nom)
-                    ],
-                    "statuts": [s.value for s in StatutExposition],
-                    "niveaux": [n.value for n in NiveauCriticite],
-                },
-            })
+    @api_bp.route("/expositions/archives", methods=["GET"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def liste_archives():
+        """
+        Expositions qualifiees faux positif ou cloturees.
+
+        Reservee a admin et super_admin : ce sont des dossiers tranches,
+        conserves pour l'historique et la relecture, pas de la veille
+        quotidienne. Un supervisor peut toujours changer un statut - il ne
+        voit simplement plus ce qu'il a range.
+        """
+        session = get_session()
+        try:
+            query = _appliquer_filtres(session.query(Exposition), request.args).filter(
+                Exposition.statut.in_(STATUTS_ARCHIVES)
+            )
+            return jsonify(_reponse_liste(session, query, STATUTS_ARCHIVES))
         finally:
             session.close()
 

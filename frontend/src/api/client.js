@@ -94,6 +94,8 @@ export const api = {
 
   // --- Expositions ---
   expositions: (filtres) => requete(`/expositions${parametres(filtres)}`),
+  // Expositions archivees (faux positif, cloturees) - admin et super_admin.
+  expositionsArchivees: (filtres) => requete(`/expositions/archives${parametres(filtres)}`),
   exposition: (id) => requete(`/expositions/${id}`),
   texteSignalement: (id, signalementId) =>
     requete(`/expositions/${id}/signalements/${signalementId}/texte`),

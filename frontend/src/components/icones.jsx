@@ -57,6 +57,15 @@ export const IconeExpositions = fabriquer("IconeExpositions", (
   </>
 ));
 
+// Lucide "archive" : le carton d'archives, couvercle puis corps.
+export const IconeArchives = fabriquer("IconeArchives", (
+  <>
+    <rect width="20" height="5" x="2" y="3" rx="1" />
+    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+    <path d="M10 12h4" />
+  </>
+));
+
 export const IconeAlertes = fabriquer("IconeAlertes", (
   <>
     <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
