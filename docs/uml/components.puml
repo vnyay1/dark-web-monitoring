@@ -10,9 +10,9 @@ package "VM isolee (Kali)" {
     component "Supervision\n(verrou d'instance unique,\nevenements)" as Supervision
 
     package "Collecte (app/connectors)" {
-      component "BaseConnector\n(FR-02 : listing, pagination,\npages de detail, delai 30-45 s)" as BaseConnector
+      component "BaseConnector\n(FR-02 : listing, pagination,\npages de detail par priorite,\ndelai 30-45 s par source)" as BaseConnector
       component "Connecteurs\n(payload, orion_leaks, blackwater,\ndata_exposure_logs, safepay,\ncmd_organization, everest)" as Connecteurs
-      component "Registre du crawl\n(app/crawl)" as Registre
+      component "Registre du crawl\n(app/crawl : entrees traitees,\nsignature de listing)" as Registre
     }
 
     component "Module Tor\n(FR-01 : proxy SOCKS, stem,\nrenouvellement de circuit)" as Tor
@@ -26,6 +26,7 @@ package "VM isolee (Kali)" {
     }
 
     component "Alertes\n(FR-25/26 : interface, email,\nSMS, WhatsApp)" as Alertes
+    component "Conservation\n(derogation CN-04/CN-05 :\nmasquage du texte conserve)" as Conservation
   }
 
   package "Processus web (run.py)" {
@@ -36,12 +37,13 @@ package "VM isolee (Kali)" {
   }
 
   database "SQLite\n(schema gere par Alembic)" as DB
+  folder "logs/*.log\n(journaux tournants,\napp/journalisation.py)" as Logs
 }
 
 actor "Analyste CIRT\n(navigateur)" as Analyste
 cloud "Sources .onion" as Onion
 
-Scheduler --> Pipeline : cycle
+Scheduler --> Pipeline : cycle\n(N sources en parallele, analyse et\necritures sous verrou unique)
 Scheduler --> Supervision
 Connecteurs ..|> BaseConnector
 Pipeline --> Connecteurs : collect()
@@ -54,6 +56,8 @@ Engine --> Exclusion
 Exclusion --> Criticite
 Criticite --> Dedup
 Dedup --> DB : Exposition,\nSourceReference
+Dedup --> Conservation : texte de l'annonce\net selecteurs trouves
+Conservation --> DB : SourceReference.texte_brut\n(superviseur+ uniquement)
 Pipeline --> Alertes
 Pipeline --> Supervision : evenements
 Registre --> DB
@@ -67,5 +71,7 @@ Downloads --> PDF
 API --> DB
 Downloads --> DB
 API ..> Supervision : demandes (collecte immediate,\nverification IP) via la base
+Scheduler ..> Logs : scheduler.log, pipeline.log
+API ..> Logs : web.log
 
 @enduml

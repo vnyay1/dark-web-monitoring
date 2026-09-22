@@ -90,6 +90,7 @@ package "Collecte" {
     +date_detail_traite : datetime
     +nb_echecs_detail : int
     +a_produit_exposition : bool
+    +signature_listing : str
   }
 
   class JournalAudit <<append-only>> {
@@ -111,6 +112,7 @@ package "Collecte" {
     +ip_sortie : str
     +collecte_immediate_demandee : bool
     +verification_ip_demandee : bool
+    +version_code : str
   }
 
   class EvenementCollecte {
@@ -188,9 +190,31 @@ note right of Categorie
 end note
 
 note bottom of Exposition
-  criticite = nombre de selecteurs
-  DISTINCTS trouves (FR-10) ;
+  criticite = score des selecteurs
+  DISTINCTS trouves, chacun compte
+  pour son poids (FR-10) ;
   ne diminue jamais.
+  Faux positif / Cloturee : l'exposition
+  passe en Archives (filtre, rien n'est
+  supprime ni deplace).
+end note
+
+note right of EntreeCollectee
+  Registre du crawl incremental, jamais
+  un index de victimes (CN-03/CN-04).
+  signature_listing : sha256 du VOLUME
+  annonce par le listing (nb de posts,
+  date) - une entree dont elle change
+  voit sa page de detail relue.
+end note
+
+note bottom of SourceReference
+  texte_brut / selecteurs_trouves :
+  derogation CN-04/CN-05 validee le
+  2026-09-18, texte masque de la seule
+  annonce ayant produit l'exposition,
+  lisible par superviseur+ uniquement
+  (app/conservation.py).
 end note
 
 @enduml

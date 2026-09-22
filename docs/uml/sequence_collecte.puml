@@ -16,9 +16,15 @@ database "Base SQLite" as DB
 Scheduler -> Supervision : marquer_debut_collecte()
 Supervision -> DB : EtatScheduler (COLLECTE_EN_COURS)
 
-loop pour chaque connecteur actif
-  Pipeline -> DB : entrees deja traitees (registre),\nperiode et plafond de pages (configuration)
-  Pipeline -> Connecteur : collect(entrees_connues, budget, profondeur, date_limite)
+loop pour chaque connecteur actif (N en parallele, sources_en_parallele)
+  Pipeline -> DB : entrees traitees, signatures de listing,\nexpositions a completer (registre) ;\nperiode et plafond de pages (configuration)
+  note right of Pipeline
+    Seule la phase RESEAU se chevauche.
+    Preparation, analyse et ecritures
+    passent une source a la fois
+    (app.db.verrou_base).
+  end note
+  Pipeline -> Connecteur : collect(entrees_connues, budget_details,\nprofondeur_max, date_limite, priorite,\nsignatures_connues, entrees_a_completer)
 
   group Listing (pagination bornee)
     loop page par page
@@ -34,7 +40,15 @@ loop pour chaque connecteur actif
     end
   end
 
-  group Detail (entrees nouvelles, dans le budget)
+  group Detail (dans le budget, servi par priorite)
+    note right of Connecteur
+      Ordre : exposition a completer (3),
+      titre citant un selecteur (2),
+      signature de listing changee ou
+      a amorcer (1), ordre du listing (0).
+      Ecartee sans cout : entree que le
+      LISTING date deja hors periode.
+    end note
     Connecteur -> Tor : page de detail (url_detail() seul juge, CN-04)
     Tor --> Connecteur : texte concatene a l'entree
   end
@@ -44,16 +58,20 @@ loop pour chaque connecteur actif
 
   loop pour chaque entree
     Pipeline -> Pipeline : fenetre temporelle\n(date ou date plafond)
-    Pipeline -> Analyse : texte, catalogue de selecteurs
-    Analyse --> Pipeline : criticite + categories
-    alt criticite suffisante
-      Pipeline -> Dedup : enregistrer_exposition()
-      Dedup -> DB : Exposition / SourceReference\n(union des categories, criticite monotone)
-      Pipeline -> Alertes : declencher_alertes()
-      Alertes -> DB : Alerte (canaux selon niveau x priorite)
-      Pipeline -> Supervision : NOUVELLE_EXPOSITION
+    alt page de detail attendue et non lue
+      Pipeline -> DB : entree laissee A_TRAITER\n(le listing seul ne cree pas d'exposition)
+    else texte complet disponible
+      Pipeline -> Analyse : texte, catalogue de selecteurs fige
+      Analyse --> Pipeline : criticite ponderee + categories\n+ selecteurs trouves
+      alt criticite suffisante
+        Pipeline -> Dedup : enregistrer_exposition()
+        Dedup -> DB : Exposition / SourceReference\n(union des categories, criticite monotone,\ntexte masque : derogation CN-04/CN-05)
+        Pipeline -> Alertes : declencher_alertes()
+        Alertes -> DB : Alerte (canaux selon niveau x priorite)
+        Pipeline -> Supervision : NOUVELLE_EXPOSITION
+      end
+      Pipeline -> DB : EntreeCollectee marquee traitee\n(+ signature de listing du passage)
     end
-    Pipeline -> DB : EntreeCollectee marquee traitee
   end
   Pipeline -> Supervision : FIN_SOURCE
 end

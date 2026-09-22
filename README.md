@@ -50,8 +50,8 @@ chose à la demande (voir « Collecte manuelle »).
 │  Scheduler (APScheduler, 1×/jour à heure aléatoire)          │
 │         │  verrou d'instance unique en base                  │
 │         ▼                                                    │
-│  Connecteurs (8 sources réelles) ──► app/tor (Tor centralisé)│
-│         │  crawl incrémental : listing puis pages de détail  │
+│  Connecteurs (7 sources réelles) ──► app/tor (Tor centralisé)│
+│         │  sources en parallèle, listing puis pages de détail│
 │         ▼  texte en mémoire (CN-05, sauf dérogation)         │
 │  Fenêtre temporelle ─► Matching ─► Filtrage faux positifs    │
 │         │            ─► Criticité ─► Catégories              │
@@ -107,13 +107,15 @@ dark-web-monitoring/
 │   │   └── __init__.py          # get_via_tor(), renouvellement de circuit
 │   │
 │   ├── crawl/                   # registre du crawl incrémental
-│   │   └── registre.py           # entrées déjà analysées, reprise de cycle
+│   │   └── registre.py           # entrées déjà analysées, signature de listing,
+│   │                              # reprise de cycle
 │   │
 │   ├── supervision.py            # état partagé du scheduler + fil d'événements
 │   ├── audit.py                  # journal d'audit : ecriture unique, plafond FIFO
 │   ├── journalisation.py         # journaux sur fichier tournant (logs/)
 │   ├── securite.py               # politique de mots de passe (FR-24)
 │   ├── conservation.py           # dérogation CN-04/CN-05 : texte intégral masqué
+│   ├── version.py                # commit exécuté vs commit installé (bandeau admin)
 │   │
 │   ├── connectors/              # connecteurs de sources (FR-02, FR-03)
 │   │   ├── base_connector.py     # interface commune, rate limiting, audit
@@ -153,13 +155,14 @@ dark-web-monitoring/
 │   │
 │   └── web/                      # couche serveur
 │       ├── auth.py                # socle Flask-Login (FR-24)
+│       ├── limitation.py          # frein aux tentatives de connexion (FR-24)
 │       ├── permissions.py         # contrôle de privilèges (4 rôles)
 │       ├── reports.py             # téléchargements PDF / JSON / CSV
 │       ├── compliance.py          # export de conformité (super-admin)
 │       ├── api/                   # API JSON consommée par l'interface
 │       │   ├── auth.py  dashboard.py  expositions.py  alerts.py
 │       │   ├── scheduler.py  settings.py  users.py  audit.py
-│       │   └── compliance.py  reports.py
+│       │   └── compliance.py  reports.py  systeme.py
 │       └── templates/
 │           └── rapport_mensuel.html   # document d'impression WeasyPrint
 │
@@ -204,6 +207,40 @@ python3 -m app.maintenance.retirer_source <nom> --confirmer          # exécutio
 
 ---
 
+## Détection (FR-08 à FR-13)
+
+Le texte d'une annonce est confronté au **catalogue de sélecteurs** — noms d'entités et mots-clés
+camerounais, chacun rattaché à une catégorie et administrable depuis l'interface
+(`python3 -m app.matching.seed_selecteurs` pour le peuplement initial).
+
+**Trois niveaux de correspondance** : exact, insensible à la casse, et approché (RapidFuzz, pour les
+fautes de frappe). Les sélecteurs de 6 caractères ou moins — sigles institutionnels type « ART »,
+« MINFI » — échappent aux deux derniers et exigent une frontière de mot stricte : sinon le mot
+anglais « art » ou une référence juridique « Art. » suffisait à déclencher une exposition.
+
+**L'annonce est analysée en entier.** Les niveaux exact et insensible à la casse parcourent tout le
+texte ; seul le niveau approché, le plus coûteux, est borné aux 20 000 premiers caractères. La
+coupure à 20 000 caractères qui s'appliquait auparavant à toute l'analyse masquait les sélecteurs
+situés au-delà — sur une annonce de 45 000 caractères, la plupart.
+
+**Filtrage des faux positifs (FR-11)** : un nom de lieu générique noyé dans une énumération de pays
+(« USA, France, Cameroun ») ne vaut pas signalement. Les pays de cette règle sont cherchés en **mots
+entiers** : en simple sous-chaîne, « uk » se trouvait dans « Ukraine », « chad » dans « Chadwick »,
+et deux de ces faux pays suffisaient à rejeter un « Cameroun » légitime. Une correspondance approchée
+dont le segment trouvé est **lui-même** un sélecteur du catalogue est également écartée : « Cameroon »
+ne doit pas compter en plus comme une faute de frappe de « Cameroun ».
+
+**Criticité (FR-10)** : score d'une annonce = somme des **poids** des sélecteurs **distincts**
+qu'elle contient (poids 1 par défaut ; l'administrateur élève celui d'un sélecteur prioritaire).
+Quatre niveaux, dont les seuils sont réglables dans *Configuration*. Une annonce qui répète un même
+nom ne doit pas paraître aussi grave qu'une annonce qui en cite trois différents. Sur une exposition
+déjà connue, la criticité ne **diminue** jamais.
+
+**Catégories (FR-13)** : celles des sélecteurs trouvés. **Déduplication (FR-12)** : une même victime
+vue sur deux sources donne une seule exposition, portant un signalement par source.
+
+---
+
 ## Gestion des privilèges
 
 Quatre rôles, avec héritage hiérarchique des permissions :
@@ -241,7 +278,7 @@ l'analyste a rangé.
 ### Mise en place
 
 ```bash
-git clone <url-du-depot-prive>
+git clone https://github.com/vnyay1/dark-web-monitoring
 cd dark-web-monitoring
 
 python3 -m venv venv
@@ -334,6 +371,52 @@ les requêtes réseau se chevauchent. Chaque source garde son délai d'au moins 
 entre deux requêtes (FR-06), et l'analyse puis l'enregistrement en base se font
 une source à la fois : deux sources qui publient la même victime n'en font qu'une
 exposition.
+
+### Ce qu'un cycle lit réellement (crawl incrémental)
+
+Une source n'est jamais relue en entier : chaque cycle reprend là où le précédent s'est
+arrêté (registre `EntreeCollectee`, `app/crawl/registre.py`).
+
+**Deux phases.** D'abord le *listing* (page d'accueil et pagination), borné par la période
+d'analyse, par le plafond de pages et par les pages ne contenant que des entrées déjà connues.
+Ensuite les *pages de détail*, dans la limite d'un budget par cycle — chacune coûte au moins
+30 s (FR-06) plus la latence Tor. Les entrées que le budget n'a pas servies restent en file et
+passent au cycle suivant.
+
+**Le listing seul ne crée jamais d'exposition.** Une annonce qui possède une page de détail
+attend sa lecture. Auparavant son seul titre créait une exposition à criticité partielle et une
+première alerte, puis la page de détail relevait la criticité et en déclenchait une **seconde**
+pour le même incident. Seule exception : une page de détail définitivement inaccessible (trois
+échecs), où l'analyse se replie sur le titre — sinon une annonce camerounaise sur une page cassée
+ne serait jamais signalée. Les sources sans page de détail (payload, cmd_organization,
+orion_leaks…) ne sont pas concernées.
+
+**Les pages de détail sont servies par priorité**, et non dans l'ordre du listing :
+
+| Rang | Entrée |
+|---|---|
+| 3 | annonce d'une exposition **à compléter** (texte ou sélecteurs manquants) |
+| 2 | annonce dont le **titre cite déjà un sélecteur** du catalogue — probablement camerounaise |
+| 1 | annonce déjà traitée dont le **listing a changé**, ou dont la signature n'a jamais été enregistrée (amorçage) |
+| 0 | les autres, dans l'ordre du listing |
+
+Sans cet ordre, une annonce camerounaise placée bas dans un listing chargé n'était analysée que
+sur son titre jusqu'à ce qu'un cycle ultérieur atteigne sa page.
+
+**Une annonce enrichie est relue.** `EntreeCollectee.signature_listing` retient, par entrée, une
+empreinte de ce que le listing annonce comme **volume** (everest : nombre de publications et date).
+Si elle change, la page de détail repasse au budget : une catégorie qui gagne un post est de nouveau
+analysée. CN-03/CN-04 : cette empreinte est un sha256 calculé uniquement sur des métadonnées de
+volume et de date — jamais un nom d'entité, jamais un extrait. Le registre ne doit pas devenir un
+index de victimes. Une entrée déjà traitée avant l'introduction du mécanisme n'a pas de référence :
+elle est relue **une fois** pour l'établir (amorçage), coût borné par le budget et épuisé en
+quelques cycles.
+
+**La période d'analyse s'applique aussi aux pages de détail.** Une annonce que le listing date déjà
+hors période ne consomme plus de budget pour être rejetée juste après. Deux exceptions : une
+exposition à compléter (la complétion ignore la période par conception) et une signature **changée**,
+le changement prouvant un contenu neuf que la date d'annonce peut ne pas refléter. Une entrée dont la
+date est illisible n'est jamais écartée ici : trois sources ne datent pas leurs annonces.
 
 ### Collecte manuelle (test / debug)
 
