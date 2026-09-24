@@ -53,6 +53,12 @@ def recategoriser(confirmer: bool) -> int:
         attribuees = 0
         for exposition in sans_categorie:
             texte = exposition.nom_entite or ""
+            # Sans source_id : une exposition peut porter plusieurs
+            # signalements, il n'y a pas UNE source a laquelle rattacher la
+            # regle - seules les regles generales s'appliquent. Les regles
+            # de type ENTITE ne sont pas consultees non plus : elles
+            # ecartent des annonces a l'analyse, elles ne retirent pas leurs
+            # categories a des expositions deja enregistrees.
             correspondances = filtrer_faux_positifs(
                 texte, match_text_against_catalogue(texte, selecteurs), session=session,
             )

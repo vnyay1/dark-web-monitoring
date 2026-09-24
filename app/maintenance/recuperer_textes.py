@@ -110,10 +110,18 @@ def _estimation(connecteur, nb_cibles) -> str:
 
 
 def _completer(session, source, entree, signalements, selecteurs) -> list:
-    """Complete les expositions d'une annonce relue (meme regle qu'en collecte)."""
+    """
+    Complete les expositions d'une annonce relue (meme regle qu'en collecte).
+
+    source_id est transmis pour que les regles d'exclusion portant sur UNE
+    source s'appliquent ici comme en collecte. Comme dans
+    pipeline._completer_exposition, les regles de type ENTITE ne sont pas
+    appliquees : une regle n'est jamais retroactive.
+    """
     texte = entree["texte_brut"]
     detail = calculer_criticite(filtrer_faux_positifs(
-        texte, match_text_against_catalogue(texte, selecteurs), session=session,
+        texte, match_text_against_catalogue(texte, selecteurs),
+        session=session, source_id=source.id,
     ))
 
     completees = completer_signalements(

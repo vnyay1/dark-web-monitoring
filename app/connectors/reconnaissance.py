@@ -705,7 +705,9 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
     from app.matching.engine import (
         SEUIL_LONGUEUR_MOT_ENTIER, _pattern_mot_entier, match_text_against_catalogue,
     )
-    from app.matching.exclusion import motif_exclusion_configuree, motif_rejet_structurel
+    from app.matching.exclusion import (
+        motif_exclusion_configuree, motif_exclusion_entite, motif_rejet_structurel,
+    )
     from app.models import (
         EntreeCollectee, Exposition, Selecteur, Source, SourceReference, StatutDetailEntree,
     )
@@ -793,6 +795,12 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
 
     session = get_session()
     try:
+        # Lue ici et non plus au moment du registre : les regles d'exclusion
+        # peuvent porter sur UNE source, il faut donc la connaitre avant de
+        # rejouer le filtrage des faux positifs.
+        source = session.query(Source).filter_by(nom=connecteur.SOURCE_NAME).first()
+        source_id = source.id if source is not None else None
+
         # --- Matching, faux positifs, criticite ---------------------------
         catalogue = session.query(Selecteur).options(joinedload(Selecteur.categorie)).all()
         actifs = [s for s in catalogue if s.actif]
@@ -805,7 +813,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
             match_text_against_catalogue(texte_complet, actifs, enable_fuzzy=False)
             if coupe > 0 else []
         )
-        motif_liste = motif_exclusion_configuree(texte_analyse, session)
+        motif_liste = motif_exclusion_configuree(texte_analyse, session, source_id)
+        motif_entite = motif_exclusion_entite(normalisee["nom_entite"], session, source_id)
 
         par_valeur = {}
         retenus = []
@@ -855,6 +864,17 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
         if motif_liste is not None:
             print(f"\n  TEXTE ENTIEREMENT EXCLU par la liste d'exclusion (motif {motif_liste!r})")
             causes.append(f"Texte exclu par la liste d'exclusion des analystes (motif {motif_liste!r}).")
+
+        # La regle ENTITE ne retire aucun selecteur : comme dans le pipeline,
+        # elle ecarte l'entree APRES coup. La criticite affichee plus bas
+        # reste donc celle qu'aurait produite l'analyse.
+        if motif_entite is not None:
+            print(f"\n  NOM D'ENTITE EXCLU par la liste d'exclusion "
+                  f"({normalisee['nom_entite']!r}, motif {motif_entite!r})")
+            causes.append(
+                f"Nom d'entite exclu par la liste d'exclusion des analystes "
+                f"(motif {motif_entite!r}) : l'entree est ecartee quelle que soit sa criticite."
+            )
 
         apres = [v for v, i in par_valeur.items() if i["apres"] is not None]
         if apres:
@@ -936,7 +956,6 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
         print()
         print("REGISTRE ET EXPOSITIONS (lecture seule)")
         print("-" * 64)
-        source = session.query(Source).filter_by(nom=connecteur.SOURCE_NAME).first()
         ligne = None
         liees = []
         if source is not None:

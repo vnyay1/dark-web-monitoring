@@ -146,6 +146,16 @@ export const api = {
   basculerSelecteur: (id) => requete(`/selecteurs/${id}/basculer`, corpsJson()),
   supprimerSelecteur: (id) => requete(`/selecteurs/${id}`, { method: "DELETE" }),
 
+  // --- Liste d'exclusion des faux positifs (FR-11) ---
+  exclusions: () => requete("/exclusions"),
+  creerExclusion: (donnees) => requete("/exclusions", corpsJson(donnees)),
+  modifierExclusion: (id, donnees) =>
+    requete(`/exclusions/${id}`, { ...corpsJson(donnees), method: "PUT" }),
+  basculerExclusion: (id) => requete(`/exclusions/${id}/basculer`, corpsJson()),
+  supprimerExclusion: (id) => requete(`/exclusions/${id}`, { method: "DELETE" }),
+  // Confrontation du motif aux donnees deja enregistrees, sans rien ecrire.
+  apercuExclusion: (donnees) => requete("/exclusions/apercu", corpsJson(donnees)),
+
   // --- Comptes ---
   utilisateurs: () => requete("/utilisateurs"),
   creerUtilisateur: (donnees) => requete("/utilisateurs", corpsJson(donnees)),

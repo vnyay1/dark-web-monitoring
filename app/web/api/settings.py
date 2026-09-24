@@ -1,6 +1,11 @@
-"""FR-08/FR-10 - Configuration systeme et catalogue de selecteurs."""
+"""
+FR-08/FR-10 - Configuration systeme et catalogue de selecteurs.
+FR-11 - Liste d'exclusion des faux positifs connus, tenue par les analystes :
+le pendant du catalogue, ce que le systeme s'interdit de signaler.
+"""
 
 import logging
+import re
 
 from flask import jsonify, request
 from flask_login import current_user, login_required
@@ -13,10 +18,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.models import (
-    POIDS_MAXIMAL, POIDS_NORMAL, Categorie, ConfigurationSysteme, RoleUtilisateur,
-    Selecteur, exposition_categories,
+    POIDS_MAXIMAL, POIDS_NORMAL, Categorie, ConfigurationSysteme, ExclusionFauxPositif,
+    Exposition, RoleUtilisateur, Selecteur, Source, SourceReference, TypeExclusion,
+    exposition_categories,
 )
-from app.web.permissions import role_requis
+from app.web.permissions import role_requis, role_suffisant
 
 logger = logging.getLogger(__name__)
 
@@ -350,6 +356,182 @@ def enregistrer(api_bp):
         finally:
             session.close()
 
+    # ------------------------------------------------------------------
+    # FR-11 - Liste d'exclusion des faux positifs connus
+    #
+    # Le pendant du catalogue : ce que le systeme s'interdit de signaler.
+    # Meme rang d'habilitation en ecriture (ADMIN), pour la meme raison -
+    # un motif trop large aveugle la detection aussi surement qu'un
+    # selecteur desactive. La lecture descend au SUPERVISOR, a qui revient
+    # de qualifier les faux positifs.
+    # ------------------------------------------------------------------
+
+    @api_bp.route("/exclusions", methods=["GET"])
+    @login_required
+    @role_requis(RoleUtilisateur.SUPERVISOR)
+    def lire_exclusions():
+        session = get_session()
+        try:
+            lignes = (
+                session.query(ExclusionFauxPositif)
+                .options(joinedload(ExclusionFauxPositif.source))
+                .order_by(ExclusionFauxPositif.date_ajout.desc())
+                .all()
+            )
+            sources = session.query(Source).order_by(Source.nom).all()
+
+            return jsonify({
+                "exclusions": [_serialiser_exclusion(e) for e in lignes],
+                # Pour le choix de portee cote interface. Les sources
+                # retirees (actif = False) restent listees : une regle peut
+                # encore y etre rattachee.
+                "sources": [
+                    {"id": s.id, "nom": s.nom, "actif": s.actif} for s in sources
+                ],
+                # Les libelles francais sont tenus cote interface, comme
+                # ceux des statuts et des niveaux (frontend/src/components).
+                "types": [t.value for t in TypeExclusion],
+                "modifiable": role_suffisant(current_user.role, RoleUtilisateur.ADMIN),
+            })
+        finally:
+            session.close()
+
+    @api_bp.route("/exclusions", methods=["POST"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def ajouter_exclusion():
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            champs, erreur = _valider_exclusion(session, donnees)
+            if erreur:
+                return erreur
+
+            exclusion = ExclusionFauxPositif(
+                **champs,
+                # Identifiant de compte, pas un nom de personne (CN-04).
+                ajoute_par=current_user.nom_utilisateur,
+            )
+            session.add(exclusion)
+            session.commit()
+
+            logger.warning(
+                f"[FR-11] Regle d'exclusion ajoutee par '{current_user.nom_utilisateur}' : "
+                f"{champs['motif']!r} ({champs['type_exclusion'].value})"
+            )
+            session.refresh(exclusion)
+            return jsonify({"succes": True, "exclusion": _serialiser_exclusion(exclusion)})
+        finally:
+            session.close()
+
+    @api_bp.route("/exclusions/<exclusion_id>", methods=["PUT"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def modifier_exclusion(exclusion_id):
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            exclusion = session.get(ExclusionFauxPositif, exclusion_id)
+            if exclusion is None:
+                return _introuvable("Regle d'exclusion inexistante.")
+
+            champs, erreur = _valider_exclusion(session, donnees)
+            if erreur:
+                return erreur
+
+            for nom, valeur in champs.items():
+                setattr(exclusion, nom, valeur)
+            session.commit()
+
+            logger.warning(
+                f"[FR-11] Regle d'exclusion modifiee par '{current_user.nom_utilisateur}' : "
+                f"{champs['motif']!r} ({champs['type_exclusion'].value})"
+            )
+            session.refresh(exclusion)
+            return jsonify({"succes": True, "exclusion": _serialiser_exclusion(exclusion)})
+        finally:
+            session.close()
+
+    @api_bp.route("/exclusions/<exclusion_id>/basculer", methods=["POST"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def basculer_exclusion(exclusion_id):
+        """
+        Active / desactive une regle. Preferable a la suppression quand on
+        doute de sa portee : ce qui a ete essaye reste lisible.
+        """
+        session = get_session()
+        try:
+            exclusion = session.get(ExclusionFauxPositif, exclusion_id)
+            if exclusion is None:
+                return _introuvable("Regle d'exclusion inexistante.")
+
+            exclusion.actif = not exclusion.actif
+            session.commit()
+
+            logger.warning(
+                f"[FR-11] Regle d'exclusion {'activee' if exclusion.actif else 'desactivee'} "
+                f"par '{current_user.nom_utilisateur}' : {exclusion.motif!r}"
+            )
+            return jsonify({"succes": True, "actif": exclusion.actif})
+        finally:
+            session.close()
+
+    @api_bp.route("/exclusions/<exclusion_id>", methods=["DELETE"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def supprimer_exclusion(exclusion_id):
+        """
+        Suppression definitive d'une regle.
+
+        Sans effet sur les expositions existantes : une regle n'est jamais
+        retroactive, elle ecarte des entrees a l'analyse. Ce qu'elle a
+        ecarte par le passe n'a laisse aucune trace a restaurer.
+        """
+        session = get_session()
+        try:
+            exclusion = session.get(ExclusionFauxPositif, exclusion_id)
+            if exclusion is None:
+                return _introuvable("Regle d'exclusion inexistante.")
+
+            motif = exclusion.motif
+            session.delete(exclusion)
+            session.commit()
+
+            logger.warning(
+                f"[FR-11] Regle d'exclusion supprimee par "
+                f"'{current_user.nom_utilisateur}' : {motif!r}"
+            )
+            return jsonify({"succes": True, "motif": motif})
+        finally:
+            session.close()
+
+    @api_bp.route("/exclusions/apercu", methods=["POST"])
+    @login_required
+    @role_requis(RoleUtilisateur.ADMIN)
+    def apercu_exclusion():
+        """
+        Confronte un motif aux donnees deja enregistrees, SANS RIEN ECRIRE,
+        pour qu'un motif trop large se voie avant d'aveugler une source.
+
+        CN-04/CN-05 : la reponse ne comporte que des compteurs et des NOMS
+        D'ENTITE. Jamais un extrait du texte conserve - sa lecture reste
+        reservee a GET /api/expositions/<id>/signalements/<sr_id>/texte,
+        seul chemin prevu par la derogation.
+        """
+        donnees = request.get_json(silent=True) or {}
+        session = get_session()
+        try:
+            champs, erreur = _valider_exclusion(session, donnees)
+            if erreur:
+                return erreur
+
+            return jsonify(_apercu(
+                session, champs["motif"], champs["type_exclusion"], champs["source_id"],
+            ))
+        finally:
+            session.close()
+
 
 # ----------------------------------------------------------------------
 # Aides
@@ -460,3 +642,167 @@ def _valider_poids(donnees, defaut):
             "message": f"Le poids est un entier de {POIDS_NORMAL} a {POIDS_MAXIMAL}.",
         }), 400)
     return poids, None
+
+
+# ----------------------------------------------------------------------
+# Aides - liste d'exclusion (FR-11)
+# ----------------------------------------------------------------------
+
+# Longueur minimale d'un motif. Trois caracteres ecartent deja les saisies
+# accidentelles sans gener un acronyme comme "SAS".
+LONGUEUR_MINIMALE_MOTIF = 3
+
+# Motifs qui correspondent a a peu pres tout : les accepter reviendrait a
+# eteindre la detection sur la portee choisie, sans que personne ne s'en
+# apercoive avant le prochain rapport vide.
+MOTIFS_UNIVERSELS = {".", ".*", ".+", ".*.*", "^", "$", "^.*$", r"[\s\S]*", r"\w*", r"\W*"}
+
+# Nombre de lignes confrontees au motif par l'apercu. L'echantillon est pris
+# sur les plus recentes : ce sont celles que l'analyste a en tete.
+TAILLE_ECHANTILLON_APERCU = 500
+
+# Nombre d'exemples renvoyes. Des NOMS D'ENTITE uniquement (CN-04).
+MAX_EXEMPLES_APERCU = 10
+
+
+def _serialiser_exclusion(exclusion) -> dict:
+    return {
+        "id": exclusion.id,
+        "motif": exclusion.motif,
+        "type_exclusion": exclusion.type_exclusion.value,
+        "source": (
+            {"id": exclusion.source.id, "nom": exclusion.source.nom}
+            if exclusion.source is not None else None
+        ),
+        "actif": exclusion.actif,
+        "commentaire": exclusion.commentaire,
+        "ajoute_par": exclusion.ajoute_par,
+        "date_ajout": exclusion.date_ajout.isoformat(),
+    }
+
+
+def _valider_exclusion(session, donnees):
+    """
+    Retourne (champs, erreur) ; erreur est None si tout va bien.
+
+    champs est directement utilisable pour construire ou mettre a jour une
+    ExclusionFauxPositif.
+    """
+    motif = (donnees.get("motif") or "").strip()
+    if len(motif) < LONGUEUR_MINIMALE_MOTIF:
+        return None, (jsonify({
+            "succes": False,
+            "message": f"Le motif fait au moins {LONGUEUR_MINIMALE_MOTIF} caracteres.",
+        }), 400)
+
+    if motif in MOTIFS_UNIVERSELS:
+        return None, (jsonify({
+            "succes": False,
+            "message": f"Le motif {motif!r} correspond a tout : il eteindrait la detection.",
+        }), 400)
+
+    # Le moteur (app.matching.exclusion) traite le motif comme une regex.
+    # Une regex cassee y est ignoree pour ne pas interrompre une collecte :
+    # c'est ici, et seulement ici, qu'elle doit etre refusee.
+    try:
+        re.compile(motif)
+    except re.error as erreur:
+        return None, (jsonify({
+            "succes": False,
+            "message": f"Expression reguliere invalide : {erreur}.",
+        }), 400)
+
+    try:
+        type_exclusion = TypeExclusion(donnees.get("type_exclusion"))
+    except ValueError:
+        return None, (jsonify({
+            "succes": False,
+            "message": "Type d'exclusion inconnu (entite ou texte).",
+        }), 400)
+
+    # Portee : une source precise, ou toutes (source_id absent).
+    source_id = donnees.get("source_id") or None
+    if source_id is not None and session.get(Source, source_id) is None:
+        return None, (jsonify({"succes": False, "message": "Source inconnue."}), 400)
+
+    commentaire = (donnees.get("commentaire") or "").strip() or None
+
+    return {
+        "motif": motif,
+        "type_exclusion": type_exclusion,
+        "source_id": source_id,
+        "commentaire": commentaire,
+    }, None
+
+
+def _apercu(session, motif, type_exclusion, source_id) -> dict:
+    """
+    Ce que ce motif aurait ecarte parmi les donnees deja enregistrees.
+
+    Strictement en lecture. La reponse ne sort que des compteurs et des
+    NOMS D'ENTITE : jamais un extrait du texte conserve (CN-04/CN-05 et la
+    derogation du 2026-09-18, dont le seul point de lecture reste la route
+    GET /api/expositions/<id>/signalements/<sr_id>/texte).
+    """
+    expression = re.compile(motif, re.IGNORECASE)
+
+    if type_exclusion == TypeExclusion.ENTITE:
+        query = session.query(Exposition.id, Exposition.nom_entite)
+        if source_id is not None:
+            query = query.filter(
+                Exposition.sources.any(SourceReference.source_id == source_id)
+            )
+        lignes = (
+            query.order_by(Exposition.date_derniere_detection.desc())
+            .limit(TAILLE_ECHANTILLON_APERCU).all()
+        )
+        valeurs = [(ligne.id, ligne.nom_entite, ligne.nom_entite or "") for ligne in lignes]
+    else:
+        query = (
+            session.query(
+                SourceReference.exposition_id, Exposition.nom_entite, SourceReference.texte_brut,
+            )
+            .join(Exposition, SourceReference.exposition_id == Exposition.id)
+            # date_texte_brut dit qu'un texte existe sans avoir a le charger
+            # (texte_brut est deferred, cf. le modele).
+            .filter(SourceReference.date_texte_brut.isnot(None))
+        )
+        if source_id is not None:
+            query = query.filter(SourceReference.source_id == source_id)
+        lignes = (
+            query.order_by(SourceReference.date_signalement.desc())
+            .limit(TAILLE_ECHANTILLON_APERCU).all()
+        )
+        # Le texte ne sert qu'a la recherche, en memoire : il ne ressort pas.
+        valeurs = [
+            (ligne.exposition_id, ligne.nom_entite, ligne.texte_brut or "") for ligne in lignes
+        ]
+
+    correspondances = [
+        (identifiant, nom) for identifiant, nom, valeur in valeurs
+        if expression.search(valeur)
+    ]
+
+    # Des exemples DISTINCTS : un meme nom d'entite signale par trois
+    # sources remplirait sinon la liste a lui seul.
+    exemples, vus = [], set()
+    for identifiant, nom in correspondances:
+        if nom in vus:
+            continue
+        vus.add(nom)
+        exemples.append({"id": identifiant, "nom_entite": nom})
+        if len(exemples) >= MAX_EXEMPLES_APERCU:
+            break
+
+    nb_testees = len(valeurs)
+    nb_correspondances = len(correspondances)
+
+    return {
+        "succes": True,
+        "type_exclusion": type_exclusion.value,
+        "nb_testees": nb_testees,
+        "nb_correspondances": nb_correspondances,
+        "pourcentage": round(100 * nb_correspondances / nb_testees, 1) if nb_testees else 0,
+        "exemples": exemples,
+        "echantillon": TAILLE_ECHANTILLON_APERCU,
+    }

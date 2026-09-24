@@ -230,6 +230,29 @@ et deux de ces faux pays suffisaient à rejeter un « Cameroun » légitime. Une
 dont le segment trouvé est **lui-même** un sélecteur du catalogue est également écartée : « Cameroon »
 ne doit pas compter en plus comme une faute de frappe de « Cameroun ».
 
+À ces règles automatiques s'ajoute une **liste d'exclusion tenue par les analystes**
+(*Configuration → Liste d'exclusion*), le pendant du catalogue : ce que le système s'interdit de
+signaler. Chaque règle est une expression régulière comparée soit au **nom d'entité** retenu pour
+l'annonce — le cas d'une société étrangère homonyme, « Cameroon Holdings Ltd », qu'aucune règle
+automatique ne peut deviner — soit au **texte** de l'annonce, pour un en-tête ou une formule qui
+revient à chaque publication. Une règle vaut pour toutes les sources ou pour **une seule** : un
+en-tête propre à une source n'a aucune raison d'aveugler les autres. Elle se **désactive** au lieu
+de se supprimer, et porte qui l'a ajoutée, quand, et pourquoi (commentaire).
+
+Deux garde-fous encadrent cette liste, une expression régulière trop large pouvant éteindre la
+détection sans que personne ne s'en aperçoive avant le prochain rapport vide :
+
+- **à la saisie**, un motif invalide, trop court ou universel (`.*`, `^.*$`, `\w*`…) est refusé ;
+- **avant enregistrement**, le bouton « Tester » confronte le motif aux données déjà enregistrées et
+  annonce ce qu'il aurait écarté, en pourcentage. Sa réponse ne comporte que des **compteurs et des
+  noms d'entité** : jamais un extrait du texte conservé, dont la lecture reste réservée au bouton
+  « Détails » d'un signalement (cf. § *Dérogation*).
+
+La lecture de la liste est ouverte au superviseur, son écriture réservée à l'administrateur — pour la
+même raison que le catalogue de sélecteurs. Une règle n'est **jamais rétroactive** : elle écarte des
+annonces à l'analyse, elle n'efface ni ne déclasse une exposition déjà enregistrée, qui se range à la
+main par son statut « faux positif ».
+
 **Criticité (FR-10)** : score d'une annonce = somme des **poids** des sélecteurs **distincts**
 qu'elle contient (poids 1 par défaut ; l'administrateur élève celui d'un sélecteur prioritaire).
 Quatre niveaux, dont les seuils sont réglables dans *Configuration*. Une annonce qui répète un même

@@ -90,6 +90,20 @@ class TypeSource(enum.Enum):
     TEST_CLAIRNET = "test_clairnet"
 
 
+class TypeExclusion(enum.Enum):
+    """
+    FR-11 - Ce qu'une regle d'exclusion confronte a son motif.
+
+    ENTITE : le NOM D'ENTITE retenu pour l'entree (cas d'une societe
+    etrangere homonyme - "Cameroon Holdings Ltd" n'est pas camerounais).
+    TEXTE  : le texte analyse de l'annonce, comportement historique de la
+    liste (en-tete recurrent d'une source, formule qui revient a chaque
+    publication).
+    """
+    ENTITE = "entite"
+    TEXTE = "texte"
+
+
 class ResultatAudit(enum.Enum):
     SUCCES = "succes"
     ECHEC = "echec"
@@ -325,16 +339,53 @@ class Selecteur(Base):
 # ---------------------------------------------------------------------
 
 class ExclusionFauxPositif(Base):
+    """
+    Une regle de la liste d'exclusion tenue par les analystes : un motif
+    (expression reguliere) qui, lorsqu'il correspond, ecarte l'entree
+    analysee avant qu'elle ne devienne une exposition.
+
+    La regle n'est JAMAIS retroactive : l'ajouter n'efface ni ne declasse
+    une exposition deja enregistree. Une exposition existante se range a la
+    main, par son statut "faux positif".
+
+    app/matching/exclusion.py est le seul lecteur de cette table.
+    """
     __tablename__ = "exclusions_faux_positifs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     motif = Column(Text, nullable=False)
+
+    # Ce que le motif confronte : le nom d'entite ou le texte de l'annonce.
+    type_exclusion = Column(
+        SAEnum(TypeExclusion), nullable=False,
+        default=TypeExclusion.TEXTE, server_default=TypeExclusion.TEXTE.name,
+    )
+
+    # Portee : NULL = toutes les sources. Renseigne, la regle ne vaut que
+    # pour cette source - un en-tete recurrent n'a aucune raison d'aveugler
+    # la detection sur les six autres.
+    source_id = Column(String(36), ForeignKey("sources.id"), nullable=True)
+
+    # Une regle trop large se desactive au lieu de se supprimer : on garde
+    # la trace de ce qui a ete essaye, et qui l'a ajoute.
+    actif = Column(Boolean, nullable=False, default=True, server_default="1")
+
+    # Pourquoi cette regle existe, pour l'analyste suivant. Comme tout le
+    # reste du modele, ce champ ne doit contenir aucune donnee divulguee
+    # ni aucun nom de personne (CN-04).
+    commentaire = Column(Text, nullable=True)
+
     ajoute_par = Column(String(255), nullable=False)  # identifiant analyste, pas de nom personnel
     date_ajout = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
+    # Pas de cascade : retirer une source la DESACTIVE (app.maintenance.
+    # retirer_source) sans supprimer sa ligne, la regle devient simplement
+    # inerte et reste lisible.
+    source = relationship("Source")
+
     def __repr__(self):
-        return f"<ExclusionFauxPositif {self.motif[:50]}>"
+        return f"<ExclusionFauxPositif {self.type_exclusion.value} {self.motif[:50]}>"
 
 
 # ---------------------------------------------------------------------

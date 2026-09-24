@@ -61,7 +61,7 @@ from app.models import (
 )
 from app import supervision
 from app.matching.engine import match_text_against_catalogue
-from app.matching.exclusion import filtrer_faux_positifs
+from app.matching.exclusion import filtrer_faux_positifs, motif_exclusion_entite
 from app.matching.criticite import calculer_criticite
 from app.matching.deduplication import completer_signalements, enregistrer_exposition
 from app.alerting.dispatcher import declencher_alertes
@@ -183,7 +183,7 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
             # elle est abandonnee au bout de MAX_ECHECS_DETAIL (registre).
             entry["echec_detail"] = "annonce sans texte"
             return False
-        _completer_exposition(session, entry, signalements, selecteurs, stats)
+        _completer_exposition(session, source, entry, signalements, selecteurs, stats)
         return True
 
     if not texte:
@@ -230,9 +230,25 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     if not matches_bruts:
         return False  # aucune correspondance camerounaise, on ignore silencieusement
 
-    # FR-11 : filtrage des faux positifs
-    matches_filtres = filtrer_faux_positifs(texte, matches_bruts, session=session)
+    # FR-11 : filtrage des faux positifs (regles structurelles + regles de
+    # type TEXTE de la liste tenue par les analystes, celles qui valent
+    # pour cette source ou pour toutes)
+    matches_filtres = filtrer_faux_positifs(
+        texte, matches_bruts, session=session, source_id=source.id,
+    )
     if not matches_filtres:
+        stats["nb_rejetees_faux_positif"] += 1
+        return False
+
+    # Le nom d'entite est arrete ICI, avant le seuil de criticite : la
+    # liste d'exclusion peut porter dessus (une societe etrangere homonyme
+    # n'a pas a etre signalee, quelle que soit sa criticite).
+    nom_entite = entry["nom_entite"] or matches_filtres[0].selecteur_valeur or "Entite inconnue"
+
+    # FR-11 : regles de type ENTITE. Meme compteur que le rejet sur texte -
+    # la console de supervision n'a pas a distinguer les deux, c'est le
+    # meme verdict : faux positif connu.
+    if motif_exclusion_entite(nom_entite, session, source.id):
         stats["nb_rejetees_faux_positif"] += 1
         return False
 
@@ -242,8 +258,6 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     if detail.score < seuils["criticite_minimum"]:
         stats["nb_rejetees_criticite_faible"] += 1
         return False
-
-    nom_entite = entry["nom_entite"] or matches_filtres[0].selecteur_valeur or "Entite inconnue"
 
     # FR-12 : deduplication + persistance
     exposition, est_nouvelle, ancienne_criticite = enregistrer_exposition(
@@ -297,7 +311,7 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     return True
 
 
-def _completer_exposition(session, entry, signalements, selecteurs, stats):
+def _completer_exposition(session, source, entry, signalements, selecteurs, stats):
     """
     Relecture complete d'une annonce deja signalee : texte, selecteurs,
     criticite et categories de son exposition (jamais a la baisse).
@@ -306,10 +320,17 @@ def _completer_exposition(session, entry, signalements, selecteurs, stats):
     DETECTER d'incidents anciens, pas a laisser incomplete une exposition
     deja enregistree. Le seuil minimum d'enregistrement non plus :
     l'exposition existe deja.
+
+    Les regles d'exclusion de type ENTITE ne sont deliberement PAS
+    appliquees ici : une regle n'est jamais retroactive, elle ne supprime
+    ni ne declasse une exposition deja enregistree (la criticite ne baisse
+    de toute facon jamais, cf. matching/deduplication.py). Une exposition
+    devenue indesirable se range a la main, par son statut "faux positif".
     """
     texte = entry["texte_brut"]
     detail = calculer_criticite(filtrer_faux_positifs(
-        texte, match_text_against_catalogue(texte, selecteurs), session=session,
+        texte, match_text_against_catalogue(texte, selecteurs),
+        session=session, source_id=source.id,
     ))
 
     completees = completer_signalements(

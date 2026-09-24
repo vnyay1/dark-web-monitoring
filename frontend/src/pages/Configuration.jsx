@@ -1,6 +1,7 @@
 /**
- * Configuration systeme, categories et catalogue de selecteurs, en trois
- * onglets (l'onglet ouvert est dans l'adresse : ?onglet=catalogue).
+ * Configuration systeme, categories, catalogue de selecteurs et liste
+ * d'exclusion, en quatre onglets (l'onglet ouvert est dans l'adresse :
+ * ?onglet=catalogue).
  *
  * Les reglages systeme sont saisis selon leur TYPE declare cote serveur :
  * un menu deroulant pour un palier de criticite, un champ numerique sinon.
@@ -11,6 +12,13 @@
  * des expositions qu'ils declenchent. Une categorie utilisee ne peut etre
  * supprimee qu'en transferant ses selecteurs et ses expositions vers une
  * autre : rien n'est perdu.
+ *
+ * La liste d'exclusion (FR-11) est le pendant du catalogue : ce que le
+ * systeme s'interdit de signaler. Le bouton « Tester » confronte un motif
+ * aux donnees deja enregistrees AVANT de l'enregistrer, un motif trop large
+ * pouvant aveugler la detection d'une source entiere. Son resultat ne
+ * comporte que des compteurs et des noms d'entite - jamais le texte d'une
+ * annonce, dont la lecture reste reservee au bouton « Details ».
  */
 
 import { useId, useState } from "react";
@@ -26,6 +34,7 @@ import {
   Chargement,
   EnTetePage,
   Erreur,
+  formaterDate,
   fuseauLocal,
   IndicateurRechargement,
   LIBELLE_NIVEAU,
@@ -126,7 +135,7 @@ const GROUPES_REGLAGES = [
   },
 ];
 
-const ONGLETS = ["reglages", "categories", "catalogue"];
+const ONGLETS = ["reglages", "categories", "catalogue", "exclusions"];
 
 /** Heure UTC ramenee a l'heure locale du navigateur. */
 function heureLocale(heureUtc) {
@@ -143,6 +152,9 @@ export default function Configuration() {
   const config = useChargement(() => api.configuration());
   // Une seule requete pour le catalogue ET les categories (avec compteurs).
   const catalogue = useChargement(() => api.selecteurs());
+  // Chargement separe : la liste d'exclusion a son propre cycle de vie et
+  // n'a pas a etre rechargee a chaque retouche du catalogue.
+  const exclusions = useChargement(() => api.exclusions());
 
   /** Retourne null si enregistre, le message d'erreur sinon. */
   async function enregistrerConfig(cle, valeur) {
@@ -156,12 +168,15 @@ export default function Configuration() {
     }
   }
 
-  /** Execute une action d'administration, puis recharge le catalogue. */
-  async function agir(action, succes) {
+  /**
+   * Execute une action d'administration, puis recharge la liste concernee
+   * (le catalogue par defaut, la liste d'exclusion pour l'onglet dedie).
+   */
+  async function agir(action, succes, recharger = catalogue.recharger) {
     try {
       const reponse = await action();
       ajouter(typeof succes === "function" ? succes(reponse) : succes);
-      catalogue.recharger();
+      recharger();
       return true;
     } catch (e) {
       ajouter(e.message, "error");
@@ -169,25 +184,32 @@ export default function Configuration() {
     }
   }
 
-  if (config.chargement || catalogue.chargement) return <Chargement />;
+  /** `agir` de l'onglet Exclusions : meme contrat, autre liste a recharger. */
+  const agirExclusions = (action, succes) => agir(action, succes, exclusions.recharger);
+
+  if (config.chargement || catalogue.chargement || exclusions.chargement) return <Chargement />;
 
   const modifiable = config.donnees?.modifiable;
   const categories = catalogue.donnees?.categories || [];
   const selecteurs = catalogue.donnees?.selecteurs || [];
+  const reglesExclusion = exclusions.donnees?.exclusions || [];
 
   return (
     <>
-      <IndicateurRechargement actif={config.rechargement || catalogue.rechargement} />
+      <IndicateurRechargement
+        actif={config.rechargement || catalogue.rechargement || exclusions.rechargement}
+      />
       <EnTetePage
         titre="Configuration"
-        sousTitre="Réglages système, catégories et catalogue de sélecteurs"
+        sousTitre="Réglages système, catégories, catalogue de sélecteurs et liste d'exclusion"
       />
 
       <Erreur
-        message={config.erreur || catalogue.erreur}
+        message={config.erreur || catalogue.erreur || exclusions.erreur}
         onReessayer={() => {
           config.recharger();
           catalogue.recharger();
+          exclusions.recharger();
         }}
       />
 
@@ -200,6 +222,7 @@ export default function Configuration() {
           { cle: "reglages", libelle: "Réglages système" },
           { cle: "categories", libelle: "Catégories", compte: categories.length },
           { cle: "catalogue", libelle: "Catalogue de sélecteurs", compte: selecteurs.length },
+          { cle: "exclusions", libelle: "Liste d'exclusion", compte: reglesExclusion.length },
         ]}
       />
 
@@ -220,6 +243,17 @@ export default function Configuration() {
       {onglet === "catalogue" && (
         <PanneauOnglet cle="catalogue" idBase="config">
           <SectionCatalogue selecteurs={selecteurs} categories={categories} agir={agir} />
+        </PanneauOnglet>
+      )}
+      {onglet === "exclusions" && (
+        <PanneauOnglet cle="exclusions" idBase="config">
+          <SectionExclusions
+            exclusions={reglesExclusion}
+            sources={exclusions.donnees?.sources || []}
+            types={exclusions.donnees?.types || []}
+            modifiable={exclusions.donnees?.modifiable}
+            agir={agirExclusions}
+          />
         </PanneauOnglet>
       )}
 
@@ -1041,5 +1075,444 @@ function SelectCategorie({ id, categories, valeur, onChange, required }) {
         </option>
       ))}
     </select>
+  );
+}
+
+/* ================================================================== */
+/* Liste d'exclusion des faux positifs (FR-11)                         */
+/* ================================================================== */
+
+const EXCLUSION_VIDE = {
+  motif: "",
+  type_exclusion: "entite",
+  source_id: "",
+  commentaire: "",
+};
+
+const LIBELLE_TYPE_EXCLUSION = {
+  entite: "Nom d'entité",
+  texte: "Texte de l'annonce",
+};
+
+const AIDE_TYPE_EXCLUSION = {
+  entite:
+    "Le motif est comparé au nom d'entité retenu pour l'annonce : le cas d'une société étrangère " +
+    "homonyme, qu'aucune règle automatique ne peut deviner.",
+  texte:
+    "Le motif est comparé au texte de l'annonce : un en-tête ou une formule qui revient à chaque " +
+    "publication d'une source.",
+};
+
+/** Au-dela, le motif ecarte une telle part de l'echantillon qu'il est probablement trop large. */
+const SEUIL_APERCU_ALERTE = 20;
+
+function SectionExclusions({ exclusions, sources, types, modifiable, agir }) {
+  const [nouvelle, setNouvelle] = useState(EXCLUSION_VIDE);
+  const [enEdition, setEnEdition] = useState(null);
+  const [aSupprimer, setASupprimer] = useState(null);
+  const [enCours, setEnCours] = useState(false);
+  const [bascule, setBascule] = useState(null);
+  const [apercu, setApercu] = useState(null);
+  const [apercuEnCours, setApercuEnCours] = useState(false);
+
+  const motif = nouvelle.motif.trim();
+
+  /**
+   * L'apercu ne vaut que pour le motif exact qui l'a produit : la moindre
+   * frappe l'invalide, sinon le resultat affiche repondrait a une autre
+   * question que celle posee par le champ.
+   */
+  function modifierNouvelle(champs) {
+    setApercu(null);
+    setNouvelle((e) => ({ ...e, ...champs }));
+  }
+
+  async function tester() {
+    setApercuEnCours(true);
+    try {
+      setApercu(await api.apercuExclusion({ ...nouvelle, motif }));
+    } catch (e) {
+      setApercu({ erreur: e.message });
+    }
+    setApercuEnCours(false);
+  }
+
+  async function creer(evenement) {
+    evenement.preventDefault();
+    const ok = await agir(
+      () => api.creerExclusion({ ...nouvelle, motif }),
+      `Règle « ${motif} » ajoutée.`,
+    );
+    if (ok) {
+      setNouvelle(EXCLUSION_VIDE);
+      setApercu(null);
+    }
+  }
+
+  async function basculer(exclusion) {
+    setBascule(exclusion.id);
+    await agir(
+      () => api.basculerExclusion(exclusion.id),
+      `Règle « ${exclusion.motif} » ${exclusion.actif ? "désactivée" : "activée"}.`,
+    );
+    setBascule(null);
+  }
+
+  async function enregistrerEdition() {
+    setEnCours(true);
+    const ok = await agir(
+      () => api.modifierExclusion(enEdition.id, { ...enEdition, motif: enEdition.motif.trim() }),
+      "Règle modifiée.",
+    );
+    setEnCours(false);
+    if (ok) setEnEdition(null);
+  }
+
+  async function confirmerSuppression() {
+    setEnCours(true);
+    const ok = await agir(
+      () => api.supprimerExclusion(aSupprimer.id),
+      `Règle « ${aSupprimer.motif} » supprimée.`,
+    );
+    setEnCours(false);
+    if (ok) setASupprimer(null);
+  }
+
+  return (
+    <>
+      <p className="texte-aide espace-texte">
+        Les faux positifs connus, écartés automatiquement à l'analyse. Chaque règle est une
+        expression régulière comparée au nom d'entité ou au texte de l'annonce, pour toutes les
+        sources ou pour une seule. Une règle n'est <strong>jamais rétroactive</strong> : elle
+        n'efface ni ne déclasse une exposition déjà enregistrée.
+      </p>
+
+      {modifiable && (
+        <form
+          className="card card-pad formulaire-ajout"
+          onSubmit={creer}
+          aria-labelledby="titre-nouvelle-exclusion"
+        >
+          <h2 className="section-title" id="titre-nouvelle-exclusion">
+            Nouvelle règle
+          </h2>
+          <div className="formulaire-ligne">
+            <div className="field">
+              <label className="field-label" htmlFor="exc-motif">
+                Motif
+              </label>
+              <input
+                id="exc-motif"
+                className="input"
+                placeholder="Ex : Cameroon Holdings"
+                value={nouvelle.motif}
+                onChange={(e) => modifierNouvelle({ motif: e.target.value })}
+                required
+              />
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="exc-type">
+                Comparé à
+              </label>
+              <select
+                id="exc-type"
+                className="select"
+                value={nouvelle.type_exclusion}
+                onChange={(e) => modifierNouvelle({ type_exclusion: e.target.value })}
+              >
+                {types.map((t) => (
+                  <option key={t} value={t}>
+                    {LIBELLE_TYPE_EXCLUSION[t] || t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="exc-source">
+                Portée
+              </label>
+              <SelectSource
+                id="exc-source"
+                sources={sources}
+                valeur={nouvelle.source_id}
+                onChange={(v) => modifierNouvelle({ source_id: v })}
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="exc-commentaire">
+              Commentaire <span className="facultatif">(facultatif)</span>
+            </label>
+            <input
+              id="exc-commentaire"
+              className="input"
+              placeholder="Pourquoi cette règle, pour l'analyste suivant"
+              value={nouvelle.commentaire}
+              onChange={(e) => modifierNouvelle({ commentaire: e.target.value })}
+            />
+          </div>
+          <p className="texte-aide">{AIDE_TYPE_EXCLUSION[nouvelle.type_exclusion]}</p>
+
+          <div className="formulaire-options">
+            <button
+              className="btn btn-contour"
+              type="button"
+              onClick={tester}
+              disabled={!motif || apercuEnCours}
+            >
+              <IconeRecherche taille={16} />
+              {apercuEnCours ? "Test en cours…" : "Tester le motif"}
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={!motif}>
+              <IconeAjouter taille={16} />
+              Ajouter la règle
+            </button>
+          </div>
+
+          {apercu && <ResultatApercu apercu={apercu} />}
+        </form>
+      )}
+
+      <div className="table-wrap tableau-cartes">
+        <table className="data">
+          <caption className="sr-only">Règles d'exclusion des faux positifs</caption>
+          <thead>
+            <tr>
+              <th scope="col">Motif</th>
+              <th scope="col">Comparé à</th>
+              <th scope="col">Portée</th>
+              <th scope="col">Ajoutée</th>
+              <th scope="col">État</th>
+              {modifiable && (
+                <th scope="col" className="cell-actions">
+                  <span className="sr-only">Actions</span>
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {exclusions.map((e) => (
+              <tr key={e.id}>
+                <td className="cell-titre">
+                  <span className="cell-mono">{e.motif}</span>
+                  {e.commentaire && (
+                    <span className="cell-muted espace-etiquettes">{e.commentaire}</span>
+                  )}
+                </td>
+                <td data-label="Comparé à">
+                  {LIBELLE_TYPE_EXCLUSION[e.type_exclusion] || e.type_exclusion}
+                </td>
+                <td data-label="Portée">
+                  {e.source ? (
+                    <span className="pill pill-neutral">{e.source.nom}</span>
+                  ) : (
+                    <span className="cell-muted">Toutes les sources</span>
+                  )}
+                </td>
+                <td className="cell-muted" data-label="Ajoutée">
+                  {formaterDate(e.date_ajout)} par {e.ajoute_par}
+                </td>
+                <td data-label="État">
+                  {modifiable ? (
+                    <Interrupteur
+                      actif={e.actif}
+                      libelle={`Règle ${e.motif} active`}
+                      libelleVisible={e.actif ? "Active" : "Inactive"}
+                      enCours={bascule === e.id}
+                      onChange={() => basculer(e)}
+                    />
+                  ) : (
+                    <span className={`pill ${e.actif ? "pill-neutral" : "pill-warn"}`}>
+                      {e.actif ? "Active" : "Inactive"}
+                    </span>
+                  )}
+                </td>
+                {modifiable && (
+                  <td className="cell-actions">
+                    <div className="btn-row">
+                      <button
+                        type="button"
+                        className="btn btn-contour btn-sm"
+                        onClick={() =>
+                          setEnEdition({
+                            id: e.id,
+                            motif: e.motif,
+                            type_exclusion: e.type_exclusion,
+                            source_id: e.source?.id || "",
+                            commentaire: e.commentaire || "",
+                          })
+                        }
+                        aria-label={`Modifier la règle ${e.motif}`}
+                      >
+                        <IconeModifier taille={14} />
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-contour btn-sm bouton-supprimer"
+                        onClick={() => setASupprimer(e)}
+                        aria-label={`Supprimer la règle ${e.motif}`}
+                      >
+                        <IconeSupprimer taille={14} />
+                        Supprimer
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {exclusions.length === 0 && (
+          <Vide titre="Aucune règle d'exclusion" icone={IconeAttention}>
+            Les règles automatiques restent actives, comme le nom de lieu noyé dans une simple
+            liste de pays.
+          </Vide>
+        )}
+      </div>
+
+      {enEdition && (
+        <Confirmation
+          titre="Modifier la règle"
+          libelleConfirmer="Enregistrer"
+          libelleEnCours="Enregistrement…"
+          variante="primaire"
+          focusAnnuler={false}
+          enCours={enCours}
+          desactiverConfirmer={!enEdition.motif.trim()}
+          onConfirmer={enregistrerEdition}
+          onAnnuler={() => setEnEdition(null)}
+        >
+          <div className="field">
+            <label className="field-label" htmlFor="edit-exc-motif">
+              Motif
+            </label>
+            <input
+              id="edit-exc-motif"
+              className="input"
+              value={enEdition.motif}
+              onChange={(e) => setEnEdition((x) => ({ ...x, motif: e.target.value }))}
+            />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="edit-exc-type">
+              Comparé à
+            </label>
+            <select
+              id="edit-exc-type"
+              className="select"
+              value={enEdition.type_exclusion}
+              onChange={(e) => setEnEdition((x) => ({ ...x, type_exclusion: e.target.value }))}
+            >
+              {types.map((t) => (
+                <option key={t} value={t}>
+                  {LIBELLE_TYPE_EXCLUSION[t] || t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="edit-exc-source">
+              Portée
+            </label>
+            <SelectSource
+              id="edit-exc-source"
+              sources={sources}
+              valeur={enEdition.source_id}
+              onChange={(v) => setEnEdition((x) => ({ ...x, source_id: v }))}
+            />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="edit-exc-commentaire">
+              Commentaire
+            </label>
+            <input
+              id="edit-exc-commentaire"
+              className="input"
+              value={enEdition.commentaire}
+              onChange={(e) => setEnEdition((x) => ({ ...x, commentaire: e.target.value }))}
+            />
+          </div>
+        </Confirmation>
+      )}
+
+      {aSupprimer && (
+        <Confirmation
+          titre="Supprimer cette règle ?"
+          enCours={enCours}
+          onConfirmer={confirmerSuppression}
+          onAnnuler={() => setASupprimer(null)}
+        >
+          <p className="fenetre-cible">
+            <strong className="cell-mono">{aSupprimer.motif}</strong>
+            <span className="cell-muted">
+              {" "}
+              — {LIBELLE_TYPE_EXCLUSION[aSupprimer.type_exclusion] || aSupprimer.type_exclusion},{" "}
+              {aSupprimer.source ? aSupprimer.source.nom : "toutes les sources"}
+            </span>
+          </p>
+          <p>
+            Les prochaines collectes cesseront de l'appliquer. Les expositions déjà enregistrées ne
+            sont pas modifiées. La désactivation reste l'alternative réversible.
+          </p>
+        </Confirmation>
+      )}
+    </>
+  );
+}
+
+/** Portee d'une regle : toutes les sources, ou une seule. */
+function SelectSource({ id, sources, valeur, onChange }) {
+  return (
+    <select id={id} className="select" value={valeur} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Toutes les sources</option>
+      {sources.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.nom}
+          {s.actif ? "" : " (retirée)"}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Ce que le motif aurait ecarte parmi les donnees deja enregistrees.
+ *
+ * N'affiche que des compteurs et des NOMS D'ENTITE : le texte conserve des
+ * annonces ne sort pas d'ici (CN-04/CN-05), sa lecture restant reservee au
+ * bouton « Détails » d'un signalement.
+ */
+function ResultatApercu({ apercu }) {
+  if (apercu.erreur) {
+    return (
+      <div className="banner banner-error espace-haut" role="alert">
+        <IconeAttention taille={16} />
+        {apercu.erreur}
+      </div>
+    );
+  }
+
+  const trop = apercu.pourcentage >= SEUIL_APERCU_ALERTE;
+  const unite = apercu.type_exclusion === "entite" ? "exposition" : "signalement";
+
+  return (
+    <div className={`banner espace-haut ${trop ? "banner-warn" : "banner-info"}`} role="status">
+      {trop && <IconeAttention taille={16} />}
+      <div>
+        <p>
+          {apercu.nb_correspondances} {pluriel("correspondance", apercu.nb_correspondances)} sur{" "}
+          {apercu.nb_testees} {pluriel(unite, apercu.nb_testees)}{" "}
+          {pluriel("testé", apercu.nb_testees)} ({apercu.pourcentage} %).
+          {trop && " Ce motif paraît trop large : il écarterait une grande part des détections."}
+        </p>
+        {apercu.exemples.length > 0 && (
+          <p className="texte-aide">
+            Aurait écarté : {apercu.exemples.map((e) => e.nom_entite).join(", ")}
+            {apercu.nb_correspondances > apercu.exemples.length ? "…" : ""}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }

@@ -5,8 +5,18 @@ Deux mecanismes complementaires :
 1. Regles structurelles generiques (ex: motif "liste de pays" -> le
    selecteur apparait seul, entoure d'autres noms de pays, signe d'un
    en-tete recapitulatif plutot que d'un contenu reellement lie au Cameroun)
-2. Liste d'exclusion configurable par les analystes (table ExclusionFauxPositif),
+2. Liste d'exclusion tenue par les analystes (table ExclusionFauxPositif),
    pour les cas specifiques identifies au fil de l'usage reel du systeme
+
+Une regle de la liste porte un TYPE - elle confronte son motif au nom
+d'entite retenu pour l'entree, ou au texte de l'annonce - et une PORTEE :
+toutes les sources, ou une seule. Un en-tete recurrent propre a une source
+n'a aucune raison d'aveugler la detection sur les autres.
+
+Ce fichier est le SEUL lecteur de la table : c'est le point d'audit unique
+de FR-11, celui ou l'on verifie ce que le systeme s'autorise a ignorer.
+Une regle n'est jamais retroactive - elle ecarte des entrees a l'analyse,
+elle n'efface ni ne declasse une exposition deja enregistree.
 """
 
 import logging
@@ -141,10 +151,58 @@ def appliquer_regles_structurelles(texte: str, matches: list) -> list:
 
 
 # ---------------------------------------------------------------------
-# Liste d'exclusion configurable (base de donnees)
+# Liste d'exclusion tenue par les analystes (base de donnees)
 # ---------------------------------------------------------------------
 
-def appliquer_liste_exclusion(texte: str, session) -> bool:
+def _regles_applicables(session, type_exclusion, source_id):
+    """
+    Regles ACTIVES du type demande qui valent pour cette source : celles
+    sans portee (toutes les sources) et celles portant sur elle.
+
+    Une source inconnue (source_id None, cas de la reconnaissance qui
+    rejoue une analyse hors collecte) ne voit que les regles generales :
+    rien ne dit a quelle source rattacher l'entree.
+    """
+    from app.models import ExclusionFauxPositif
+
+    regles = (
+        session.query(ExclusionFauxPositif)
+        .filter(ExclusionFauxPositif.actif.is_(True))
+        .filter(ExclusionFauxPositif.type_exclusion == type_exclusion)
+        .all()
+    )
+
+    return [
+        regle for regle in regles
+        if regle.source_id is None or regle.source_id == source_id
+    ]
+
+
+def _premier_motif_correspondant(regles, valeur: str):
+    """
+    Motif de la premiere regle qui correspond a cette valeur, ou None.
+
+    Un motif invalide est IGNORE plutot que fatal : une regex cassee ne
+    doit pas interrompre une collecte. L'API la refuse deja a
+    l'enregistrement (re.compile), le cas ne se produit donc qu'avec une
+    ligne ecrite directement en base.
+    """
+    for regle in regles:
+        try:
+            if re.search(regle.motif, valeur, re.IGNORECASE):
+                logger.info(
+                    f"[FR-11] Ecarte par la regle '{regle.motif}' "
+                    f"({regle.type_exclusion.value}, ajoutee par {regle.ajoute_par})"
+                )
+                return regle.motif
+        except re.error:
+            logger.warning(f"[FR-11] Motif d'exclusion invalide (regex), ignore : '{regle.motif}'")
+            continue
+
+    return None
+
+
+def appliquer_liste_exclusion(texte: str, session, source_id=None) -> bool:
     """
     Verifie si le texte correspond a un motif d'exclusion enregistre par
     les analystes (table ExclusionFauxPositif). Le champ "motif" est
@@ -154,36 +212,48 @@ def appliquer_liste_exclusion(texte: str, session) -> bool:
 
     Retourne True si le texte doit etre exclu (faux positif connu).
     """
-    return motif_exclusion_configuree(texte, session) is not None
+    return motif_exclusion_configuree(texte, session, source_id) is not None
 
 
-def motif_exclusion_configuree(texte: str, session):
-    """Motif de la liste d'exclusion qui ecarte ce texte, ou None."""
-    from app.models import ExclusionFauxPositif
+def motif_exclusion_configuree(texte: str, session, source_id=None):
+    """Motif de la liste d'exclusion qui ecarte ce TEXTE, ou None."""
+    from app.models import TypeExclusion
 
-    exclusions = session.query(ExclusionFauxPositif).all()
+    regles = _regles_applicables(session, TypeExclusion.TEXTE, source_id)
 
-    for exclusion in exclusions:
-        try:
-            if re.search(exclusion.motif, texte, re.IGNORECASE):
-                logger.info(f"[FR-11] Texte exclu par la regle : '{exclusion.motif}' (ajoutee par {exclusion.ajoute_par})")
-                return exclusion.motif
-        except re.error:
-            logger.warning(f"[FR-11] Motif d'exclusion invalide (regex), ignore : '{exclusion.motif}'")
-            continue
-
-    return None
+    return _premier_motif_correspondant(regles, texte)
 
 
-def filtrer_faux_positifs(texte: str, matches: list, session=None) -> list:
+def motif_exclusion_entite(nom_entite, session, source_id=None):
+    """
+    Motif de la liste d'exclusion qui ecarte ce NOM D'ENTITE, ou None.
+
+    Couvre le faux positif le plus courant, qu'aucune regle structurelle
+    ne peut deviner : une societe etrangere dont le nom contient un
+    selecteur ("Cameroon Holdings Ltd"), qui revient a chaque publication.
+    """
+    from app.models import TypeExclusion
+
+    if not nom_entite:
+        return None
+
+    regles = _regles_applicables(session, TypeExclusion.ENTITE, source_id)
+
+    return _premier_motif_correspondant(regles, nom_entite)
+
+
+def filtrer_faux_positifs(texte: str, matches: list, session=None, source_id=None) -> list:
     """
     Point d'entree principal FR-11 : applique successivement les regles
-    structurelles puis, si une session DB est fournie, la liste
-    d'exclusion configurable par les analystes.
+    structurelles puis, si une session DB est fournie, les regles de type
+    TEXTE de la liste tenue par les analystes.
+
+    Les regles de type ENTITE ne s'appliquent PAS ici : le nom d'entite
+    n'est arrete qu'une fois les matches filtres (cf. app.pipeline).
     """
     matches_filtres = appliquer_regles_structurelles(texte, matches)
 
-    if session is not None and appliquer_liste_exclusion(texte, session):
+    if session is not None and appliquer_liste_exclusion(texte, session, source_id):
         logger.info("[FR-11] Texte entierement exclu par la liste de faux positifs.")
         return []
 
