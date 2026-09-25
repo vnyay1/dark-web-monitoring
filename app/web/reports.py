@@ -15,7 +15,7 @@ mis en page pour WeasyPrint, pas une page d'interface.
 from flask import Blueprint, Response, abort, request
 from flask_login import login_required
 
-from app.reports.monthly_report import generer_rapport_html, generer_rapport_pdf
+from app.reports.monthly_report import erreur_de_periode, generer_rapport_html, generer_rapport_pdf
 from app.reports.export import exporter_json, exporter_csv
 from app.models import utc_now, RoleUtilisateur
 from app.web.permissions import role_requis
@@ -26,14 +26,15 @@ reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
 def _mois_annee() -> tuple:
     """
     Mois et annee demandes, le mois courant par defaut (y compris pour une
-    valeur non numerique, cf. type=int). Un mois hors 1-12 est refuse en
-    400 : int() leve auparavant une erreur 500 sur toute valeur invalide.
+    valeur non numerique, cf. type=int). Une periode invalide est refusee
+    en 400, avec les memes bornes que l'API (erreur_de_periode).
     """
     maintenant = utc_now()
     mois = request.args.get("mois", maintenant.month, type=int)
     annee = request.args.get("annee", maintenant.year, type=int)
-    if not 1 <= mois <= 12:
-        abort(400, "Mois invalide (1 a 12).")
+    erreur = erreur_de_periode(mois, annee)
+    if erreur:
+        abort(400, erreur)
     return mois, annee
 
 

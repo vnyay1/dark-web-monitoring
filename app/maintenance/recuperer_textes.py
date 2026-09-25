@@ -134,7 +134,12 @@ def _completer(session, source, entree, signalements, selecteurs) -> list:
         selecteurs=detail.details,
     )
     if entree["niveau_detail"] == "detail":
-        marquer_traitee(session, source.id, entree["identifiant_entree"], a_produit_exposition=True)
+        # Signature comprise, comme en collecte : sans elle, une annonce
+        # everest relue ici serait "amorcee" - relue - au cycle suivant.
+        marquer_traitee(
+            session, source.id, entree["identifiant_entree"], a_produit_exposition=True,
+            signature_listing=entree["signature_listing"],
+        )
         session.commit()
 
     lignes = []

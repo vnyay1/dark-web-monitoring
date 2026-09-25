@@ -61,6 +61,21 @@ def _rendre_chemins_static_relatifs(html_content: str) -> str:
     return _STATIC_URL_PATTERN.sub(r"url(\1static/", html_content)
 
 
+def erreur_de_periode(mois: int, annee: int):
+    """
+    Message d'erreur si la periode demandee n'est pas valide, None sinon.
+    Partage par l'API (JSON) et les telechargements (PDF, HTML) : sans
+    borne, datetime.replace(year=...) leve un ValueError non rattrape
+    (annee 0, negative, au-dela de 9999) et la saisie invalide finissait en
+    erreur 500.
+    """
+    if not 1 <= mois <= 12:
+        return "Mois invalide (1 a 12)."
+    if not 2000 <= annee <= 2100:
+        return "Annee invalide (2000 a 2100)."
+    return None
+
+
 def collecter_statistiques_mensuelles(mois: int, annee: int) -> dict:
     """
     Rassemble les statistiques agregees du mois donne, sans jamais
