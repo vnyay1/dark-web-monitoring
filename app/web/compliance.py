@@ -11,7 +11,7 @@ from flask import Blueprint, Response
 from flask_login import login_required
 
 from app.models import RoleUtilisateur, utc_now
-from app.reports.export import exporter_json
+from app.reports.export import exporter_conformite
 from app.web.permissions import role_requis
 
 compliance_bp = Blueprint("compliance", __name__, url_prefix="/compliance")
@@ -21,10 +21,13 @@ compliance_bp = Blueprint("compliance", __name__, url_prefix="/compliance")
 @login_required
 @role_requis(RoleUtilisateur.SUPER_ADMIN)
 def export_complet():
-    """Export complet a des fins d'audit externe, avant purge eventuelle."""
+    """
+    Export complet a des fins d'audit externe, avant purge eventuelle :
+    expositions, journal d'audit et historique des roles.
+    """
     horodatage = utc_now().strftime("%Y%m%d_%H%M%S")
     return Response(
-        exporter_json(),
+        exporter_conformite(),
         mimetype="application/json",
         headers={
             "Content-Disposition":

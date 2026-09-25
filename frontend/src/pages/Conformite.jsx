@@ -95,7 +95,9 @@ export default function Conformite() {
           Export intégral
         </h2>
         <p className="texte-aide espace-texte">
-          Export JSON de toutes les expositions, destiné à un audit externe. À réaliser avant toute purge.
+          Export JSON de toutes les expositions, du journal d'audit et de l'historique des changements de
+          rôle, destiné à un audit externe. À réaliser avant toute purge : elle supprime aussi les entrées
+          anciennes du journal d'audit.
         </p>
         {/* Telechargement servi par Flask : un lien natif conserve le nom de
             fichier et la barre de progression du navigateur. */}

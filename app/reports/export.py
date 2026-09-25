@@ -1,5 +1,10 @@
 """
-FR-28 - Export des indicateurs d'exposition en JSON et CSV.
+FR-28 - Export des indicateurs d'exposition en JSON et CSV, et export de
+conformite (expositions, journal d'audit, historique des roles).
+
+Aucun export ne porte le texte conserve des annonces (SourceReference.
+texte_brut, derogation CN-04/CN-05) : il n'est lisible que par son
+endpoint dedie.
 """
 
 import csv
@@ -9,7 +14,7 @@ import logging
 
 from app import libelles
 from app.db import get_session
-from app.models import Exposition
+from app.models import Exposition, HistoriqueRole, JournalAudit, Source, User, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +73,46 @@ def exporter_json() -> str:
         session.close()
 
     return json.dumps(data, indent=2, ensure_ascii=False)
+
+
+def exporter_conformite() -> str:
+    """
+    Export de conformite (super_admin), a faire AVANT une purge : c'est lui
+    qui fait foi pour ce qui doit etre conserve. Il porte donc, en plus des
+    expositions, le journal d'audit - file circulaire que la purge ampute
+    aussi (cf. app.audit) - et l'historique des changements de role.
+    """
+    session = get_session()
+    try:
+        noms_sources = {s.id: s.nom for s in session.query(Source)}
+        noms_comptes = {u.id: u.nom_utilisateur for u in session.query(User)}
+        donnees = {
+            "genere_le": utc_now().isoformat(),
+            "expositions": [_exposition_vers_dict(e) for e in session.query(Exposition).all()],
+            "journal_audit": [
+                {
+                    "horodatage": ligne.horodatage.isoformat(),
+                    "resultat": ligne.resultat.value,
+                    "source": noms_sources.get(ligne.source_id),
+                    "details": ligne.details,
+                }
+                for ligne in session.query(JournalAudit).order_by(JournalAudit.horodatage)
+            ],
+            "historique_roles": [
+                {
+                    "date_modification": ligne.date_modification.isoformat(),
+                    "compte": noms_comptes.get(ligne.user_cible_id, "(compte supprime)"),
+                    "modifie_par": noms_comptes.get(ligne.modifie_par_id, "(compte supprime)"),
+                    "ancien_role": ligne.ancien_role.value,
+                    "nouveau_role": ligne.nouveau_role.value,
+                }
+                for ligne in session.query(HistoriqueRole).order_by(HistoriqueRole.date_modification)
+            ],
+        }
+    finally:
+        session.close()
+
+    return json.dumps(donnees, indent=2, ensure_ascii=False)
 
 
 def exporter_csv() -> str:
