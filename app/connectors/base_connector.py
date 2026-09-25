@@ -10,7 +10,7 @@ deux phases :
 
   1. LISTING : parcours des pages de liste (pagination bornee par
      MAX_PAGES_LISTING et par le plafond reglable pages_listing_max).
-     Trois arrets anticipes, le premier atteint l'emporte :
+     Quatre arrets anticipes, le premier atteint l'emporte :
        - "page_connue" : une page n'apporte plus aucune entree nouvelle,
          avec PAGES_GRACE pages de tolerance (une entree epinglee ou un
          reordonnancement peut faire apparaitre une page "deja connue"
@@ -20,12 +20,19 @@ deux phases :
          suivantes, plus anciennes encore, n'ont pas a etre demandees ;
        - "dates_illisibles" : aucune date lisible sur la page. Garde-fou :
          sans lui, un site qui changerait son format de date serait
-         parcouru jusqu'au plafond a chaque cycle.
+         parcouru jusqu'au plafond a chaque cycle ;
+       - "sonde_echouee" : la sonde de date (ci-dessous) n'a pas pu lire
+         sa page de detail ; la page n'est pas datee, meme prudence.
+     Les autres motifs sont des fins normales : "page_unique" (source non
+     paginee), "page_vide", "fin_pagination", "profondeur_max" (plafond de
+     pages), ou "erreur_page" (une page 2+ en erreur).
      Une source qui ne date ses annonces que sur la page de detail
      (DATE_SUR_DETAIL, safepay) est datee par SONDE : la page de detail de
      la derniere annonce NOUVELLE de la page de listing est visitee des la
      phase de listing. Cette visite n'est pas perdue - l'entree est alors
-     enrichie comme en phase de detail, qui ne la revisite pas.
+     enrichie comme en phase de detail, qui ne la revisite pas. Elle ne
+     compte pas dans le budget de pages de detail (au plus une par page de
+     listing, stats["sondes_date"]).
      Chaque lien de pagination est valide par _page_suivante_validee() :
      meme domaine, meme chemin que le listing, page suivante exactement.
 
@@ -628,7 +635,18 @@ class BaseConnector:
                 # Rien de nouveau a dater sur cette page : c'est l'arret sur
                 # pages connues (et sa page de tolerance) qui borne la suite.
                 return None
-            lisibles = [d for d in [self.dater_par_sonde(sonde, stats, erreurs)] if d]
+            date = self.dater_par_sonde(sonde, stats, erreurs)
+            if date is None and sonde.get("echec_detail"):
+                # La page n'a pas pu etre datee parce que la sonde a echoue
+                # (Tor, page indisponible), et non parce que le site aurait
+                # change son format de date : motif distinct, pour ne pas
+                # lancer une fausse piste. L'arret reste la prudence.
+                logger.warning(
+                    f"[{self.SOURCE_NAME}] Sonde de date en echec "
+                    f"({sonde['echec_detail']}) : pagination arretee par prudence."
+                )
+                return "sonde_echouee"
+            lisibles = [date] if date else []
         else:
             lisibles = self.dates_lisibles(page_entries)
 

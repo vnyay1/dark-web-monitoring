@@ -51,6 +51,7 @@ const LIBELLE_ARRET = {
   profondeur_max: "plafond atteint",
   hors_periode: "hors période",
   dates_illisibles: "dates illisibles",
+  sonde_echouee: "sonde de date en échec",
   erreur_page: "erreur de page",
 };
 
