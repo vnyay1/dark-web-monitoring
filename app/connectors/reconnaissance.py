@@ -199,7 +199,7 @@ def resumer_structure(html, profondeur_max=6, max_groupes=10, netloc_source=""):
     return "\n".join(lignes)
 
 
-def _recuperer(connecteur, url, max_retries=1, **kwargs):
+def _recuperer(connecteur, url, tentatives=1):
     """
     Requete rate-limitee (FR-06), en renvoyant la reponse complete. Passe
     par BaseConnector.requete() : memes delais et memes reessais que la
@@ -208,7 +208,7 @@ def _recuperer(connecteur, url, max_retries=1, **kwargs):
     # L'envoi est journalise par requete() elle-meme, APRES le delai FR-06 :
     # un log pose ici, avant l'attente, laissait croire a une requete
     # immediate.
-    return connecteur.requete(url, tentatives=max_retries, **kwargs)
+    return connecteur.requete(url, tentatives=tentatives)
 
 
 def _url_de_la_page(connecteur, page):
@@ -502,7 +502,7 @@ def phase_detail(connecteur, index, profondeur=6):
         print(f"URL reconstruite pour qualification : forme "
               f"{_forme_url(url, netloc_source)}")
 
-    reponse = _recuperer(connecteur, url, max_retries=1)
+    reponse = _recuperer(connecteur, url)
 
     print(f"\nHTTP {reponse.status_code} | {reponse.headers.get('Content-Type', '?')} "
           f"| {len(reponse.text)} caracteres")

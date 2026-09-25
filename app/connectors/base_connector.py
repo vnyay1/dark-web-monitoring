@@ -81,7 +81,7 @@ import time
 from urllib.parse import parse_qs, urljoin, urlparse
 
 from app.connectors.dates import CLES_DATE, parser_date
-from app.tor import get_via_tor, renew_tor_circuit
+from app.tor import ReponseTropVolumineuse, get_via_tor, renew_tor_circuit
 
 logger = logging.getLogger(__name__)
 
@@ -203,15 +203,15 @@ class BaseConnector:
     def _marquer_fin_requete(self):
         BaseConnector._fin_derniere_requete_par_source[self.SOURCE_NAME] = time.time()
 
-    def requete(self, url=None, tentatives=TENTATIVES_PAR_DEFAUT, **kwargs):
+    def requete(self, url=None, tentatives=TENTATIVES_PAR_DEFAUT):
         """
         Seul point de sortie reseau d'un connecteur (collecte comme
         reconnaissance). Renvoie la reponse HTTP complete.
 
-        Les reessais sont faits ICI, et non par get_via_tor (appele avec
-        max_retries=1) : ses propres reessais partaient a 5 s d'intervalle,
-        hors de tout rate limiting. Ici, chaque tentative attend le delai
-        complet et part sur un circuit Tor renouvele.
+        Les reessais sont faits ICI, get_via_tor n'en fait aucun : chaque
+        tentative attend le delai complet et part sur un circuit Tor
+        renouvele. Une reponse trop volumineuse n'est pas reessayee : elle
+        serait la meme, en plus couteux.
         """
         derniere_erreur = None
 
@@ -223,7 +223,9 @@ class BaseConnector:
             # logs. Seul le chemin est ecrit (page d'annonce, cf. CN-03).
             logger.info(f"[{self.SOURCE_NAME}] Requete : {urlparse(cible).path or '/'}")
             try:
-                return get_via_tor(cible, max_retries=1, **kwargs)
+                return get_via_tor(cible)
+            except ReponseTropVolumineuse:
+                raise
             except Exception as erreur:
                 derniere_erreur = erreur
                 logger.warning(
@@ -238,15 +240,13 @@ class BaseConnector:
 
         raise derniere_erreur
 
-    def fetch(self, url=None, max_retries=TENTATIVES_PAR_DEFAUT, **kwargs):
+    def fetch(self, url=None, tentatives=TENTATIVES_PAR_DEFAUT):
         """
         Recupere le contenu brut d'une page, en respectant le rate limiting.
         Le contenu reste en memoire (CN-05), jamais ecrit sur disque.
-
-        max_retries garde son nom historique (appelants existants) : c'est le
-        nombre de tentatives, chacune soumise au delai.
+        tentatives : nombre d'essais, chacun soumis au delai.
         """
-        return self.requete(url, tentatives=max_retries, **kwargs).text
+        return self.requete(url, tentatives=tentatives).text
 
     def nettoyer_urls(self, texte):
         """
@@ -810,7 +810,7 @@ class BaseConnector:
             # Une seule tentative : une page de detail en echec est
             # reessayee au run suivant via le registre, plutot que de
             # consommer ici plusieurs delais complets sur une entree.
-            raw = self.fetch(self.url_detail(entry), max_retries=1)
+            raw = self.fetch(self.url_detail(entry), tentatives=1)
             try:
                 enrichi = self.parse_detail(raw, entry) or {}
             finally:

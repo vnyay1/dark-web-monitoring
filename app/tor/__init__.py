@@ -2,12 +2,13 @@
 FR-01 - Module centralise de connexion Tor.
 
 Regroupe la configuration du proxy SOCKS, le renouvellement de circuit,
-et une fonction utilitaire de requete HTTP via Tor - utilisee par tous
-les connecteurs .onion.
+et la requete HTTP via Tor (get_via_tor) - seul chemin reseau des
+connecteurs .onion, qui l'appellent par BaseConnector.requete.
 
 Renouvellement PROACTIF a intervalle ALEATOIRE (entre 10 et 120s, tire
 apres chaque renouvellement) pendant une session de collecte prolongee, en
-plus du renouvellement reactif en cas d'echec.
+plus du renouvellement REACTIF entre deux tentatives d'une requete, que
+BaseConnector.requete demande par renew_tor_circuit().
 
 COLLECTE PARALLELE - plusieurs sources passent par ce module en meme temps,
 depuis des fils differents. L'etat du renouvellement est donc protege par
@@ -49,6 +50,9 @@ class ReponseTropVolumineuse(Exception):
     le flux d'evenements de la console de supervision.
     """
 
+
+# Delai maximal d'attente d'une reponse, en secondes.
+DELAI_REPONSE_SECONDES = 30
 
 # 10 Mo : trois ordres de grandeur au-dessus d'une page de listing de site de
 # fuite (quelques dizaines de Ko), donc aucune collecte legitime n'est
@@ -272,13 +276,17 @@ def _lire_avec_limite(response: requests.Response) -> requests.Response:
     return response
 
 
-def get_via_tor(url: str, timeout: int = 30, max_retries: int = 3,
-                 retry_delay_seconds: int = 5, headers: dict = None) -> requests.Response:
+def get_via_tor(url: str) -> requests.Response:
     """
-    Effectue une requete GET via le proxy SOCKS Tor, avec :
-    - renouvellement REACTIF du circuit en cas d'echec (FR-01)
+    Effectue UNE requete GET via le proxy SOCKS Tor, avec :
     - renouvellement PROACTIF du circuit periodiquement, meme sans echec
     - corps de reponse BORNE a TAILLE_MAX_REPONSE (voir _lire_avec_limite)
+
+    Une seule tentative, deliberement : les reessais - et le renouvellement
+    reactif du circuit entre deux essais - sont faits par
+    BaseConnector.requete, qui soumet chacun au delai FR-06. La boucle de
+    reessai qui vivait ici repartait a 5 s d'intervalle, hors de tout rate
+    limiting.
     """
     _renouvellement_proactif_si_necessaire()
 
@@ -286,7 +294,6 @@ def get_via_tor(url: str, timeout: int = 30, max_retries: int = 3,
         "http": TOR_SOCKS_PROXY,
         "https": TOR_SOCKS_PROXY,
     }
-    request_headers = headers or DEFAULT_HEADERS
 
     # CN-03 : l'URL complete d'un site de fuite ne doit jamais atterrir dans
     # un journal. base_connector fait deja cet effort de son cote ; le faire
@@ -294,29 +301,19 @@ def get_via_tor(url: str, timeout: int = 30, max_retries: int = 3,
     # a chaque echec reseau.
     chemin = urlparse(url).path or "/"
 
-    derniere_exception = None
-
-    for attempt in range(1, max_retries + 1):
-        try:
-            response = requests.get(
-                url,
-                proxies=proxies,
-                headers=request_headers,
-                timeout=timeout,
-                stream=True,
-            )
-            response.raise_for_status()
-            return _lire_avec_limite(response)
-        except ReponseTropVolumineuse as e:
-            # Inutile de renouveler le circuit et de reessayer : la reponse
-            # serait la meme, en plus couteux. On abandonne cette cible.
-            logger.warning(f"[tor] Reponse rejetee pour {chemin} : {e}")
-            raise
-        except requests.exceptions.RequestException as e:
-            derniere_exception = e
-            logger.warning(f"[tor] Tentative {attempt}/{max_retries} echouee pour {chemin} : {e}")
-            if attempt < max_retries:
-                renew_tor_circuit()
-                time.sleep(retry_delay_seconds)
-
-    raise derniere_exception
+    try:
+        response = requests.get(
+            url,
+            proxies=proxies,
+            headers=DEFAULT_HEADERS,
+            timeout=DELAI_REPONSE_SECONDES,
+            stream=True,
+        )
+        response.raise_for_status()
+        return _lire_avec_limite(response)
+    except ReponseTropVolumineuse as e:
+        logger.warning(f"[tor] Reponse rejetee pour {chemin} : {e}")
+        raise
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"[tor] Requete echouee pour {chemin} : {e}")
+        raise
