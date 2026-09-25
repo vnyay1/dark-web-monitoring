@@ -96,10 +96,18 @@ def _get_or_create_source(session, connector) -> Source:
     ).first()
 
     if source is None:
-        type_source_enum = TypeSource(connector.SOURCE_TYPE) if connector.SOURCE_TYPE in TypeSource._value2member_map_ else TypeSource.TEST_CLAIRNET
+        # Un SOURCE_TYPE inconnu leve une erreur : il etait auparavant range
+        # en silence sous "test_clairnet", type de la source retiree.
+        try:
+            type_source = TypeSource(connector.SOURCE_TYPE)
+        except ValueError:
+            raise ValueError(
+                f"SOURCE_TYPE inconnu pour {connector.SOURCE_NAME} : {connector.SOURCE_TYPE!r} "
+                f"(attendu : {', '.join(t.value for t in TypeSource)})."
+            ) from None
         source = Source(
             nom=connector.SOURCE_NAME,
-            type_source=type_source_enum,
+            type_source=type_source,
             url_ou_identifiant=getattr(connector, "TARGET_URL", None) or "unknown",
         )
         session.add(source)
@@ -154,11 +162,19 @@ def _normaliser_entry(entry, connector) -> dict:
         # Calculee ici parce que le dict normalise perd les cles propres au
         # connecteur (nb_posts, date...) dont elle est tiree.
         "signature_listing": connector.signature_listing(entry),
-        # Pose par _analyser_collecte, qui seul a acces au registre : la page
-        # de detail de cette annonce ne sera jamais lue (cf.
-        # _detail_definitivement_perdu). Sans cette cle, _traiter_une_entree
-        # devrait interroger la base par entree.
+        # Les trois cles suivantes sont posees par _analyser_collecte, qui
+        # seul a acces au registre et aux signatures : sans elles,
+        # _traiter_une_entree devrait interroger la base par entree.
+        #
+        # La page de detail de cette annonce ne sera jamais lue (cf.
+        # _detail_definitivement_perdu).
         "detail_abandonne": False,
+        # L'annonce a deja ete analysee lors d'un cycle precedent (TRAITEE,
+        # SANS_DETAIL ou ECHEC dans le registre).
+        "deja_traitee": False,
+        # Pourquoi une annonce deja analysee doit etre relue :
+        # BaseConnector.raison_relecture() - "changement", "amorcage" ou None.
+        "relecture": None,
     }
 
 
@@ -189,27 +205,6 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     if not texte:
         return False
 
-    # FR-03 - une annonce qui POSSEDE une page de detail n'est JAMAIS
-    # enregistree sur le seul texte de la page d'accueil (le listing).
-    #
-    # Sans cette garde, le titre d'une categorie suffisait a creer une
-    # Exposition et son alerte ; la page de detail, lue ensuite, relevait la
-    # criticite et declenchait une SECONDE alerte pour le meme incident. Et
-    # tant que le budget ne servait pas cette page, l'exposition restait
-    # partielle (criticite du seul titre, aucun texte conserve).
-    #
-    # L'entree n'est pas perdue : elle reste A_TRAITER dans le registre (cf.
-    # _marquer_dans_le_registre) et _priorite_detail la sert AVANT les autres,
-    # puisque son texte de listing cite deja un selecteur.
-    #
-    # Seule exception, sinon une annonce camerounaise sur une page cassee ne
-    # serait jamais signalee : une page de detail definitivement inaccessible
-    # (cf. _detail_definitivement_perdu). L'analyse se replie alors sur le
-    # titre, avec la criticite partielle que cela implique.
-    if not texte_complet(entry) and not entry["detail_abandonne"]:
-        stats["nb_details_en_attente"] += 1
-        return False
-
     # FR-03 : fenetre temporelle reglee par l'administrateur.
     #
     # Une entree SANS date exploitable est analysee quand meme : trois de
@@ -219,10 +214,46 @@ def _traiter_une_entree(session, source, entry, selecteurs, seuils, stats) -> bo
     # Sur un listing chronologique, une annonce sans date n'est pas plus
     # recente que l'annonce datee qui la precede (date_plafond) : si cette
     # borne est deja hors periode, l'annonce l'est aussi.
+    #
+    # Appliquee AVANT le test d'attente ci-dessous : une annonce que le
+    # listing date hors periode n'attend aucune page de detail (la phase de
+    # detail l'ecarte sans la lire, cf. BaseConnector._phase_detail).
+    #
+    # Deux exceptions, les memes qu'en phase de detail : une exposition a
+    # completer (la completion ignore la fenetre par conception) et une
+    # signature de listing CHANGEE, preuve d'un contenu neuf que la date de
+    # l'annonce peut ne pas refleter. Sans cette seconde exception, la page
+    # relue malgre la periode etait aussitot rejetee ici.
     date_publication = entry.get("date_publication")
     date_reference = date_publication or entry.get("date_plafond")
-    if date_reference is not None and date_reference < seuils["date_limite"]:
+    if (date_reference is not None and date_reference < seuils["date_limite"]
+            and not signalements and entry["relecture"] != "changement"):
         stats["nb_hors_periode"] += 1
+        return False
+
+    # FR-03 - une annonce qui POSSEDE une page de detail n'est JAMAIS
+    # enregistree sur le seul texte de la page d'accueil (le listing).
+    #
+    # Sans cette garde, le titre d'une categorie suffisait a creer une
+    # Exposition et son alerte ; la page de detail, lue ensuite, relevait la
+    # criticite et declenchait une SECONDE alerte pour le meme incident. Et
+    # tant que le budget ne servait pas cette page, l'exposition restait
+    # partielle (criticite du seul titre, aucun texte conserve).
+    #
+    # Une annonce NOUVELLE n'est pas perdue : elle reste A_TRAITER dans le
+    # registre (cf. _marquer_dans_le_registre) et _priorite_detail la sert
+    # AVANT les autres si son texte de listing cite deja un selecteur. Une
+    # annonce DEJA analysee, sans rien a relire, est simplement revue dans
+    # le listing : elle n'attend rien et n'est pas comptee en attente.
+    #
+    # Seule exception, sinon une annonce camerounaise sur une page cassee ne
+    # serait jamais signalee : une page de detail definitivement inaccessible
+    # (cf. _detail_definitivement_perdu). L'analyse se replie alors sur le
+    # titre, avec la criticite partielle que cela implique.
+    if not texte_complet(entry) and not entry["detail_abandonne"]:
+        a_relire = bool(signalements) or entry["relecture"] is not None
+        if a_relire or not entry["deja_traitee"]:
+            stats["nb_details_en_attente"] += 1
         return False
 
     # FR-09 : matching
@@ -456,12 +487,13 @@ def _priorite_detail(entree, identifiants_a_completer, catalogue,
     return 0
 
 
-def traiter_connecteur(connector_class, db_session=None, budget_details=None,
+def traiter_connecteur(connector_class, session, budget_details=None,
                        profondeur_max=None) -> dict:
     """
     Execute le pipeline complet pour UN connecteur donne.
 
     connector_class : classe (pas instance) heritant de BaseConnector.
+    session         : session propre a ce fil (cf. _traiter_isole).
     budget_details  : nombre maximum de pages de detail pour ce run.
     profondeur_max  : nombre maximum de pages de listing pour ce run.
 
@@ -471,8 +503,6 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
 
     Retourne un resume statistique de l'execution.
     """
-    session = db_session or get_session()
-
     with verrou_base:
         source = _get_or_create_source(session, connector_class)
         connector = connector_class(db_session=session, source_id=source.id)
@@ -534,15 +564,21 @@ def traiter_connecteur(connector_class, db_session=None, budget_details=None,
         )
 
         with verrou_base:
-            return _analyser_collecte(session, source, connector, result, seuils, catalogue)
+            return _analyser_collecte(
+                session, source, connector, result, seuils, catalogue, signatures,
+            )
     finally:
         _publier_source_en_cours(connector.SOURCE_NAME, False)
 
 
-def _analyser_collecte(session, source, connector, result, seuils, catalogue) -> dict:
+def _analyser_collecte(session, source, connector, result, seuils, catalogue,
+                       signatures) -> dict:
     """
     Analyse et enregistre ce qu'une collecte a rapporte. Appelee sous
     app.db.verrou_base : une seule source a la fois ecrit en base.
+
+    catalogue  : selecteurs figes a la preparation (cf. _catalogue_fige) ;
+    signatures : signatures de listing connues (registre.signatures_connues).
     """
     stats = {
         "source": connector.SOURCE_NAME,
@@ -595,30 +631,35 @@ def _analyser_collecte(session, source, connector, result, seuils, catalogue) ->
     entrees = []
     for brute in entries_brutes:
         try:
-            entrees.append(_normaliser_entry(brute, connector))
+            entree = _normaliser_entry(brute, connector)
+            # Sur l'entree BRUTE : la signature se calcule sur des cles
+            # propres au connecteur, que la normalisation ne garde pas.
+            entree["relecture"] = connector.raison_relecture(brute, signatures)
+            entrees.append(entree)
         except Exception as e:
             logger.warning(f"[pipeline] Entree illisible ({connector.SOURCE_NAME}) : {e}")
             stats["nb_entrees_en_erreur"] += 1
 
-    # Le registre voit TOUTES les entrees du listing, y compris celles que
-    # le budget ne servira pas ce cycle-ci : un seul commit pour l'ensemble.
     # Compte des entrees sans date exploitable : soit la source n'en publie
     # pas, soit son format n'est pas reconnu (cf. reconnaissance --phase
     # dates). Visible dans la page Collecte, sans avoir a lire les logs.
     stats["nb_sans_date"] = sum(1 for e in entrees if e["date_publication"] is None)
 
+    # Le registre voit TOUTES les entrees du listing, y compris celles que
+    # le budget ne servira pas ce cycle-ci : un seul commit pour l'ensemble.
+    # Il est lu AVANT d'etre mis a jour : une ligne qui n'est pas A_TRAITER
+    # designe une annonce analysee lors d'un cycle precedent.
+    deja_traitees = identifiants_traites(session, source.id)
     lignes_registre = enregistrer_entrees_vues(session, source.id, entrees)
 
-    # Une annonce dont la page de detail est definitivement perdue est la
-    # seule a pouvoir etre analysee sur son titre (cf. _traiter_une_entree).
     for entree in entrees:
+        entree["deja_traitee"] = entree["identifiant_entree"] in deja_traitees
+        # Une annonce dont la page de detail est definitivement perdue est la
+        # seule a pouvoir etre analysee sur son titre (cf. _traiter_une_entree).
         entree["detail_abandonne"] = _detail_definitivement_perdu(
             lignes_registre.get(entree["identifiant_entree"]), entree, connector
         )
 
-    # Catalogue charge une seule fois, a la preparation de la source
-    # (cf. _catalogue_fige) : les commits de la boucle ne l'expirent pas.
-    selecteurs = catalogue
     logger.info(
         f"[pipeline] Fenetre d'analyse : {seuils['periode_jours']} jours "
         f"(entrees publiees avant le {seuils['date_limite'].date()} ignorees)."
@@ -626,8 +667,10 @@ def _analyser_collecte(session, source, connector, result, seuils, catalogue) ->
 
     for entree in entrees:
         try:
+            # Catalogue fige a la preparation de la source (cf.
+            # _catalogue_fige) : les commits de la boucle ne l'expirent pas.
             a_produit = _traiter_une_entree(
-                session, source, entree, selecteurs, seuils, stats
+                session, source, entree, catalogue, seuils, stats
             )
             _marquer_dans_le_registre(session, source.id, connector, entree, a_produit)
             # Un commit par entree : une mise a jour du registre non commitee
@@ -756,7 +799,7 @@ def _traiter_isole(connector_class, budget_details, profondeur_max) -> dict:
     try:
         return traiter_connecteur(
             connector_class,
-            db_session=session,
+            session,
             budget_details=budget_details,
             profondeur_max=profondeur_max,
         )
