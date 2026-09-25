@@ -1,8 +1,9 @@
 """
-Modele de donnees SQLAlchemy - base sur le diagramme de classes valide.
+Modele de donnees SQLAlchemy - base sur le diagramme de classes valide
+(docs/uml/classes.puml) et sur la liste de metadonnees de FR-16.
 
-Base sur FR-16 (liste la plus complete). A ajuster si l'encadrant tranche
-en faveur de la liste restreinte de CN-03 (voir ambiguite 3 du rapport de suivi).
+Le schema appartient a Alembic (migrations/) : toute modification d'un
+modele passe par une migration ecrite a la main (cf. app.db).
 
 Respecte CN-04 : aucun champ ne doit jamais contenir de nom de personne,
 numero CNI, telephone, email, mot de passe, hash, information financiere,
@@ -567,8 +568,10 @@ class EntreeCollectee(Base):
     a_produit_exposition = Column(Boolean, nullable=False, default=False)
 
     # Empreinte du volume annonce par le listing au dernier passage
-    # (cf. point 5 de la docstring). NULL = pas de point de comparaison :
-    # l'entree n'est alors jamais relue pour changement.
+    # (cf. point 5 de la docstring). NULL sur une entree deja analysee :
+    # aucune reference encore, la page est relue UNE fois pour l'etablir
+    # (amorcage, cf. BaseConnector.raison_relecture), si le connecteur
+    # publie une signature.
     signature_listing = Column(String(64), nullable=True)
 
     __table_args__ = (

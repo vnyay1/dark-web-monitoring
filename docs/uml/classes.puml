@@ -52,6 +52,9 @@ package "Expositions" {
   class ExclusionFauxPositif {
     +id : UUID
     +motif : str
+    +type_exclusion : TypeExclusion
+    +actif : bool
+    +commentaire : str
     +ajoute_par : str
     +date_ajout : datetime
   }
@@ -93,7 +96,7 @@ package "Collecte" {
     +signature_listing : str
   }
 
-  class JournalAudit <<append-only>> {
+  class JournalAudit <<file circulaire, 1000 lignes>> {
     +id : UUID
     +horodatage : datetime
     +resultat : ResultatAudit
@@ -179,6 +182,7 @@ Selecteur "0..*" --> "1" Categorie : appartient a >
 Exposition "1" *-- "0..*" Alerte : declenche >
 Source "1" -- "0..*" JournalAudit : historique >
 Source "1" -- "0..*" EntreeCollectee : registre du crawl >
+ExclusionFauxPositif "0..*" --> "0..1" Source : portee >
 EvenementCollecte "0..*" --> "0..1" Exposition : annonce >
 User "1" -- "0..*" HistoriqueRole : cible / auteur >
 

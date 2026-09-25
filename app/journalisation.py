@@ -8,9 +8,9 @@ journaux n'existaient nulle part, et un incident de collecte n'etait
 diagnosticable qu'en relancant la collecte a la main.
 
 A NE PAS CONFONDRE avec le fil d'activite de la page Collecte : celui-la vit
-en base (EvenementCollecte, cf. app.supervision) et le bouton « Vider
-l'affichage » de l'interface n'efface que l'ecran du navigateur. Ni ce
-bouton, ni aucune route, ne touche au fichier ecrit ici.
+en base (EvenementCollecte, cf. app.supervision), et c'est lui que le bouton
+« Vider les logs » de l'interface supprime. Ni ce bouton, ni aucune route,
+ne touche au fichier ecrit ici.
 
 CN-04/CN-05 - ce fichier recoit les memes messages que la console, et les
 messages du projet ne contiennent ni contenu de page ni donnee personnelle

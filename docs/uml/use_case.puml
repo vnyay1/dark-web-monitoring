@@ -18,8 +18,15 @@ rectangle "Système de surveillance Dark Web - ANTIC" {
   usecase "Consulter la frise\nchronologique" as UC_Timeline
   usecase "Générer / consulter\nun rapport" as UC_Report
   usecase "Exporter les données\n(JSON/CSV)" as UC_Export
-  usecase "Valider un sélecteur\nproposé (NER)" as UC_ValidateNER
   usecase "Gérer la liste\nd'exclusion" as UC_Exclusion
+  usecase "Gérer le catalogue\nde sélecteurs" as UC_Catalogue
+  usecase "Piloter la collecte\n(planificateur)" as UC_Pilotage
+  usecase "Gérer les comptes\net les rôles" as UC_Comptes
+  usecase "Consulter le journal\nd'audit" as UC_Journal
+  usecase "Exporter / purger\n(conformité)" as UC_Conformite
+
+  ' FR-14 (proposition de sélecteurs par NER) n'est pas implémenté :
+  ' il n'a donc pas de cas d'utilisation ici.
 
   ' Cas d'utilisation - Système (déclenchés par le planificateur)
   usecase "Collecter une source" as UC_Collect
@@ -38,8 +45,12 @@ Analyste --> UC_Status
 Analyste --> UC_Timeline
 Analyste --> UC_Report
 Analyste --> UC_Export
-Analyste --> UC_ValidateNER
 Analyste --> UC_Exclusion
+Analyste --> UC_Catalogue
+Analyste --> UC_Pilotage
+Analyste --> UC_Comptes
+Analyste --> UC_Journal
+Analyste --> UC_Conformite
 
 UC_Dashboard ..> UC_Auth : <<include>>
 UC_Search ..> UC_Auth : <<include>>

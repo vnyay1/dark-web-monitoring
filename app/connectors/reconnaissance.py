@@ -743,7 +743,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
         etat_detail = f"ECHEC de parse_detail : {visite['erreur']}"
         causes.append(
             f"[E/F] parse_detail echoue ({visite['erreur']}) : en collecte, l'entree part en "
-            f"echec de detail et seul le titre du listing est analyse."
+            f"echec de detail et n'est pas analysee ; au bout de trois echecs, seul le titre "
+            f"du listing l'est."
         )
     else:
         etat_detail = "visitee et lue"
@@ -777,8 +778,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
         date_listing = lire(next(iter(dates_listing.values()), None))
         message = "[A] HORS PERIODE : en collecte, l'entree enrichie est ecartee avant le matching."
         if date_listing is not None and date_listing >= seuils["date_limite"]:
-            message += (" Le listing SEUL etait dans la periode : l'exposition a pu naitre du "
-                        "titre seul, et la page de detail ne l'a jamais completee.")
+            message += (" Le listing SEUL etait dans la periode : c'est la date de la page de "
+                        "detail qui l'en fait sortir.")
         causes.append(message)
 
     if visite["json"] is not None:
@@ -981,8 +982,8 @@ def phase_correspondance(connecteur, identifiant=None, index=0, page=1, termes=(
             print(f"                     vue le {ligne.date_premiere_vue:%Y-%m-%d}, {traite}")
             if ligne.statut_detail == StatutDetailEntree.A_TRAITER:
                 causes.append(
-                    "[F] Page de detail pas encore servie par le budget : l'entree n'a ete "
-                    "analysee que sur son titre."
+                    "[F] Page de detail pas encore servie par le budget : l'entree attend sa "
+                    "lecture, son titre seul ne produit pas d'exposition."
                 )
             elif ligne.statut_detail == StatutDetailEntree.ECHEC:
                 causes.append(

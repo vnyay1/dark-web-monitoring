@@ -36,9 +36,11 @@ deux phases :
      Chaque lien de pagination est valide par _page_suivante_validee() :
      meme domaine, meme chemin que le listing, page suivante exactement.
 
-  2. DETAIL : pour les entrees NOUVELLES uniquement, et dans la limite
-     du budget alloue, recuperation de la page de detail dont le texte
-     est concatene au texte du listing. C'est cette phase qui rend le
+  2. DETAIL : dans la limite du budget alloue, recuperation de la page de
+     detail des entrees jamais lues en entier (nouvelles, ou exposition a
+     completer) et des entrees deja lues dont la signature de listing
+     appelle une relecture (cf. raison_relecture). Son texte est
+     concatene au texte du listing. C'est cette phase qui rend le
      matching fiable : le listing ne contient souvent qu'un nom et une
      phrase, insuffisants pour reperer une mention camerounaise.
 
@@ -705,9 +707,10 @@ class BaseConnector:
                       priorite=None, signatures_connues=None, date_limite=None,
                       entrees_a_completer=None):
         """
-        Enrichit les entrees NOUVELLES par leur page de detail, dans la
-        limite du budget. Un echec sur une entree n'interrompt jamais la
-        collecte : il est comptabilise et reessaye au run suivant.
+        Enrichit par leur page de detail les entrees jamais lues en entier,
+        dans la limite du budget. Un echec sur une entree n'interrompt
+        jamais la collecte : il est comptabilise et reessaye au run suivant
+        (abandon apres MAX_ECHECS_DETAIL, cf. le registre).
 
         Une entree deja connue redevient candidate quand sa SIGNATURE DE
         LISTING a change (cf. signature_listing) : meme annonce, contenu
@@ -827,7 +830,7 @@ class BaseConnector:
         entry["niveau_detail"] = "detail"
 
     # ------------------------------------------------------------------
-    # Journal d'audit (FR-17, append-only)
+    # Journal d'audit (FR-17)
     # ------------------------------------------------------------------
 
     def _journaliser_synthese(self, stats, erreurs, succes, debut):
@@ -836,9 +839,11 @@ class BaseConnector:
         par classe.
 
         Une ligne par requete HTTP produirait environ un millier de lignes
-        par jour dans une table append-only sans purge. L'agregation rend
-        au contraire visible un motif systematique (le site a change ses
-        URLs de detail) sans qu'une instabilite Tor ne noie le journal.
+        par jour, et le journal etant une file circulaire de 1 000 lignes
+        (app.audit), elle effacerait en un cycle toute trace plus ancienne.
+        L'agregation rend au contraire visible un motif systematique (le
+        site a change ses URLs de detail) sans qu'une instabilite Tor ne
+        noie le journal.
 
         details ne contient jamais de corps de reponse (CN-04) : uniquement
         des compteurs et des libelles d'exception tronques.

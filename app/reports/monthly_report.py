@@ -206,13 +206,15 @@ def _paliers(repartition_criticite: Counter) -> list:
     elevee = get_config_int("seuil_criticite_elevee")
     critique = get_config_int("seuil_criticite_critique")
 
+    # En POINTS et non en selecteurs : un selecteur prioritaire compte pour
+    # son poids, "4 selecteurs" ne decrivait donc pas le palier.
     def plage(bas, haut):
-        pluriel = lambda n: "sélecteur" if n <= 1 else "sélecteurs"
+        pluriel = lambda n: "point" if n <= 1 else "points"
         if haut is None:
             return f"{bas} {pluriel(bas)} et plus"
         if bas >= haut:
             return f"{bas} {pluriel(bas)}"
-        return f"{bas} à {haut} sélecteurs"
+        return f"{bas} à {haut} points"
 
     bornes = (
         (NiveauCriticite.CRITIQUE, critique, None),

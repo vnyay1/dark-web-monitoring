@@ -40,7 +40,8 @@ STATUTS_ARCHIVES = (StatutExposition.FALSE_POSITIVE, StatutExposition.CLOSED)
 
 def seuil_du_niveau(niveau: NiveauCriticite) -> int:
     """
-    Nombre minimum de selecteurs correspondant a un palier.
+    Score minimum (selecteurs distincts ponderes par leur poids)
+    correspondant a un palier, d'apres les seuils EN VIGUEUR.
 
     On filtre sur `criticite` (l'entier) et non sur `niveau_criticite` :
     NiveauCriticite est une enumeration de chaines, dont l'ordre SQL serait

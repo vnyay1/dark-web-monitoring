@@ -83,9 +83,11 @@ def texte_complet(entree) -> bool:
     L'entree normalisee porte-t-elle le texte COMPLET de l'annonce ? Oui si
     sa page de detail a ete lue, ou si elle n'en a pas (source listing-only).
 
-    Une entree deja connue est re-analysee a chaque cycle sur son seul
-    titre de listing : conserver ce titre afficherait "CCA Bank" en guise de
-    texte de l'annonce, et masquerait qu'il reste a recuperer le vrai texte.
+    Sinon, l'entree n'a que son titre de listing : elle ne produit pas
+    d'exposition (cf. pipeline._traiter_une_entree) et, dans le seul cas ou
+    elle en produit une - page de detail definitivement perdue -, ce titre
+    n'est pas conserve : il afficherait "CCA Bank" en guise de texte de
+    l'annonce, et masquerait qu'il reste a recuperer le vrai texte.
     """
     return entree.get("niveau_detail") == "detail" or not entree.get("a_page_detail")
 
@@ -124,9 +126,10 @@ def conserver_selecteurs(signalement, details, noms_categories):
     """
     Enregistre les selecteurs trouves (CriticiteDetail.details) sur le
     signalement, SEULEMENT si leur score depasse celui de la liste deja
-    enregistree : comme la criticite, elle ne redescend jamais. Le titre
-    d'une annonce connue, re-analyse a chaque cycle, n'ecrase donc pas les
-    selecteurs trouves dans son texte complet.
+    enregistree : comme la criticite, elle ne redescend jamais. Une lecture
+    moins complete (titre seul d'une page de detail perdue, annonce
+    raccourcie par la source) n'ecrase donc pas les selecteurs deja
+    trouves.
 
     noms_categories : {categorie_id: nom}, fige avec la liste.
     """

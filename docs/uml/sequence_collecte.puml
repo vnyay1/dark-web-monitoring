@@ -35,7 +35,8 @@ loop pour chaque connecteur actif (N en parallele, sources_en_parallele)
       Connecteur -> Connecteur : parse() puis del raw (CN-05)
       note right of Connecteur
         Arret : page hors periode, dates illisibles,
-        pages deja connues, derniere page ou plafond.
+        sonde de date en echec, pages deja connues,
+        derniere page ou plafond.
       end note
     end
   end
@@ -53,13 +54,13 @@ loop pour chaque connecteur actif (N en parallele, sources_en_parallele)
     Tor --> Connecteur : texte concatene a l'entree
   end
 
-  Connecteur -> DB : JournalAudit (1 ligne de synthese)
+  Connecteur -> DB : JournalAudit (1 ligne de synthese,\n+ 3 erreurs agregees au plus)
   Connecteur --> Pipeline : entrees (texte en memoire)
 
   loop pour chaque entree
-    Pipeline -> Pipeline : fenetre temporelle\n(date ou date plafond)
+    Pipeline -> Pipeline : fenetre temporelle\n(date ou date plafond ; sauf completion\net signature changee)
     alt page de detail attendue et non lue
-      Pipeline -> DB : entree laissee A_TRAITER\n(le listing seul ne cree pas d'exposition)
+      Pipeline -> DB : entree nouvelle laissee A_TRAITER ;\ndeja analysee : simplement revue\n(le listing seul ne cree pas d'exposition)
     else texte complet disponible
       Pipeline -> Analyse : texte, catalogue de selecteurs fige
       Analyse --> Pipeline : criticite ponderee + categories\n+ selecteurs trouves

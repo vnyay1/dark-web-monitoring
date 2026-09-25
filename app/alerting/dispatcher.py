@@ -31,7 +31,8 @@ def _construire_message(exposition, est_confirmation: bool = False) -> tuple:
     )
 
     intro = (
-        "La criticite de cette exposition deja connue a augmente suite a une nouvelle source."
+        "La criticite de cette exposition deja connue a augmente : nouvelle source, ou "
+        "nouvelle lecture de son annonce."
         if est_confirmation
         else "Une nouvelle exposition potentielle a ete detectee."
     )

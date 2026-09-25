@@ -64,14 +64,14 @@ Registre --> DB
 Supervision --> DB : EtatScheduler,\nEvenementCollecte
 BaseConnector --> DB : JournalAudit
 
-Analyste --> SPA : HTTPS (session)
+Analyste --> SPA : HTTP local (session ;\nHTTPS derriere un reverse proxy)
 SPA --> API : fetch JSON
 SPA --> Downloads : liens natifs
 Downloads --> PDF
 API --> DB
 Downloads --> DB
 API ..> Supervision : demandes (collecte immediate,\nverification IP) via la base
-Scheduler ..> Logs : scheduler.log, pipeline.log
+Scheduler ..> Logs : scheduler.log\n(pipeline.log : collecte manuelle)
 API ..> Logs : web.log
 
 @enduml

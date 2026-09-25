@@ -4,6 +4,8 @@ Système de détection et d'indexation des indicateurs de fuites de données rel
 
 Projet de stage — ANTIC (Agence Nationale des Technologies de l'Information) — École Marocaine des Sciences de l'Ingénieur.
 
+Fonctionnement détaillé, de la collecte à l'interface : [`docs/doc.md`](./docs/doc.md).
+
 ---
 
 ## Principe directeur
@@ -59,7 +61,7 @@ chose à la demande (voir « Collecte manuelle »).
 │         ▼                                                    │
 │  SQLAlchemy / SQLite                                         │
 │         │                                                    │
-│         ├──► Alerting (email / SMS / WhatsApp / interface)   │ 
+│         ├──► Alertes (interface ; email/SMS/WhatsApp simulés)│
 │         ├──► API JSON Flask (4 rôles)                        │
 │         └──► Interface React (SPA, servie par Flask)         │
 └──────────────────────────────────────────────────────────────┘
@@ -176,6 +178,10 @@ dark-web-monitoring/
 │
 ├── migrations/                   # migrations Alembic
 └── docs/
+    ├── doc.md                     # fonctionnement complet, de A à Z
+    ├── incoherences.md            # revue de code : incohérences et corrections
+    ├── audit-securite.md          # audit de sécurité et correctifs
+    ├── Leaks-sites.md             # sites de fuite repérés (sources candidates)
     └── uml/                       # diagrammes PlantUML (use case, classes,
                                     # composants, séquence)
 ```
@@ -216,7 +222,9 @@ camerounais, chacun rattaché à une catégorie et administrable depuis l'interf
 **Trois niveaux de correspondance** : exact, insensible à la casse, et approché (RapidFuzz, pour les
 fautes de frappe). Les sélecteurs de 6 caractères ou moins — sigles institutionnels type « ART »,
 « MINFI » — échappent aux deux derniers et exigent une frontière de mot stricte : sinon le mot
-anglais « art » ou une référence juridique « Art. » suffisait à déclencher une exposition.
+anglais « art » ou une référence juridique « Art. » suffisait à déclencher une exposition. Deux
+formes courtes n'ont de frontière que d'un côté : un suffixe de domaine (« .cm », toujours collé à
+son nom : « camtel.cm ») et un indicatif (« +237 », toujours suivi du numéro).
 
 **L'annonce est analysée en entier.** Les niveaux exact et insensible à la casse parcourent tout le
 texte ; seul le niveau approché, le plus coûteux, est borné aux 20 000 premiers caractères. La
@@ -330,7 +338,7 @@ tout autre programme.
 ```bash
 alembic upgrade head
 python3 -m app.matching.seed_selecteurs
-python3 -m app.create_user
+python3 -m app.create_user --role super_admin   # premier compte ; les suivants depuis l'interface
 ```
 
 ### Mise à jour (après un `git pull`)
@@ -487,13 +495,13 @@ de connecteur, tentatives de connexion, purges). Aucune route ne modifie ni ne s
 particulier, mais le journal est une **file circulaire de 1 000 entrées** : au-delà, les plus
 anciennes sortent à l'écriture de la suivante. La purge de conformité l'ampute également, sur la
 même date limite que les expositions. Ce qui doit être conservé durablement est donc exporté avant
-(`/compliance/export-complet`).
+(`/compliance/export-complet` : expositions, journal d'audit et historique des rôles).
 
 ### Journaux serveur
 
 Le serveur web, le scheduler et le pipeline écrivent sur la console **et** dans un fichier tournant
-(`app/journalisation.py`) : `logs/web.log`, `logs/scheduler.log`, `logs/pipeline.log`, 5 Mo × 5
-archives chacun. `logs/scheduler.err.log` recueille la sortie d'erreur du scheduler lancé depuis
+(`app/journalisation.py`) : `logs/web.log`, `logs/scheduler.log` (collecte planifiée comprise),
+`logs/pipeline.log` (collecte manuelle, `python3 -m app.pipeline`), 5 Mo × 5 archives chacun. `logs/scheduler.err.log` recueille la sortie d'erreur du scheduler lancé depuis
 l'interface, pour qu'un plantage antérieur à l'initialisation du journal reste diagnosticable.
 Répertoire modifiable par `SENTINEL_LOG_DIR` (facultatif, contrairement aux variables de `.env`).
 
@@ -517,7 +525,11 @@ aux fichiers `logs/*.log`.
 
 Toutes les exigences **Must** du cahier des charges sont couvertes (FR-01, FR-02, FR-03, FR-06, FR-08 à FR-11, FR-13, FR-15, FR-16, FR-19 à FR-21, FR-24, FR-25, FR-27).
 
+Les alertes email, SMS et WhatsApp sont **simulées** (`app/alerting/senders.py` : journalisées et
+marquées envoyées, rien ne part) en attendant les accès de l'ANTIC ; seul le canal interface est réel.
+
 **Restant à faire :**
+- FR-25 : brancher les vrais fournisseurs email / SMS / WhatsApp
 - FR-05 : connecteur Telegram (compte dédié à créer)
 - FR-14 : proposition de sélecteurs par NER (étude de faisabilité réalisée)
 - FR-23 : visualisation géographique/sectorielle (optionnelle)
