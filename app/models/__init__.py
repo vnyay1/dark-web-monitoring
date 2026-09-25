@@ -108,16 +108,13 @@ class ResultatAudit(enum.Enum):
     SUCCES = "succes"
     ECHEC = "echec"
 
+
 class RoleUtilisateur(enum.Enum):
     USER = "user"
     SUPERVISOR = "supervisor"
     ADMIN = "admin"
     SUPER_ADMIN = "super_admin"
 
-
-# ---------------------------------------------------------------------
-# Exposition (indicateur d'exposition - FR-16)
-# ---------------------------------------------------------------------
 
 # ---------------------------------------------------------------------
 # Categorie (FR-13) - geree par l'administrateur
@@ -169,6 +166,11 @@ exposition_categories = Table(
     Column("exposition_id", String(36), ForeignKey("expositions.id"), primary_key=True),
     Column("categorie_id", String(36), ForeignKey("categories.id"), primary_key=True),
 )
+
+
+# ---------------------------------------------------------------------
+# Exposition (indicateur d'exposition - FR-16)
+# ---------------------------------------------------------------------
 
 
 class Exposition(Base):
@@ -418,9 +420,6 @@ class JournalAudit(Base):
     def __repr__(self):
         return f"<JournalAudit {self.horodatage} - {self.resultat.value}>"
 
-# ---------------------------------------------------------------------
-# User (FR-24 - authentification des analystes)
-# ---------------------------------------------------------------------
 
 # ---------------------------------------------------------------------
 # User (FR-24 - authentification + gestion des privileges)
@@ -439,6 +438,7 @@ class User(Base):
 
     def __repr__(self):
         return f"<User {self.nom_utilisateur} ({self.role.value})>"
+
 
 # ---------------------------------------------------------------------
 # Alerte (FR-25/FR-26 - alertes multi-canal)
@@ -475,6 +475,7 @@ class Alerte(Base):
     def __repr__(self):
         return f"<Alerte {self.canal.value} - {self.statut_envoi.value}>"
 
+
 # ---------------------------------------------------------------------
 # ConfigurationSysteme (parametres modifiables par admin/super_admin)
 # ---------------------------------------------------------------------
@@ -489,6 +490,7 @@ class ConfigurationSysteme(Base):
     def __repr__(self):
         return f"<ConfigurationSysteme {self.cle}={self.valeur}>"
 
+
 class HistoriqueRole(Base):
     __tablename__ = "historique_roles"
 
@@ -499,8 +501,6 @@ class HistoriqueRole(Base):
     nouveau_role = Column(SAEnum(RoleUtilisateur), nullable=False)
     date_modification = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
-    user_cible = relationship("User", foreign_keys=[user_cible_id])
-    modifie_par = relationship("User", foreign_keys=[modifie_par_id])
 
 # ---------------------------------------------------------------------
 # EntreeCollectee - file de travail du crawl incremental

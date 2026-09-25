@@ -8,17 +8,16 @@ Objectifs :
 - ne pas insérer de noms de personnes physiques ;
 - limiter les sélecteurs extrêmement génériques aux catégories contextuelles.
 
-Compatibilité :
-- s'appuie sur app.db et app.models comme le seed d'origine ;
-- utilise les catégories déjà présentes dans le projet :
-  DOMAINE, TELEPHONE, MINISTERE, AGENCE_GOUVERNEMENTALE,
-  BANQUE, MICROFINANCE, TELECOM, UNIVERSITE,
-  ENTREPRISE, VILLE_REGION.
+Categories : DOMAINE, TELEPHONE, MINISTERE, AGENCE_GOUVERNEMENTALE,
+BANQUE, MICROFINANCE, TELECOM, UNIVERSITE, ENTREPRISE, VILLE_REGION,
+creees si absentes (cf. CategorieSelecteur).
 
 Important :
 - Les sélecteurs courts/génériques (ex. ART, CBC, CCA, INS) peuvent produire
-  des faux positifs. Ils restent présents pour la couverture, mais il est
-  recommandé de leur attribuer un poids faible dans le moteur de scoring.
+  des faux positifs. Le moteur ne les trouve qu'en majuscules exactes et en
+  mot isolé (app.matching.engine) ; ils gardent le poids minimal (1).
+- Le seed n'ajoute que ce qui manque : il ne modifie ni ne supprime rien
+  dans un catalogue déjà administré depuis l'interface.
 """
 
 import logging
@@ -70,10 +69,6 @@ def _categorie(session, cache, nom):
     return cache[nom]
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -680,17 +675,8 @@ def seed():
     added_count = 0
     skipped_count = 0
 
-    # Le projet possède déjà un SEED_SELECTEURS dans le seed initial.
-    # On l'importe dynamiquement pour pouvoir utiliser ce fichier seul ou
-    # en complément d'un seed existant.
-    try:
-        from app.matching.seed_selecteurs import SEED_SELECTEURS as SEED_ORIGINAL
-    except (ImportError, AttributeError):
-        SEED_ORIGINAL = []
-
-    # Fusion + déduplication tout en conservant l'ordre.
-    tous = list(SEED_ORIGINAL) + list(SEED_SELECTEURS_ENRICHIS)
-    uniques = list(dict.fromkeys(tous))
+    # Deduplication en conservant l'ordre.
+    uniques = list(dict.fromkeys(SEED_SELECTEURS_ENRICHIS))
 
     cache_categories = {}
 
@@ -744,4 +730,5 @@ def seed():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     seed()

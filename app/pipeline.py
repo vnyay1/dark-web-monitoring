@@ -3,8 +3,8 @@ Pipeline complet : Connecteur -> Fenetre temporelle -> Matching Engine ->
 Filtrage faux positifs -> Criticite (et categories des selecteurs trouves)
 -> Deduplication -> Persistance -> Alertes.
 
-Chaque connecteur retourne un dict {"entries": [...], "texte_global": ...,
-"nb_entries": int}. Le pipeline traite CHAQUE entree individuellement
+Chaque connecteur retourne ses entrees (BaseConnector.collect :
+{"success", "entries", ...}). Le pipeline traite CHAQUE entree individuellement
 (une entree = une victime potentielle = une Exposition potentielle),
 plutot que la page entiere d'un coup, pour rester precis sur FR-16.
 
@@ -623,8 +623,7 @@ def _analyser_collecte(session, source, connector, result, seuils, catalogue,
     source.nombre_erreurs = 0
     session.commit()
 
-    # collect() renvoie toujours ses entrees sous "entries" (BaseConnector).
-    entries_brutes = result["extracted_text"]["entries"]
+    entries_brutes = result["entries"]
 
     stats["nb_entries_brutes"] = len(entries_brutes)
 

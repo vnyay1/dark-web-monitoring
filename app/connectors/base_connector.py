@@ -118,12 +118,14 @@ class BaseConnector:
     Classe de base pour tous les connecteurs de sources.
 
     Un connecteur concret DOIT redefinir :
-    - parse(raw_content) -> {"entries": [...], "texte_global": str, "nb_entries": int}
+    - parse(raw_content) -> {"entries": [...]}, une entree par annonce :
+      texte_brut, et selon la source nom_entite_detecte, lien_detail, une
+      date (cf. app.connectors.dates.CLES_DATE)
 
     Il PEUT redefinir :
     - url_page_suivante(raw_content, page)  (avec SUPPORTE_PAGINATION = True)
     - url_detail(entry) + parse_detail(raw_content, entry)  (avec SUPPORTE_DETAIL = True)
-    - identifiant_entree(entry), priorite_detail(entry), get_metadata()
+    - identifiant_entree(entry), signature_listing(entry)
     """
 
     # A redefinir dans chaque connecteur concret
@@ -299,18 +301,6 @@ class BaseConnector:
             f"mais n'implemente pas parse_detail()"
         )
 
-    def priorite_detail(self, entry):
-        """
-        Priorite d'une entree dans la depense du budget de pages de detail
-        (plus grand = servi en premier). A priorite egale, l'ordre du
-        listing est conserve (tri stable).
-
-        Surcharge utile quand le listing revele deja un signal fort et
-        gratuit (indicatif pays, domaine .cm) : le systeme devient utile
-        des le premier run au lieu du dixieme.
-        """
-        return 0
-
     def signature_listing(self, entry):
         """
         Empreinte de ce que le LISTING dit du volume d'une entree, ou None.
@@ -436,13 +426,6 @@ class BaseConnector:
         )
         return "h:" + hashlib.sha256(graine.encode("utf-8")).hexdigest()[:32]
 
-    def get_metadata(self):
-        """Retourne les informations de base de la source (redefinissable si besoin)."""
-        return {
-            "source_name": self.SOURCE_NAME,
-            "source_type": self.SOURCE_TYPE,
-        }
-
     # ------------------------------------------------------------------
     # Orchestration
     # ------------------------------------------------------------------
@@ -477,11 +460,11 @@ class BaseConnector:
                           (qui connait le catalogue et les expositions) :
                           les pages de detail des entrees de plus haute
                           priorite sont servies en premier dans le budget.
-                          Sans elle, ordre du listing (et priorite_detail).
+                          Sans elle, ordre du listing.
 
-        Appele sans argument sur un connecteur qui ne surcharge rien, il
-        fait exactement une requete et retourne exactement la meme
-        structure qu'avant l'introduction du crawl profond.
+        Retourne {"success", "entries", "statistiques_crawl"} (plus "error"
+        en cas d'echec). Appele sans argument sur un connecteur qui ne
+        surcharge rien, il fait exactement une requete.
         """
         debut = time.time()
         entrees_connues = entrees_connues or set()
@@ -509,7 +492,7 @@ class BaseConnector:
             return {
                 "success": False,
                 "error": erreur_bloquante,
-                "metadata": self.get_metadata(),
+                "entries": [],
                 "statistiques_crawl": stats,
             }
 
@@ -523,12 +506,7 @@ class BaseConnector:
 
         return {
             "success": True,
-            "extracted_text": {
-                "entries": entries,
-                "texte_global": "\n".join(e.get("texte_brut") or "" for e in entries),
-                "nb_entries": len(entries),
-            },
-            "metadata": self.get_metadata(),
+            "entries": entries,
             "statistiques_crawl": stats,
         }
 
@@ -749,9 +727,9 @@ class BaseConnector:
             categorie qui gagne un post ne voit pas forcement sa date
             rafraichie).
 
-        Ordre de service : priorite() du pipeline d'abord (une annonce dont
-        le titre cite deja un selecteur passe avant les autres), puis
-        priorite_detail() du connecteur, puis l'ordre du listing. Sans cet
+        Ordre de service : priorite() du pipeline (une annonce dont le
+        titre cite deja un selecteur passe avant les autres), puis l'ordre
+        du listing (tri stable). Sans cet
         ordre, une annonce camerounaise placee bas dans un listing charge
         n'etait lue que sur son titre tant que le budget ne l'atteignait pas.
         """
@@ -783,15 +761,10 @@ class BaseConnector:
             candidats.append(entree)
 
         stats["details_hors_periode"] = hors_periode
-        rangs = {
-            id(e): ((priorite(e) if priorite else 0), self.priorite_detail(e))
-            for e in candidats
-        }
+        rangs = {id(e): (priorite(e) if priorite else 0) for e in candidats}
         candidats.sort(key=lambda e: rangs[id(e)], reverse=True)  # tri stable
         stats["details_ignores"] = max(0, len(candidats) - budget)
-        stats["details_prioritaires"] = sum(
-            1 for e in candidats[:budget] if rangs[id(e)][0] > 0
-        )
+        stats["details_prioritaires"] = sum(1 for e in candidats[:budget] if rangs[id(e)] > 0)
         # Entrees deja connues reprises : listing change, ou amorcage de
         # leur signature (cf. signature_a_change).
         stats["details_relus"] = sum(

@@ -17,7 +17,7 @@ import re
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, send_from_directory
 
 from app.config import Config
 from app.db import init_db

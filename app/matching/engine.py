@@ -202,7 +202,7 @@ def _match_case_insensitive(texte: str, selecteur_valeur: str,
     return results
 
 
-def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRESHOLD,
+def _match_fuzzy(texte: str, selecteur_valeur: str,
                  contexte: _ContexteTexte = None) -> list[MatchResult]:
     """
     Recherche des correspondances approximatives via une fenetre glissante
@@ -234,7 +234,7 @@ def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRES
     trouves = sorted(
         process.extract(
             selecteur_lower, segments_lower,
-            scorer=fuzz.ratio, score_cutoff=threshold, limit=None,
+            scorer=fuzz.ratio, score_cutoff=FUZZY_THRESHOLD, limit=None,
         ),
         key=lambda resultat: resultat[2],
     )

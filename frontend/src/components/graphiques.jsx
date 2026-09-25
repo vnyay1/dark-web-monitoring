@@ -53,7 +53,7 @@ function lireCouleurs() {
 }
 
 /** Couleurs du theme actif, relues a chaque bascule de theme. */
-export function useCouleursGraphique() {
+function useCouleursGraphique() {
   const { theme } = useTheme();
   const [couleurs, setCouleurs] = useState(lireCouleurs);
   useEffect(() => {

@@ -3,11 +3,9 @@ FR-03 - Connecteur reel #2 : Data Leaks & Exposure / Orion Leaks (ransomware lea
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
 ATTENTION CN-04/OS-03 : le lien "Hidden Link Revealed" pointe
-potentiellement vers les donnees volees elles-memes. Ce lien ne doit
-JAMAIS etre suivi/telecharge - on enregistre uniquement son existence
-(booleen), jamais l'URL ni le contenu qu'il pointe.
-
-MISE A JOUR : utilise desormais le module centralise app.tor.
+potentiellement vers les donnees volees elles-memes. Il n'est jamais suivi
+ni meme lu : ni son URL ni ce qu'il pointe ne sont conserves. Listing seul
+(url_detail() -> None).
 
 PAGINATION (reconnaissance VM, 11/09/2026) : ul.pagination a.page-link,
 lien "Next" vers ../news/home?page=N.
@@ -31,17 +29,16 @@ class OrionLeaksConnector(BaseConnector):
     SUPPORTE_PAGINATION = True
     MAX_PAGES_LISTING = 30
 
-
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
 
         entries = []
-        cards = soup.select("div.card.post-card")
-
-        for card in cards:
+        for card in soup.select("div.card.post-card"):
             nom_tag = card.select_one("span.company-name")
             nom_entite = nom_tag.get_text(strip=True) if nom_tag else None
 
+            # Le titre de la card est l'adresse du site de la victime : un
+            # domaine en .cm est un signal pour le catalogue.
             url_victime_tag = card.select_one("h5.card-title")
             url_victime = url_victime_tag.get_text(strip=True) if url_victime_tag else None
 
@@ -54,31 +51,16 @@ class OrionLeaksConnector(BaseConnector):
             statut_tag = card.select_one(".status-text")
             statut = statut_tag.get_text(strip=True) if statut_tag else None
 
-            lien_cache_present = card.select_one(".hidden-link-revealed a") is not None
-
-            texte_complet = " ".join(filter(
-                None, [nom_entite, url_victime, statut, date_publication, message]
-            ))
-
             entries.append({
                 "nom_entite_detecte": nom_entite,
-                "url_victime": url_victime,
                 "date_publication": date_publication,
-                "message": message,
-                "statut": statut,
-                "lien_donnees_present": lien_cache_present,
-                "texte_brut": texte_complet,
+                "texte_brut": " ".join(filter(
+                    None, [nom_entite, url_victime, statut, date_publication, message]
+                )),
             })
 
         logger.info(f"[orion_leaks] {len(entries)} entree(s) trouvee(s) sur la page.")
-
-        texte_global = "\n".join(e["texte_brut"] for e in entries)
-
-        return {
-            "entries": entries,
-            "texte_global": texte_global,
-            "nb_entries": len(entries),
-        }
+        return {"entries": entries}
 
     def url_page_suivante(self, raw_content, page_courante):
         soup = BeautifulSoup(raw_content, "html.parser")

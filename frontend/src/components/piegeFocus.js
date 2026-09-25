@@ -18,7 +18,7 @@ const FOCALISABLES = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-export function elementsFocalisables(conteneur) {
+function elementsFocalisables(conteneur) {
   if (!conteneur) return [];
   return Array.from(conteneur.querySelectorAll(FOCALISABLES)).filter(
     (el) => el.offsetParent !== null || el === document.activeElement,

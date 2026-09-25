@@ -169,7 +169,7 @@ def _relire_source(session, connecteur, source, par_reference, selecteurs):
         return list(par_reference)
 
     retrouvees = set()
-    for brute in resultat["extracted_text"]["entries"]:
+    for brute in resultat["entries"]:
         try:
             entree = _normaliser_entry(brute, connecteur)
         except Exception as erreur:

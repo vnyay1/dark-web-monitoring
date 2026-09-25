@@ -14,7 +14,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 
 import { IconeLune, IconeSoleil } from "../components/icones";
 
-export const CLE_THEME = "sentinel-theme";
+const CLE_THEME = "sentinel-theme";
 
 const ContexteTheme = createContext(null);
 

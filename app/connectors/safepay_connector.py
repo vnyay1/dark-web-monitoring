@@ -2,8 +2,6 @@
 FR-03 - Connecteur reel #5 : SafePay (ransomware leak site).
 STATUT : structure confirmee via inspection reelle (VM, 08/2026).
 
-MISE A JOUR : utilise desormais le module centralise app.tor.
-
 PAGE DE DETAIL - le listing ne date pas ses annonces ; la page de detail,
 si. Structure confirmee par reconnaissance (VM, 10/09/2026, verdict de
 liceite favorable : HTML, meme domaine, page d'annonce) :
@@ -41,9 +39,10 @@ class SafePayConnector(BaseConnector):
     TARGET_URL = "http://safepaypfxntwixwjrlcscft433ggemlhgkkdupi2ynhtcmvdgubmoyd.onion/"
 
     # Page de detail : seule source de la date de publication. Seules les
-    # annonces NOUVELLES sont visitees, a raison d'une requete toutes les 30
-    # a 45 s (FR-06) ; celles que le budget ne sert pas le sont au cycle
-    # suivant. Les sondes de date (une par page de listing) s'y ajoutent.
+    # annonces jamais lues en entier sont visitees, a raison d'une requete
+    # toutes les 30 a 45 s (FR-06) ; celles que le budget ne sert pas le sont
+    # au cycle suivant. Les sondes de date (une par page de listing) s'y
+    # ajoutent, hors budget.
     SUPPORTE_DETAIL = True
     MAX_DETAILS_PAR_RUN = 10
 
@@ -54,54 +53,27 @@ class SafePayConnector(BaseConnector):
     # Seule forme de lien verifiee comme page d'annonce (reconnaissance).
     PREFIXE_ANNONCE = "/blog/post/"
 
-
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
 
         entries = []
-        cards = soup.select("div.card.bg-dark.text-light")
-
-        for card in cards:
+        for card in soup.select("div.card.bg-dark.text-light"):
             nom_tag = card.select_one("h5.card-title")
             nom_entite = nom_tag.get_text(strip=True) if nom_tag else None
-
-            flag_tag = card.select_one("img.country-flag")
-            code_pays = flag_tag.get("alt") if flag_tag else None
 
             description_tag = card.select_one("p.card-text")
             description = description_tag.get_text(strip=True) if description_tag else None
 
-            statut_tag = card.select_one(".published-text span")
-            statut = statut_tag.get_text(strip=True) if statut_tag else None
-
-            vues_tag = card.select_one(".badge.bg-secondary")
-            vues = vues_tag.get_text(strip=True) if vues_tag else None
-
             lien_detail_tag = card.select_one("a.btn-primary")
-            lien_detail = lien_detail_tag.get("href") if lien_detail_tag else None
-
-            texte_complet = " ".join(filter(None, [nom_entite, description]))
 
             entries.append({
                 "nom_entite_detecte": nom_entite,
-                "code_pays": code_pays,
-                "description": description,
-                "statut": statut,
-                "vues": vues,
-                "lien_detail": lien_detail,
-                "texte_brut": texte_complet,
+                "lien_detail": lien_detail_tag.get("href") if lien_detail_tag else None,
+                "texte_brut": " ".join(filter(None, [nom_entite, description])),
             })
 
         logger.info(f"[safepay] {len(entries)} entree(s) trouvee(s) sur la page.")
-
-        texte_global = "\n".join(e["texte_brut"] for e in entries)
-
-        return {
-            "entries": entries,
-            "texte_global": texte_global,
-            "nb_entries": len(entries),
-        }
-
+        return {"entries": entries}
 
     def url_page_suivante(self, raw_content, page_courante):
         soup = BeautifulSoup(raw_content, "html.parser")

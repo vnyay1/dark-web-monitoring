@@ -135,8 +135,10 @@ def valider_valeur(cle: str, valeur: str) -> str:
 def get_config(cle: str) -> str:
     """Recupere une valeur de configuration, avec repli sur la valeur par defaut."""
     session = get_session()
-    entry = session.query(ConfigurationSysteme).filter_by(cle=cle).first()
-    session.close()
+    try:
+        entry = session.query(ConfigurationSysteme).filter_by(cle=cle).first()
+    finally:
+        session.close()
 
     if entry:
         return entry.valeur
@@ -161,17 +163,19 @@ def get_config_niveau(cle: str):
 def set_config(cle: str, valeur: str):
     """Met a jour (ou cree) une valeur de configuration."""
     session = get_session()
-    entry = session.query(ConfigurationSysteme).filter_by(cle=cle).first()
+    try:
+        entry = session.query(ConfigurationSysteme).filter_by(cle=cle).first()
 
-    if entry:
-        entry.valeur = valeur
-    else:
-        description = VALEURS_PAR_DEFAUT.get(cle, (None, None, None))[1]
-        entry = ConfigurationSysteme(cle=cle, valeur=valeur, description=description)
-        session.add(entry)
+        if entry:
+            entry.valeur = valeur
+        else:
+            description = VALEURS_PAR_DEFAUT.get(cle, (None, None, None))[1]
+            entry = ConfigurationSysteme(cle=cle, valeur=valeur, description=description)
+            session.add(entry)
 
-    session.commit()
-    session.close()
+        session.commit()
+    finally:
+        session.close()
     logger.info(f"[config] {cle} mis a jour : {valeur}")
 
 
@@ -192,4 +196,3 @@ def init_config_defaults():
         session.commit()
     finally:
         session.close()
-    session.close()

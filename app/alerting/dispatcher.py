@@ -55,22 +55,18 @@ ORDRE_NIVEAUX = {niveau: rang for rang, niveau in enumerate(NiveauCriticite)}
 
 
 def declencher_alertes(session, exposition, est_nouvelle: bool = True,
-                        ancienne_criticite: int = None,
-                        niveau_minimum=None) -> list:
+                        ancienne_criticite: int = None) -> list:
     """
     FR-25 - Point d'entree : declenche les alertes pour une exposition.
 
-    niveau_minimum : palier en dessous duquel aucune alerte n'est emise.
-    Laisse a None (le cas normal), il est lu depuis la configuration
-    systeme. L'ancienne version prenait ici une valeur par defaut en dur
-    (0.6) qui n'etait donc JAMAIS None : le seuil regle par
-    l'administrateur n'a jamais ete applique.
+    Aucune alerte sous le palier niveau_alerte_minimum (configuration
+    systeme). Une exposition deja connue n'alerte que si sa criticite a
+    augmente d'au moins hausse_criticite_confirmation depuis
+    ancienne_criticite : c'est l'alerte de CONFIRMATION.
     """
     from app.config_system import get_config_int, get_config_niveau
 
-    if niveau_minimum is None:
-        niveau_minimum = get_config_niveau("niveau_alerte_minimum")
-
+    niveau_minimum = get_config_niveau("niveau_alerte_minimum")
     if ORDRE_NIVEAUX[exposition.niveau_criticite] < ORDRE_NIVEAUX[niveau_minimum]:
         return []
 

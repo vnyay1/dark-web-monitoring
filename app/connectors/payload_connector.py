@@ -17,11 +17,8 @@ Structure REELLE confirmee :
     </article>
 </a>
 
-Le lien est le PARENT de la card, pas l'inverse.
-
-MISE A JOUR : utilise desormais le module centralise app.tor pour la
-connexion (renouvellement de circuit inclus automatiquement), au lieu
-de dupliquer la logique de proxy SOCKS localement.
+Le lien est le PARENT de la card, pas l'inverse. Listing seul : aucune
+page de detail, aucune date publiee.
 """
 
 import logging
@@ -37,45 +34,24 @@ class PayloadConnector(BaseConnector):
 
     TARGET_URL = "http://payloadrz5yw227brtbvdqpnlhq3rdcdekdnn3rgucbcdeawq2v6vuyd.onion/"
 
-
     def parse(self, raw_content):
         soup = BeautifulSoup(raw_content, "html.parser")
 
         entries = []
-        links = soup.select("a.card-link")
-
-        for link_tag in links:
-            href = link_tag.get("href")
-
+        for link_tag in soup.select("a.card-link"):
             card = link_tag.select_one("article.card")
             if card is None:
                 continue
 
             nom_tag = card.select_one(".title")
-            nom_entite = nom_tag.get_text(strip=True) if nom_tag else None
-
-            size_tag = card.select_one("span.company-size")
-            taille = size_tag.get_text(strip=True) if size_tag else None
-
-            timer_tag = card.select_one("span.timer")
-            timer = timer_tag.get_text(strip=True) if timer_tag else None
-
-            texte_complet = card.get_text(separator=" ", strip=True)
 
             entries.append({
-                "nom_entite_detecte": nom_entite,
-                "taille": taille,
-                "timer": timer,
-                "lien_detail": href,
-                "texte_brut": texte_complet,
+                "nom_entite_detecte": nom_tag.get_text(strip=True) if nom_tag else None,
+                "lien_detail": link_tag.get("href"),
+                # Texte COMPLET de la card (nom, volume revendique, compte a
+                # rebours) : une mention camerounaise peut s'y trouver.
+                "texte_brut": card.get_text(separator=" ", strip=True),
             })
 
         logger.info(f"[payload] {len(entries)} entree(s) trouvee(s) sur la page.")
-
-        texte_global = "\n".join(e["texte_brut"] for e in entries)
-
-        return {
-            "entries": entries,
-            "texte_global": texte_global,
-            "nb_entries": len(entries),
-        }
+        return {"entries": entries}

@@ -164,9 +164,9 @@ def liberer_verrou():
         session.close()
 
 
-def battre_coeur(statut: StatutScheduler = None, source_en_cours=False):
+def battre_coeur(source_en_cours=False):
     """
-    Rafraichit le heartbeat, et accessoirement le statut ou la source en
+    Rafraichit le heartbeat, et accessoirement la liste des sources en
     cours d'analyse.
 
     source_en_cours vaut False par defaut (et non None) pour distinguer
@@ -176,8 +176,6 @@ def battre_coeur(statut: StatutScheduler = None, source_en_cours=False):
     try:
         etat = _etat(session)
         etat.heartbeat = utc_now()
-        if statut is not None:
-            etat.statut = statut
         if source_en_cours is not False:
             etat.source_en_cours = source_en_cours
         session.commit()

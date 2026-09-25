@@ -1,8 +1,7 @@
 """
-FR-03 - Connecteur reel #8 : Everest (Laravel + Inertia.js + React).
-STATUT : structure de page CATEGORIE confirmee et validee en conditions
-reelles. Structure de la page D'ACCUEIL (liste des categories) non
-encore confirmee - HOME_URL est une hypothese a valider.
+FR-03 - Connecteur reel #7 : Everest (Laravel + Inertia.js + React).
+STATUT : page d'accueil (props.categories) et pages de categorie
+confirmees en conditions reelles (VM, 09/2026 : 46 categories collectees).
 
 Architecture particuliere : Laravel (backend) sert une page HTML unique
 contenant tout le state de la page dans un bloc :
@@ -16,8 +15,9 @@ browser necessaire).
 
 Strategie de collecte, desormais portee par le contrat BaseConnector :
 1. LISTING - page d'accueil -> props.categories (une entree par victime)
-2. DETAIL  - pour chaque categorie NOUVELLE et dans la limite du budget,
-   sa page /news/{slug} -> props.active + props.posts (texte integral)
+2. DETAIL  - pour chaque categorie nouvelle, ou dont le nombre de posts a
+   change (signature_listing), dans la limite du budget : sa page
+   /news/{slug} -> props.active + props.posts (texte integral)
 
 C'est la phase de detail qui porte toute la valeur : la page d'accueil ne
 donne que le TITRE d'une categorie, bien trop pauvre pour que le Matching
@@ -87,26 +87,18 @@ class EverestConnector(BaseConnector):
             slug = cat.get("slug")
             entries.append({
                 "nom_entite_detecte": cat.get("title"),
-                "slug": slug,
                 # Expose le chemin de la page de publication sous la cle
                 # commune : identifiant_entree et reference_source du
                 # pipeline s'en servent alors sans traitement particulier.
                 "lien_detail": f"/news/{slug}" if slug else None,
+                # Volume et date annonces : la signature de listing.
                 "nb_posts": cat.get("postCount"),
                 "date": cat.get("date"),
-                "verrouille": cat.get("locked"),
                 "texte_brut": cat.get("title") or "",
             })
 
         logger.info(f"[everest] {len(entries)} categorie(s) trouvee(s) sur la page d'accueil.")
-
-        texte_global = "\n".join(e["texte_brut"] for e in entries)
-
-        return {
-            "entries": entries,
-            "texte_global": texte_global,
-            "nb_entries": len(entries),
-        }
+        return {"entries": entries}
 
     def url_detail(self, entry):
         """
@@ -151,7 +143,6 @@ class EverestConnector(BaseConnector):
 
         return {
             "nom_entite_detecte": nom_entite,
-            "nb_posts_analyses": len(posts),
             "date_publication": posts[0].get("date") if posts else None,
             "texte_brut": self.nettoyer_urls(" ".join(filter(None, morceaux))),
         }

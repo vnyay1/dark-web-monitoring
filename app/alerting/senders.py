@@ -1,4 +1,3 @@
-
 """
 FR-25/FR-26 - Interface generique des "senders" d'alertes.
 
@@ -18,8 +17,6 @@ logger = logging.getLogger(__name__)
 class BaseSender(ABC):
     """Interface commune a tous les canaux d'alerte."""
 
-    CANAL_NOM = "unknown"
-
     @abstractmethod
     def send(self, destinataire: str, sujet: str, message: str) -> bool:
         """
@@ -36,7 +33,6 @@ class MockEmailSender(BaseSender):
     Sender EMAIL simule (mock). A remplacer par une vraie integration
     SMTP/SendGrid/etc. une fois les identifiants ANTIC disponibles.
     """
-    CANAL_NOM = "email"
 
     def send(self, destinataire: str, sujet: str, message: str) -> bool:
         logger.info(
@@ -51,7 +47,6 @@ class MockSmsSender(BaseSender):
     Sender SMS simule (mock). A remplacer par une vraie integration
     (Twilio ou autre) une fois les identifiants ANTIC disponibles.
     """
-    CANAL_NOM = "sms"
 
     def send(self, destinataire: str, sujet: str, message: str) -> bool:
         logger.info(f"[MOCK SMS] A: {destinataire} | Message: {message[:100]}...")
@@ -64,7 +59,6 @@ class MockWhatsAppSender(BaseSender):
     (Twilio WhatsApp Business API ou autre) une fois les identifiants
     ANTIC disponibles.
     """
-    CANAL_NOM = "whatsapp"
 
     def send(self, destinataire: str, sujet: str, message: str) -> bool:
         logger.info(f"[MOCK WHATSAPP] A: {destinataire} | Message: {message[:100]}...")
