@@ -3,9 +3,13 @@ FR-12 - Deduplication des expositions detectees sur plusieurs sources.
 
 Regle d'identite proposee (a valider avec l'encadrant si possible - aucune
 formule n'est donnee dans le cahier des charges) : deux detections sont
-considerees comme LE MEME incident si :
-  1. Le nom d'entite est identique ou tres similaire (fuzzy)
-  2. La premiere detection existante date de moins de FENETRE_JOURS jours
+considerees comme LE MEME incident si le nom d'entite est identique ou tres
+similaire (fuzzy) ET :
+  1. soit l'exposition porte deja un signalement de la MEME source pour la
+     MEME reference : c'est la meme annonce, revue a un cycle ulterieur,
+     quelle que soit son anciennete ;
+  2. soit sa premiere detection date de moins de FENETRE_JOURS jours (meme
+     victime publiee par une autre source, ou nouvelle annonce).
 Les categories ne sont pas un critere : elles sont reunies (cf.
 enregistrer_exposition).
 
@@ -30,6 +34,41 @@ SEUIL_SIMILARITE_NOM_ENTITE = 90  # score RapidFuzz (0-100)
 FENETRE_JOURS = 30
 
 
+def _meme_nom(nom_entite: str, candidat: str) -> int:
+    """Score de similarite des deux noms, 0 sous SEUIL_SIMILARITE_NOM_ENTITE."""
+    score = fuzz.ratio(nom_entite.lower(), (candidat or "").lower())
+    return score if score >= SEUIL_SIMILARITE_NOM_ENTITE else 0
+
+
+def _exposition_du_meme_signalement(session, nom_entite: str, source_id, reference_source):
+    """
+    Exposition portant deja un signalement de CETTE source pour CETTE
+    reference, au nom proche : la meme annonce, revue a un cycle ulterieur.
+
+    SANS fenetre de date, contrairement au rapprochement multi-source : une
+    annonce qui reste listee des mois n'est pas un nouvel incident. Les
+    sources sans page de detail (payload, cmd_organization...) sont
+    re-analysees a chaque cycle ; avec la seule fenetre de FENETRE_JOURS,
+    une victime toujours listee recreait une exposition - et une alerte
+    "nouvelle" - tous les 30 jours.
+
+    Le nom est tout de meme compare : orion_leaks et cmd_organization n'ont
+    pas de reference propre a chaque annonce (l'URL du listing sert pour
+    toutes).
+    """
+    if source_id is None or not reference_source:
+        return None
+
+    meilleure, meilleur_score = None, 0
+    for signalement in session.query(SourceReference).filter_by(
+        source_id=source_id, reference_source=reference_source,
+    ):
+        score = _meme_nom(nom_entite, signalement.exposition.nom_entite)
+        if score > meilleur_score:
+            meilleure, meilleur_score = signalement.exposition, score
+    return meilleure
+
+
 def _trouver_exposition_existante(session, nom_entite: str):
     """
     Cherche parmi les expositions existantes (recentes) celle qui
@@ -52,8 +91,8 @@ def _trouver_exposition_existante(session, nom_entite: str):
     meilleur_score = 0
 
     for exposition in candidates:
-        score = fuzz.ratio(nom_entite.lower(), exposition.nom_entite.lower())
-        if score >= SEUIL_SIMILARITE_NOM_ENTITE and score > meilleur_score:
+        score = _meme_nom(nom_entite, exposition.nom_entite)
+        if score > meilleur_score:
             meilleure_correspondance = exposition
             meilleur_score = score
 
@@ -65,6 +104,19 @@ def _trouver_exposition_existante(session, nom_entite: str):
 
     return meilleure_correspondance
 
+
+def _meme_source(signalement, type_source, source_id) -> bool:
+    """
+    Le signalement vient-il de cette source ? Compare source_id, et non la
+    seule FAMILLE de source (type_source) : deux sites de rancongiciel
+    distincts peuvent publier une meme reference relative ("/posts/12").
+    Un signalement anterieur a source_id n'a que sa famille a comparer.
+    """
+    if signalement.source_id is not None and source_id is not None:
+        return signalement.source_id == source_id
+    return signalement.type_source == type_source
+
+
 def _ajouter_reference(session, exposition, type_source, reference_source,
                        source_id, date_publication, texte_brut=None,
                        selecteurs=None, noms_categories=None):
@@ -73,7 +125,7 @@ def _ajouter_reference(session, exposition, type_source, reference_source,
     Retourne True si une reference a effectivement ete ajoutee.
     """
     for sr in exposition.sources:
-        if sr.reference_source == reference_source and sr.type_source == type_source:
+        if sr.reference_source == reference_source and _meme_source(sr, type_source, source_id):
             # Meme signalement revu : on complete ce qu'on ignorait alors.
             if sr.source_id is None and source_id is not None:
                 sr.source_id = source_id
@@ -201,7 +253,10 @@ def enregistrer_exposition(
     """
     categories = _charger_categories(session, categorie_ids)
     noms_categories = {c.id: c.nom for c in categories}
-    exposition_existante = _trouver_exposition_existante(session, nom_entite)
+    exposition_existante = (
+        _exposition_du_meme_signalement(session, nom_entite, source_id, reference_source)
+        or _trouver_exposition_existante(session, nom_entite)
+    )
 
     if exposition_existante:
         ancienne_criticite = exposition_existante.criticite
