@@ -2,8 +2,9 @@
  * Comptes analystes et privileges.
  *
  * La liste des roles proposes reflete ce que le serveur acceptera (un admin
- * ne cree pas de super-admin) ; le serveur reste juge (role_requis, regles
- * de hierarchie dans app/web/permissions.py).
+ * ne cree pas de super-admin, n'agit pas sur un compte admin) ; le serveur
+ * reste juge (app/web/api/users.py, hierarchie de app/web/permissions.py).
+ * La regle de mot de passe affichee est celle de app/securite.py.
  */
 
 import { useState } from "react";
@@ -124,7 +125,7 @@ export default function Comptes() {
                 onChange={(e) => setFormulaire((f) => ({ ...f, mot_de_passe: e.target.value }))}
                 autoComplete="new-password"
                 aria-describedby="u-mdp-regles"
-                minLength={8}
+                minLength={12}
                 required
               />
               <button
@@ -139,7 +140,8 @@ export default function Comptes() {
               </button>
             </div>
             <span className="field-aide" id="u-mdp-regles">
-              Au moins 8 caractères, dont une majuscule, une minuscule et un caractère spécial.
+              Au moins 12 caractères, dont une majuscule, une minuscule, un chiffre et un caractère
+              spécial.
             </span>
           </div>
 

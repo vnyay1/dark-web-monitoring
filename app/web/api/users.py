@@ -1,9 +1,10 @@
 """
 FR-24 - Gestion des comptes et des roles.
 
-Les regles de privilege sont celles des blueprints Jinja, reprises telles
-quelles : un compte ne peut pas se desactiver lui-meme, et seul un
-super_admin agit sur un compte admin ou super_admin.
+Regles de privilege (README, "Gestion des privileges") : un compte ne peut
+pas se desactiver lui-meme, n'agit jamais sur un compte de rang egal ou
+superieur au sien - role comme activation -, et seul un super_admin
+attribue le role super_admin. Le super_admin n'est pas restreint.
 """
 
 from flask import jsonify, request
@@ -12,8 +13,18 @@ from werkzeug.security import generate_password_hash
 
 from app.db import get_session
 from app.models import HistoriqueRole, RoleUtilisateur, User
-from app.web.permissions import role_requis
+from app.web.permissions import HIERARCHIE_ROLES, role_requis
 from app.securite import valider_mot_de_passe
+
+
+def _rang_insuffisant(cible) -> bool:
+    """
+    Vrai si l'utilisateur connecte n'a pas autorite sur ce compte : hors
+    super_admin, on n'agit pas sur un compte de rang egal ou superieur.
+    """
+    if current_user.role == RoleUtilisateur.SUPER_ADMIN:
+        return False
+    return HIERARCHIE_ROLES[cible.role] >= HIERARCHIE_ROLES[current_user.role]
 
 
 def _serialiser(user) -> dict:
@@ -59,14 +70,13 @@ def enregistrer(api_bp):
         if not valide:
             return jsonify({"succes": False, "message": message}), 400
 
+        # Un role inconnu est refuse, jamais remplace : creer un compte avec
+        # un privilege autre que celui demande est une surprise dangereuse.
         try:
             role = RoleUtilisateur(donnees.get("role", RoleUtilisateur.USER.value))
         except ValueError:
-            role = RoleUtilisateur.USER
+            return jsonify({"succes": False, "message": "Role invalide."}), 400
 
-        # Contrairement au formulaire Jinja, qui retrogradait silencieusement
-        # vers "user", on refuse explicitement : creer un compte avec un
-        # privilege autre que celui demande est une surprise dangereuse.
         if role == RoleUtilisateur.SUPER_ADMIN and current_user.role != RoleUtilisateur.SUPER_ADMIN:
             return jsonify({
                 "succes": False,
@@ -113,15 +123,22 @@ def enregistrer(api_bp):
                     "message": "Utilisateur introuvable.",
                 }), 404
 
-            if current_user.role != RoleUtilisateur.SUPER_ADMIN:
-                if RoleUtilisateur.SUPER_ADMIN in (user.role, nouveau_role):
-                    return jsonify({
-                        "succes": False,
-                        "message": (
-                            "Seul un super-administrateur peut attribuer ou "
-                            "modifier le role super-admin."
-                        ),
-                    }), 403
+            # Le rang de la cible, et non la seule presence du role
+            # super_admin : un admin ne modifie pas davantage le role d'un
+            # autre admin (ni le sien) qu'il ne peut le desactiver.
+            if _rang_insuffisant(user):
+                return jsonify({
+                    "succes": False,
+                    "message": (
+                        "Seul un super-administrateur peut modifier le role d'un "
+                        "compte admin ou super-admin."
+                    ),
+                }), 403
+            if nouveau_role == RoleUtilisateur.SUPER_ADMIN and current_user.role != RoleUtilisateur.SUPER_ADMIN:
+                return jsonify({
+                    "succes": False,
+                    "message": "Seul un super-administrateur peut attribuer le role super-admin.",
+                }), 403
 
             if user.role != nouveau_role:
                 session.add(HistoriqueRole(
@@ -158,8 +175,7 @@ def enregistrer(api_bp):
                     "message": "Vous ne pouvez pas desactiver votre propre compte.",
                 }), 403
 
-            cible_protegee = user.role in (RoleUtilisateur.ADMIN, RoleUtilisateur.SUPER_ADMIN)
-            if cible_protegee and current_user.role != RoleUtilisateur.SUPER_ADMIN:
+            if _rang_insuffisant(user):
                 return jsonify({
                     "succes": False,
                     "message": (
