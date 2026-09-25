@@ -76,7 +76,6 @@ class _ContexteTexte:
     """
 
     def __init__(self, texte: str, limite_fuzzy: int = LIMITE_TEXTE_FUZZY):
-        self.texte = texte
         self.texte_lower = texte.lower()
         self.mots = texte[:limite_fuzzy].split()
         self._fenetres = {}
@@ -96,6 +95,10 @@ def _est_selecteur_court(selecteur_valeur: str) -> bool:
     return len(selecteur_valeur) <= SEUIL_LONGUEUR_MOT_ENTIER
 
 
+# Indicatif telephonique ("+237", "00237") : que des chiffres, "+" en tete.
+FORME_INDICATIF = re.compile(r"^\+?\d+$")
+
+
 @lru_cache(maxsize=None)
 def _pattern_mot_entier(selecteur_valeur: str) -> re.Pattern:
     """
@@ -107,9 +110,17 @@ def _pattern_mot_entier(selecteur_valeur: str) -> re.Pattern:
     Lookaround (?<!...) / (?!...) plutot que \\b, car \\b considere le
     tiret comme une frontiere valide. Compilee une seule fois par
     selecteur : le catalogue est le meme pour toutes les annonces.
+
+    Deux formes echappent a l'une des frontieres, qu'elles rendraient
+    introuvables :
+      - un suffixe de domaine (".cm") est TOUJOURS precede d'une lettre
+        ("camtel.cm") : pas de frontiere avant lui ;
+      - un indicatif ("+237", "00237") est TOUJOURS suivi de chiffres
+        ("+237699...") : pas de frontiere apres lui.
     """
-    escaped = re.escape(selecteur_valeur)
-    return re.compile(r"(?<![A-Za-z0-9\-])" + escaped + r"(?![A-Za-z0-9\-])")
+    avant = "" if selecteur_valeur.startswith(".") else r"(?<![A-Za-z0-9\-])"
+    apres = "" if FORME_INDICATIF.match(selecteur_valeur) else r"(?![A-Za-z0-9\-])"
+    return re.compile(avant + re.escape(selecteur_valeur) + apres)
 
 
 def _match_exact(texte: str, selecteur_valeur: str) -> list[MatchResult]:
@@ -207,9 +218,9 @@ def _match_fuzzy(texte: str, selecteur_valeur: str, threshold: int = FUZZY_THRES
     if _est_selecteur_court(selecteur_valeur):
         # Le fuzzy matching sur un selecteur de 2-6 caracteres genere trop
         # de faux positifs (trop de mots courts lui ressemblent a 85%+).
-        # On le desactive pour ces selecteurs - ils restent couverts par
-        # exact/insensible_casse avec frontiere de mot, ce qui est deja
-        # strict et suffisant pour un acronyme.
+        # Un selecteur court n'est donc trouve que par _match_exact, sous
+        # sa forme exacte et avec frontiere de mot : c'est strict et
+        # suffisant pour un acronyme.
         return []
 
     contexte = contexte or _ContexteTexte(texte)
@@ -301,9 +312,10 @@ def match_text_against_catalogue(texte: str, selecteurs: list, enable_fuzzy: boo
     """
     Applique le matching pour l'ensemble du catalogue de selecteurs actifs.
 
-    selecteurs : liste d'objets Selecteur, charges AVEC leur categorie
-    (joinedload, sinon une requete par selecteur), ou tuples
-    (valeur, categorie_id[, lieu_generique[, poids]]) pour les tests.
+    selecteurs : tuples (valeur, categorie_id[, lieu_generique[, poids]]),
+    forme figee qu'utilise la collecte (pipeline._catalogue_fige), ou objets
+    Selecteur charges AVEC leur categorie (joinedload, sinon une requete par
+    selecteur) - outils de maintenance et reconnaissance.
     Retourne toutes les correspondances trouvees, tous selecteurs confondus.
     """
     contexte = _ContexteTexte(texte)

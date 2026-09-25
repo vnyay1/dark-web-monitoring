@@ -2,9 +2,9 @@
 FR-11 - Filtrage des faux positifs connus.
 
 Deux mecanismes complementaires :
-1. Regles structurelles generiques (ex: motif "liste de pays" -> le
-   selecteur apparait seul, entoure d'autres noms de pays, signe d'un
-   en-tete recapitulatif plutot que d'un contenu reellement lie au Cameroun)
+1. Regle structurelle "liste de pays" : un nom de lieu generique entoure
+   d'autres noms de pays signe un en-tete recapitulatif plutot qu'un
+   contenu reellement lie au Cameroun
 2. Liste d'exclusion tenue par les analystes (table ExclusionFauxPositif),
    pour les cas specifiques identifies au fil de l'usage reel du systeme
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------
-# Regle structurelle 1 : detection de "liste de pays / victimes"
+# Regle structurelle : detection de "liste de pays / victimes"
 # ---------------------------------------------------------------------
 
 # Echantillon de noms de pays frequemment cites dans des en-tetes de leak
@@ -66,46 +66,6 @@ def _pays_a_proximite(texte: str, position: int, segment_trouve: str) -> list:
     return [pays for pays, motif in MOTIFS_PAYS.items() if motif.search(contexte)]
 
 
-def _est_dans_liste_de_pays(texte: str, position: int, segment_trouve: str) -> bool:
-    """
-    Detecte si un match de type "nom de pays generique" (ex: Cameroon,
-    Cameroun) apparait dans un contexte de liste/enumeration de plusieurs
-    pays - typique d'un en-tete recapitulatif de leak site multi-victimes,
-    qui n'est PAS une indication reelle d'un lien avec le Cameroun.
-    """
-    return len(_pays_a_proximite(texte, position, segment_trouve)) >= SEUIL_AUTRES_PAYS_PROXIMITE
-
-
-# ---------------------------------------------------------------------
-# Regle structurelle 2 : sous-chaine "cm" sans rapport (ex: dans un mot
-# plus long comme "confirm", "become", "cmd", etc.)
-# ---------------------------------------------------------------------
-
-def _cm_isole_dans_mot(texte: str, position: int, segment_trouve: str) -> bool:
-    """
-    Verifie si le selecteur ".cm" ou "cm" a ete trouve a l'interieur d'un
-    mot plus long (ex: "confirm.cm" ne serait pas un vrai TLD .cm, mais
-    surtout : "become", "command", "cmd" contiennent "cm" sans rapport).
-
-    Cette fonction est utile principalement pour les selecteurs courts
-    comme "cm" seul seraient ajoutes un jour au catalogue (actuellement
-    le catalogue utilise ".cm" avec le point, ce qui limite deja beaucoup
-    ce risque, mais la regle est gardee par robustesse).
-    """
-    if segment_trouve.lower() not in ("cm", ".cm"):
-        return False
-
-    debut = position - 1
-    fin = position + len(segment_trouve)
-
-    caractere_avant = texte[debut] if debut >= 0 else " "
-    caractere_apres = texte[fin] if fin < len(texte) else " "
-
-    # Si le caractere immediatement avant/apres est une lettre, le match
-    # fait partie d'un mot plus long -> faux positif probable
-    return caractere_avant.isalpha() or (segment_trouve.lower() == "cm" and caractere_apres.isalpha())
-
-
 # ---------------------------------------------------------------------
 # Application des regles structurelles
 # ---------------------------------------------------------------------
@@ -115,12 +75,14 @@ def motif_rejet_structurel(texte: str, m):
     Motif pour lequel une regle structurelle ecarte ce match, ou None s'il
     est retenu. Expose pour la reconnaissance (phase correspondance), qui
     doit dire POURQUOI un selecteur n'a pas compte.
+
+    Il n'y a plus de regle "cm dans un mot" : elle rejetait tout ".cm"
+    precede d'une lettre, c'est-a-dire tout vrai domaine ("camtel.cm"), et
+    les frontieres de mot du moteur (app.matching.engine) couvrent deja un
+    "cm" colle a un mot.
     """
     if m.position is None or m.position < 0:
         return None
-
-    if _cm_isole_dans_mot(texte, m.position, m.segment_trouve):
-        return "'cm' isole dans un mot plus long"
 
     # La regle "liste de pays" ne s'applique qu'aux noms de lieux
     # generiques. Elle suit l'indicateur de la categorie, et non plus son
